@@ -731,9 +731,18 @@ public final class TopicSubscription {
 ```
 
 - Topics are `Topic.session(id)` and `Topic.run(id)` ([protocol/envelope.md](../protocol/envelope.md#subscriptions)).
-- The Workspace counts holders per `(mainDeviceID, topic)`. The first holder sends `subscribe` with that topic when the
-  connection is connected and awaits the answer before returning; a failure is logged and the topic stays held. The
-  last `cancel()` sends `unsubscribe` when connected, without waiting; a failure is logged.
+- The Workspace counts holders per `(mainDeviceID, topic)`. The first holder makes the topic held; the last `cancel()`
+  releases it.
+- The `subscribe` and `unsubscribe` requests of a Main go through one serial queue per Main: each request is sent once
+  the previous one has been answered, so the Main receives them in the order the topics were held and released. When
+  its turn comes, a request is sent only when the connection is connected and the request is still needed: `subscribe`
+  when the topic is held, `unsubscribe` when it is not. A failure is logged and leaves the topic held or released.
+  Otherwise, the `unsubscribe` sent when a view of a session disappears could reach the Main after the `subscribe` of
+  the view that replaces it, and the session's events would stop arriving.
+- The first holder waits for the answer to its `subscribe`, queued behind any earlier request of that Main, before
+  `subscribe(_:on:)` returns. The last `cancel()` does not wait.
+- Closing the connection drops the requests still queued: the handshake subscribes to the held topics again
+  (reconnect sequence step 3).
 - A `TopicSubscription` released without `cancel()` cancels itself (its `deinit` schedules the cancel on the main
   actor).
 - On every handshake the held topics of that Main are subscribed again (reconnect sequence step 3), before the
