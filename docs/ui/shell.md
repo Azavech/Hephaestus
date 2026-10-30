@@ -492,7 +492,8 @@ The path bar shows and changes `{Main} ▸ {project} ▸ {sub project}` like Xco
 `PathBar` view in the toolbar; in compact width it is the `CompactPathButton` ([§7.4](#74-compact-path-button)).
 
 `PathBar` is an `HStack(spacing: 4)` of segments separated by `Image(systemName: "chevron.right")` (`.caption`,
-secondary). Each segment is a `Menu` with `.menuStyle(.button)`, `.buttonStyle(.borderless)`,
+secondary), with a padding of 10 × 2 pt so that its first and last segments keep clear of the edges of the toolbar
+capsule. Each segment is a `Menu` with `.menuStyle(.button)`, `.buttonStyle(.borderless)`,
 `.menuIndicator(.hidden)` and `.fixedSize()`; its label is an icon and a one-line title (middle truncation, at most
 220 pt wide).
 
