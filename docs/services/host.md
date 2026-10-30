@@ -254,7 +254,8 @@ stay open.
 ### 3.4 Settings changes
 
 - The `ForgeConfig` passed to `forge.configure` is built from the `forge` settings
-  ([../data/app-storage.md](../data/app-storage.md)) when `forge.enabled` is true, and is `nil` otherwise.
+  ([../data/app-storage.md](../data/app-storage.md)), with `repository` = `ForgeConfig.publicRepository`
+  ([../protocol/types.md](../protocol/types.md#forgeconfig)), when `forge.enabled` is true, and is `nil` otherwise.
 - While `running`, the host iterates `settingsStore.changes()` and compares each value with the previous one: a
   change of any `forge` key → `forge.configure(...)`; a change of `claudePath` → `hostInfo.refresh()`. The Settings
   screen only writes the settings; `listenerPort` changes are applied by `restartListener()`, which the app wiring
@@ -669,6 +670,9 @@ when step 6 created it; in a folder that existed before, the `.hephaestus/projec
 6. `registry.register(root: path, parentID: nil)`, which also registers the listed sub projects.
 7. Returns the `ProjectSummary`.
 
+The Forge registers its source project with the same logic, calling `projects.importFolder(_:)` in process
+([../forge/pipeline.md](../forge/pipeline.md#registering-the-source-project)).
+
 ### 7.5 projects.update
 
 Inside `registry.write(projectID)`: `ProjectFile.update(projectRoot:)` applying each non-nil field of the
@@ -1020,7 +1024,8 @@ members directly: `registry.hosted(_:)`, `tasks.create`, `tasks.addComment` and 
 ([files.md](files.md) §7), `sessions.start(_:)` and `sessions.sessions(projectID:)`
 ([../claude/cli.md](../claude/cli.md)), `emit(_:)` (§5), `mesh.localDevice()` and `mesh.snapshot()` (the device names
 and addresses of the private terms too), `registry.all()` and `registry.descendants(of:)` (the projects of the private
-terms), `hostInfo.claudePath` and `hostInfo.gitAvailable` (§10), and `appSupport` (`forge.json`, `private-terms.txt`).
+terms), `hostInfo.claudePath` and `hostInfo.gitAvailable` (§10), `projects.importFolder(_:)` (§7.4) and `settings()`
+(the projects folder) to register its source project, and `appSupport` (`forge.json`, `private-terms.txt`).
 The host calls `configure(_:)` (§3.4), `shutdown()` (§3.2), `config()` (§10.1), the `forge.*` functions (§4.4) and the
 notifications of §5. The app wiring calls `forge.privateTermsCount()`, `forge.preparePrivateTerms()`,
 `forge.privateTermSuggestions()`, `forge.addPrivateTerm(_:)` and `forge.dismissPrivateTerm(_:)` for Settings ▸ Forge &

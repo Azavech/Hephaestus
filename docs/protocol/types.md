@@ -604,15 +604,20 @@ Where a feedback was sent from ([forge/feedback.md](../forge/feedback.md)).
 
 ### ForgeConfig
 
-The Forge settings of the Forge host. This type and the next ones follow [forge/pipeline.md](../forge/pipeline.md),
-which defines when each value changes.
+The Forge settings of the Forge host, with the GitHub repository. This type and the next ones follow
+[forge/pipeline.md](../forge/pipeline.md), which defines when each value changes.
 
-| Field             | Type     | Meaning                                                |
-|-------------------|----------|--------------------------------------------------------|
-| `sourceProjectID` | `String` | The Hephaestus source project (default `HEPH`)         |
-| `repository`      | `String` | GitHub repository, `owner/name` (`Azavech/Hephaestus`) |
-| `branch`          | `String` | Branch the Forge follows (`main`)                      |
-| `autoRegenerate`  | `Bool`   | "Regenerate automatically" (default on)                |
+| Field             | Type     | Meaning                                                                         |
+|-------------------|----------|---------------------------------------------------------------------------------|
+| `sourceProjectID` | `String` | The Hephaestus source project (default `HEPH`)                                  |
+| `repository`      | `String` | GitHub repository, `owner/name`; the Forge host sets `publicRepository` (below) |
+| `branch`          | `String` | Branch the Forge follows (`main`)                                               |
+| `autoRegenerate`  | `Bool`   | "Regenerate automatically" (default on)                                         |
+
+`ForgeConfig` also declares `public static let publicRepository = "Azavech/Hephaestus"`: the GitHub repository of
+Hephaestus, `owner/name`, a constant of the code that no setting changes. Every `ForgeConfig` the Forge host builds
+has it as `repository` ([forge/pipeline.md](../forge/pipeline.md#forge-host-configuration)); the Forge and the
+self-update read the constant itself ([forge/update.md](../forge/update.md#check)).
 
 ### ForgeStage
 

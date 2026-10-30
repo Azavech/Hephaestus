@@ -23,7 +23,9 @@ Updates ([../ui/settings.md](../ui/settings.md)):
 |---------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `updates.enabled`         | `true` (default), "Update automatically": a check that finds a newer build downloads, verifies and re-signs it, then Installing follows; `false`: a check only records the latest build (Check step 5), and the update status view offers Install (`install()`); an update already `ready` installs as usual |
 | `updates.signingIdentity` | `""` (default): automatic identity (Re-signing); `-`: keep the ad-hoc signature of the release; any other value: the identity given to `codesign --sign` (a SHA-1 or a certificate name)                                                                                                                     |
-| `forge.repository`        | the GitHub repository whose releases are checked (default `Azavech/Hephaestus`)                                                                                                                                                                                                                              |
+
+The GitHub repository whose releases are checked is not a setting: it is the constant `ForgeConfig.publicRepository`,
+`Azavech/Hephaestus` ([../protocol/types.md](../protocol/types.md#forgeconfig)).
 
 ## Values
 
@@ -54,8 +56,8 @@ Updates ([../ui/settings.md](../ui/settings.md)):
 ## Check
 
 1. Status `checking`, except while `ready`: a `ready` status stays during the check.
-2. `GitHubClient(repository: <forge.repository>, token: await GitHubClient.readToken())`
-   ([pipeline.md](pipeline.md#swift-api)), `latestRelease()` (`GET /repos/<repository>/releases/latest`).
+2. `GitHubClient(repository: ForgeConfig.publicRepository, token: await GitHubClient.readToken())`
+   ([pipeline.md](pipeline.md#swift-api)), `latestRelease()` (`GET /repos/Azavech/Hephaestus/releases/latest`).
 3. Fields used: `tag_name`, `html_url`, `published_at`, `assets[].name`, `assets[].browser_download_url`,
    `assets[].size`.
 4. `latestBuild` = `N` when `tag_name` is `build-<N>` (`N` decimal), else nil; `latestReleaseURL` = `html_url`;
@@ -294,13 +296,14 @@ public enum UpdateInstaller {
 
 ## Depends on
 
-| Name                                                                                                                    | Defined in                                         |
-|-------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------|
-| `GitHubClient`                                                                                                          | [pipeline.md](pipeline.md#swift-api)               |
-| `ChildProcess`, `LoginEnvironment`                                                                                      | [../claude/cli.md](../claude/cli.md)               |
-| `HostService.hasActiveWork()`                                                                                           | [../services/host.md](../services/host.md)         |
-| `AppSupport`, `JSONFile`, `DeviceSettings` (`updates`, `forge`), the mesh credentials Keychain item                     | [../data/app-storage.md](../data/app-storage.md)   |
-| `AppModel.updateModel`, `AppModel.updater`, `isBusy` wiring, `releaseObserver` wiring, `start()` at launch, termination | [../ui/shell.md](../ui/shell.md)                   |
-| the "Update automatically" toggle, the signing identity picker, `UpdateStatusView` in Settings ▸ Forge & Updates        | [../ui/settings.md](../ui/settings.md)             |
-| `ForgeModel.releaseObserver`                                                                                            | [../ui/forge.md](../ui/forge.md)                   |
-| `Log.host`                                                                                                              | [../architecture.md](../architecture.md#logging)   |
+| Name                                                                                                                    | Defined in                                               |
+|-------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|
+| `GitHubClient`                                                                                                          | [pipeline.md](pipeline.md#swift-api)                     |
+| `ForgeConfig.publicRepository`                                                                                          | [../protocol/types.md](../protocol/types.md#forgeconfig) |
+| `ChildProcess`, `LoginEnvironment`                                                                                      | [../claude/cli.md](../claude/cli.md)                     |
+| `HostService.hasActiveWork()`                                                                                           | [../services/host.md](../services/host.md)               |
+| `AppSupport`, `JSONFile`, `DeviceSettings` (`updates`), the mesh credentials Keychain item                              | [../data/app-storage.md](../data/app-storage.md)         |
+| `AppModel.updateModel`, `AppModel.updater`, `isBusy` wiring, `releaseObserver` wiring, `start()` at launch, termination | [../ui/shell.md](../ui/shell.md)                         |
+| the "Update automatically" toggle, the signing identity picker, `UpdateStatusView` in Settings ▸ Forge & Updates        | [../ui/settings.md](../ui/settings.md)                   |
+| `ForgeModel.releaseObserver`                                                                                            | [../ui/forge.md](../ui/forge.md)                         |
+| `Log.host`                                                                                                              | [../architecture.md](../architecture.md#logging)         |

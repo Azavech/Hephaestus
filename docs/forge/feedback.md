@@ -177,15 +177,21 @@ A `VStack(alignment: .leading, spacing: 12)` with 20 pt padding:
 ## Sending
 
 1. The target is `workspace.forge.forgeHostID` ([../ui/forge.md](../ui/forge.md#forgemodel)), the connected Main whose
-   `host.info` reports `forge`. None: the error is `No Forge is online. Feedback goes to the Main where “This Main is
-   the Forge” is on (Settings ▸ Forge & Updates).` and the sheet stays.
+   `host.info` reports `forge`. None: the error is `No Forge is online. Feedback goes to the Main where “Set as Forge”
+   is on (Settings ▸ Forge & Updates).` and the sheet stays.
 2. `workspace.forge.sendFeedback(screenshot:comment:context:progress:)` ([../ui/forge.md](../ui/forge.md#requests)):
    with a screenshot, it first uploads the PNG to that Main for the Forge's source project, in chunks, and the sheet
    shows the upload's progress (the upload row); then it sends `forge.feedback {screenshot, comment, context}` to that
    Main: `screenshot` = the upload's `UploadRef` (nil when there is no screenshot), `comment` = the comment trimmed.
 3. Failure (of the upload or of `forge.feedback`): the error is the error's message, as the window banners give it
    ([../ui/shell.md](../ui/shell.md#81-windowbanners)); the sheet and the comment stay, so Send can be pressed again,
-   which uploads the screenshot again.
+   which uploads the screenshot again. When the upload fails with `notFound`, the Forge host hosts no source project
+   yet (its `uploads.begin` finds no project `<ID>`), and the error is `The Forge on <Forge host name> has no source
+   project <ID> yet. Its Forge screen says what is missing.`: `<Forge host name>` named as [Content](#content) names a
+   Main, `<ID>` the `sourceProjectID` of the Forge's config (`sendFeedback` throws it,
+   [../ui/forge.md](../ui/forge.md#requests)). The Pipeline section of the Forge screen
+   ([../ui/forge.md](../ui/forge.md#pipeline)) shows the Forge's `lastError`, which says what is missing
+   ([pipeline.md](pipeline.md#registering-the-source-project)). Other upload errors show as they are.
 4. Success `{projectID, taskID, sessionID}`: the sheet closes and the session opens with
    `context.navigate(mainDeviceID: <the Forge host>, projectID: projectID, section: .claude, item:
    sessionID.uuidString)` on the controller's `WindowContext` ([../ui/shell.md](../ui/shell.md#52-windowcontext)),
@@ -228,8 +234,9 @@ Internal types: `FeedbackDraft` (screenshot PNG data, preview image, context, co
 
 | Name                                                                                              | Defined in                                                        |
 |---------------------------------------------------------------------------------------------------|-------------------------------------------------------------------|
-| `FeedbackContext`, `FeedbackSelection`, `ForgeFeedbackResult`                                     | [../protocol/types.md](../protocol/types.md)                      |
+| `FeedbackContext`, `FeedbackSelection`, `ForgeFeedbackResult`, `ForgeConfig` (`sourceProjectID`)  | [../protocol/types.md](../protocol/types.md)                      |
 | `forge.feedback` on the Forge host                                                                | [pipeline.md](pipeline.md#feedback-intake)                        |
+| the Forge's `lastError`, Registering the source project                                           | [pipeline.md](pipeline.md#registering-the-source-project)         |
 | `ForgeModel` (`workspace.forge`: `forgeHostID`, `sendFeedback`)                                   | [../ui/forge.md](../ui/forge.md#forgemodel)                       |
 | `TransferProgress`, uploads                                                                       | [../client/workspace.md](../client/workspace.md#transfers)        |
 | `Workspace` (`device`, `forge`), `Selection` (`feedbackSelection`)                                | [../client/workspace.md](../client/workspace.md)                  |

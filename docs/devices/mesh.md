@@ -942,7 +942,7 @@ The host service of this doc. One instance, created by `HostService.init` and ke
 
 | Call                       | Effect                                                                                                                                                                                                                                                                                                              |
 |----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `ensureMesh()`             | Loads the credentials; without them creates the mesh and saves it. Loads the registry ([Persistence](#persistence)), applies the own-record rule, starts iterating `credentialStore.changes()` the first time only. Throws a `DataError` when the credential store fails.                                           |
+| `ensureMesh()`             | Reads `device.json`, loads the credentials; without them creates the mesh and saves it. Loads the registry ([Persistence](#persistence)), applies the own-record rule, starts iterating `credentialStore.changes()` the first time only. Throws a `DataError` when `device.json` or the credential store fails.     |
 | `startListener(acceptor:)` | Starts a `WebSocketListener` with the transport key on `options.listenerPort` when it is set, else on the `listenerPort` setting, bound to `options.listenerHost` (`host:`); every channel it delivers is passed to `acceptor` in a new task. Throws `MeshTransportError.listenerFailed` (the host shows its text). |
 | `stopListener()`           | Stops the listener and closes the pairing window. Established connections stay open.                                                                                                                                                                                                                                |
 | `boundListenerPort()`      | The `port` of the mesh listener while it runs, kept during the tries every 50 ms of its replacement after a key change ([Receiving a new key](#receiving-a-new-key)); nil otherwise. Tests read the port of a listener started on port 0 with it.                                                                   |
@@ -1044,9 +1044,13 @@ public enum PeerLinkEvent: Sendable {
   [../protocol/envelope.md](../protocol/envelope.md). `AppSupport`, `SettingsStore`, `MeshCredentials`,
   `MeshCredentialStore`, `RegistryCache`, `DataError`: [../data/app-storage.md](../data/app-storage.md).
 - `device.json` ([roles.md](roles.md#devicejson)) gives this Main's id and its name before it has a record.
-  `MeshService` reads it (`DeviceFile.load`) when it is created and, when it could not then, at each `ensureMesh()`:
-  there a missing file throws `DataError.notFound("device.json: the file does not exist")` and an unreadable one the
-  `DeviceFile.load` error, so `HostService.start()` fails. `localDevice()` before `ensureMesh()` uses the `device.json`
-  name; without a readable `device.json`, an id generated once per `MeshService` instance and the name "Mac".
+  `MeshService` reads it (`DeviceFile.load`) when it is created and again at each `ensureMesh()`, which runs at each
+  `HostService.start()`. The app creates `MeshService` at launch, before onboarding saves the name the user typed
+  ([../ui/onboarding.md](../ui/onboarding.md)); since the file is read again, the record that `ensureMesh()` creates
+  for this Main carries that name ([This Main's record](#this-mains-record)). At `ensureMesh()` a missing file throws
+  `DataError.notFound("device.json: the file does not exist")` and an unreadable one the `DeviceFile.load` error, so
+  `HostService.start()` fails; the values read before are kept. `localDevice()` before `ensureMesh()` uses the
+  `device.json` name; without a readable `device.json`, an id generated once per `MeshService` instance and the name
+  "Mac".
 - Errors thrown by handlers are `ProtocolError` values with the codes of
   [../protocol/methods.md](../protocol/methods.md).

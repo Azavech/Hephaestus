@@ -971,11 +971,12 @@ device names and the like. The check refuses each of them in everything it reads
 - The Forge host writes the file when it is missing, with a header comment and the terms it suggests from the Mac's
   account, names and serial number, the mesh's devices, the other projects of this Mac, the names of git's global
   identity, the code-signing identities and their team IDs, and the GitHub logins of `gh`. It never suggests the
-  GitHub owner of `forge.repository`, the placeholders, default device names or terms shorter than 3 characters
-  ([forge/pipeline.md](forge/pipeline.md#private-terms)). It does not read the e-mails of git's global identity:
-  every commit publishes them, and as terms they would refuse the user's own commits. A suggested term that is a whole
-  word of one of these e-mails, such as an account name an address starts with, would refuse the user's commits too:
-  the user dismisses it, with the line `# not private: <term>` in place of the term.
+  GitHub owner of the repository, `Azavech` (the constant `ForgeConfig.publicRepository`,
+  [protocol/types.md](protocol/types.md#forgeconfig)), the placeholders, default device names or terms shorter than 3
+  characters ([forge/pipeline.md](forge/pipeline.md#private-terms)). It does not read the e-mails of git's global
+  identity: every commit publishes them, and as terms they would refuse the user's own commits. A suggested term that is
+  a whole word of one of these e-mails, such as an account name an address starts with, would refuse the user's commits
+  too: the user dismisses it, with the line `# not private: <term>` in place of the term.
 - Later, at enabling and at each push, the Forge computes again the terms it would suggest. While one of them is neither
   a term nor dismissed in the file (a device paired or a project registered since), the push tools refuse to push until
   the user adds or dismisses it in Settings ▸ Forge & Updates ([ui/settings.md](ui/settings.md)). Apart from creating
@@ -1109,8 +1110,10 @@ git config commit.gpgsign false
   has it, never on an orphan branch or in a sparse checkout that leaves it out.
 
 On the Forge host, the Forge sets the hooks path and the signing of its source repository itself
-([Commit identity](#commit-identity)). There the user registers the repository folder once as the project `HEPH`, with
-Add Existing Folder… ([ui/overview.md](ui/overview.md)); its `.hephaestus/` folder is ignored by git.
+([Commit identity](#commit-identity)). There the repository folder is registered once as the project `HEPH`: the
+Forge registers the clone in the projects folder itself (`~/Developer/Hephaestus` by default,
+[forge/pipeline.md](forge/pipeline.md#registering-the-source-project)), or the user adds the clone with Add Existing
+Folder… ([ui/overview.md](ui/overview.md)); its `.hephaestus/` folder is ignored by git.
 
 ## First publication
 

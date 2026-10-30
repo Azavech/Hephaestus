@@ -67,8 +67,9 @@ Hephaestus/
     Tests/                      test targets                                                   (testing.md)
 ```
 
-The repository folder is registered once, by the user, as the project `HEPH` on the Forge host. The app keeps the
-project's data in its `.hephaestus/` folder, which git ignores and which is never committed
+The repository folder is registered once as the project `HEPH` on the Forge host, by the user or by the Forge itself
+([forge/pipeline.md](forge/pipeline.md#registering-the-source-project)). The app keeps the project's data in its
+`.hephaestus/` folder, which git ignores and which is never committed
 ([general.md](general.md#where-personal-data-lives-instead)).
 
 Every Swift source file lives in the folder of its module. File names are UpperCamelCase and name the main type they
@@ -1055,8 +1056,10 @@ Or open `Hephaestus.xcodeproj` in Xcode and run the `Hephaestus` scheme.
   `Hephaestus.xcodeproj` in Xcode, select the `Hephaestus` scheme and the device, and run. Choose no team in Xcode's
   Signing & Capabilities; if Xcode wrote one into the project file, run
   `git restore Hephaestus.xcodeproj/project.pbxproj`.
-- Forge host, the Mac that turns feedback into new builds: a clone of this repository, set up as above, added in the
-  app with Add Existing Folder… as the project `HEPH`; then "This Main is the Forge" in Settings ▸ Forge & Updates.
+- Forge host, the Mac that turns feedback into new builds: the Mac that creates the mesh, or another Main with
+  "Set as Forge" turned on in Settings ▸ Forge & Updates. It needs a clone of this repository, set up as above. The
+  Forge registers a clone at `~/Developer/Hephaestus` (in the default projects folder) as the project `HEPH` itself;
+  to use a clone kept elsewhere, add it in the app with Add Existing Folder… as `HEPH`.
 
 ## Documentation
 

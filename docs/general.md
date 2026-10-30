@@ -8,8 +8,9 @@ is the e-mail address of the user's own git identity, which each of their commit
 committer e-mail. This rule comes before every other rule: it holds for every doc, every file generated from the docs,
 every commit and every verbatim copy. When in doubt, leave it out.
 
-`Azavech` is the owner's public GitHub handle: the repository path `Azavech/Hephaestus`, the `forge.repository` setting
-and the bundle identifier `ca.azavech.hephaestus` are public by nature and allowed.
+`Azavech` is the owner's public GitHub handle: the repository path `Azavech/Hephaestus`, the repository constant
+`ForgeConfig.publicRepository` ([protocol/types.md](protocol/types.md#forgeconfig)) and the bundle identifier
+`ca.azavech.hephaestus` are public by nature and allowed.
 
 ### Personal data
 
@@ -50,8 +51,8 @@ the repository passes its own check ([public-repository.md](public-repository.md
 ### Where personal data lives instead
 
 - `.hephaestus/`, where the app keeps a project's data (`project.yml`, tasks, sessions, attachments): the whole folder
-  is ignored by git and never committed. The repository folder is registered once, by the user, as the project `HEPH` on
-  the Forge host.
+  is ignored by git and never committed. The repository folder is registered once as the project `HEPH` on the Forge
+  host, by the user or by the Forge itself ([forge/pipeline.md](forge/pipeline.md#registering-the-source-project)).
 - `.claude/` (Claude Code's local settings, with paths and permission rules) and `CLAUDE.local.md`: ignored.
 - `Config/Signing.local.xcconfig`, the user's team ID ([architecture.md](architecture.md#configsigningxcconfig)):
   ignored.

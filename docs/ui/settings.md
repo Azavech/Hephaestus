@@ -168,9 +168,8 @@ font, secondary) and no footer.
 
 | Control                  | Kind                                      | Edits                                              |
 |--------------------------|-------------------------------------------|----------------------------------------------------|
-| This Main is the Forge   | toggle                                    | `forge.enabled`                                    |
+| Set as Forge             | toggle                                    | `forge.enabled`                                    |
 | Source project           | menu `Picker`                             | `forge.sourceProjectID`                            |
-| Repository               | text field, "owner/name"                  | `forge.repository`                                 |
 | Branch                   | text field                                | `forge.branch`                                     |
 | Regenerate automatically | toggle                                    | `forge.autoRegenerate`                             |
 | Private terms            | the number of terms and an "Edit…" button | `private-terms.txt` of this Mac, in its own editor |
@@ -179,7 +178,14 @@ font, secondary) and no footer.
   `forge.enabled` is true.
 - Source project: the projects of this Mac's project tree (`workspace.localConnection?.projects`), depth first (sub
   projects after their parent), each "<name> — <identifier>", tagged with the identifier. A stored identifier that is
-  not in the tree is listed as an extra item "<identifier> (not on this Mac)".
+  not in the tree is listed as an extra item "<identifier> (not on this Mac)". The row's caption: "When this project
+  is not on this Mac, the Forge adds it from the clone at <folder>." `<folder>` is the folder the Forge registers as
+  its source project ([../forge/pipeline.md](../forge/pipeline.md#registering-the-source-project)), from the stored
+  `projectsFolder` and the repository's name, the part of `ForgeConfig.publicRepository` after its `/`
+  ([../protocol/types.md](../protocol/types.md#forgeconfig)), written with
+  `(path as NSString).abbreviatingWithTildeInPath`: `~/Developer/Hephaestus` with the default settings.
+- The GitHub repository is not a setting: it is the constant `ForgeConfig.publicRepository`, and the pane has no
+  control for it.
 - Caption: "The Forge turns feedback into documentation changes, regenerates the app and follows its CI build."
 - The pane only writes the settings; the host applies them ([../forge/pipeline.md](../forge/pipeline.md)).
 - Private terms: the words the personal data check refuses in the public repository, kept in `private-terms.txt` in
@@ -269,6 +275,8 @@ inside `#if os(...)`; `DeviceNameField`, `AddressListEditor` and `AboutSection` 
 | device names, the Main toggle procedures and texts                                                                                                                                                                                                                                                                                                                                                                                          | [../devices/roles.md](../devices/roles.md)                                                                     |
 | `AppModel` (`becomeMain`, `resignMain`, `isMigrationActive`, `restartListener`, `refreshListenerError`, `renameDevice`, `renameConnection`, `setLocalName`, `listenerError`, `updater`, `privateTermsCount`, `editPrivateTerms`, `privateTermSuggestions`, `addPrivateTerm`, `dismissPrivateTerm`), `WindowBanners`, `AppBannerRouter`, `BannerOverlay`, `StatusDot`, `EmptyStateView`, `AppModel.preview()`, `previewWindow(_:selection:)` | [shell.md](shell.md)                                                                                           |
 | `private-terms.txt`, the pre-filled file, the count of terms, the suggestions                                                                                                                                                                                                                                                                                                                                                               | [../forge/pipeline.md](../forge/pipeline.md#private-terms), [../public-repository.md](../public-repository.md) |
+| the folder the Forge registers as its source project (the Source project caption)                                                                                                                                                                                                                                                                                                                                                           | [../forge/pipeline.md](../forge/pipeline.md#registering-the-source-project)                                    |
+| `ForgeConfig.publicRepository`, the repository constant                                                                                                                                                                                                                                                                                                                                                                                     | [../protocol/types.md](../protocol/types.md#forgeconfig)                                                       |
 | `DevicesView`                                                                                                                                                                                                                                                                                                                                                                                                                               | [devices.md](devices.md)                                                                                       |
 | `ClaudeModelField`, `PermissionModePicker`                                                                                                                                                                                                                                                                                                                                                                                                  | [sessions.md](sessions.md)                                                                                     |
 | `UpdateStatusView`                                                                                                                                                                                                                                                                                                                                                                                                                          | [forge.md](forge.md)                                                                                           |

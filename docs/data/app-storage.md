@@ -115,30 +115,30 @@ The identity of this device ([devices/roles.md](../devices/roles.md) creates and
 
 The settings of this device. Nested keys are JSON objects: `forge.enabled` is `{"forge": {"enabled": …}}`.
 
-| Key                       | JSON type        | Default              | Used on    | Meaning                                                                           | Used by                                        |
-|---------------------------|------------------|----------------------|------------|-----------------------------------------------------------------------------------|------------------------------------------------|
-| `isMain`                  | boolean          | `false`              | macOS      | This Mac is a Main.                                                               | [devices/roles.md](../devices/roles.md)        |
-| `projectsFolder`          | string           | `~/Developer`        | Main       | Folder where new projects and moved-in projects are created.                      | [services/host.md](../services/host.md)        |
-| `listenerPort`            | integer          | `47100`              | Main       | TCP port of the mesh listener.                                                    | [devices/mesh.md](../devices/mesh.md)          |
-| `pairingPort`             | integer          | `47101`              | Main       | TCP port of the pairing listener.                                                 | [devices/mesh.md](../devices/mesh.md)          |
-| `additionalAddresses`     | array of strings | `[]`                 | Main       | Extra host names or IP addresses of this Main, added to its device record.        | [devices/mesh.md](../devices/mesh.md)          |
-| `claudePath`              | string           | `""`                 | Main       | Path of the Claude CLI. Empty: found automatically.                               | [claude/cli.md](../claude/cli.md)              |
-| `defaultModel`            | string           | `""`                 | Main       | Model of new sessions when the project sets none. Empty: no `--model`.            | [claude/cli.md](../claude/cli.md)              |
-| `defaultPermissionMode`   | string           | `acceptEdits`        | Main       | Permission mode of new sessions when the project sets none.                       | [claude/cli.md](../claude/cli.md)              |
-| `sessionIdleMinutes`      | integer          | `15`                 | Main       | A session process with no activity for this long is stopped.                      | [claude/cli.md](../claude/cli.md)              |
-| `autosave`                | boolean          | `true`               | every      | The editors save 1.5 s after the last edit.                                       | [ui/code.md](../ui/code.md)                    |
-| `showHiddenFiles`         | boolean          | `false`              | every      | The file browser shows hidden files and folders.                                  | [ui/code.md](../ui/code.md)                    |
-| `forge.enabled`           | boolean          | `false`              | Main       | This Main is the Forge.                                                           | [forge/pipeline.md](../forge/pipeline.md)      |
-| `forge.sourceProjectID`   | string           | `HEPH`               | Main       | Identifier of the project holding the Hephaestus source.                          | [forge/pipeline.md](../forge/pipeline.md)      |
-| `forge.repository`        | string           | `Azavech/Hephaestus` | Main       | GitHub repository, `owner/name`.                                                  | [forge/pipeline.md](../forge/pipeline.md)      |
-| `forge.branch`            | string           | `main`               | Main       | Branch the Forge pushes to and watches.                                           | [forge/pipeline.md](../forge/pipeline.md)      |
-| `forge.autoRegenerate`    | boolean          | `true`               | Main       | Regenerate automatically when the docs are ahead of the code.                     | [forge/pipeline.md](../forge/pipeline.md)      |
-| `updates.enabled`         | boolean          | `true`               | macOS      | New builds install automatically. False: this Mac only checks and offers Install. | [forge/update.md](../forge/update.md)          |
-| `updates.signingIdentity` | string           | `""`                 | macOS      | Code signing identity applied to updates. Empty: chosen automatically.            | [forge/update.md](../forge/update.md)          |
+| Key                       | JSON type        | Default              | Used on    | Meaning                                                                           | Used by                                                                                                   |
+|---------------------------|------------------|----------------------|------------|-----------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| `isMain`                  | boolean          | `false`              | macOS      | This Mac is a Main.                                                               | [devices/roles.md](../devices/roles.md)                                                                   |
+| `projectsFolder`          | string           | `~/Developer`        | Main       | Folder where new projects and moved-in projects are created.                      | [services/host.md](../services/host.md)                                                                   |
+| `listenerPort`            | integer          | `47100`              | Main       | TCP port of the mesh listener.                                                    | [devices/mesh.md](../devices/mesh.md)                                                                     |
+| `pairingPort`             | integer          | `47101`              | Main       | TCP port of the pairing listener.                                                 | [devices/mesh.md](../devices/mesh.md)                                                                     |
+| `additionalAddresses`     | array of strings | `[]`                 | Main       | Extra host names or IP addresses of this Main, added to its device record.        | [devices/mesh.md](../devices/mesh.md)                                                                     |
+| `claudePath`              | string           | `""`                 | Main       | Path of the Claude CLI. Empty: found automatically.                               | [claude/cli.md](../claude/cli.md)                                                                         |
+| `defaultModel`            | string           | `""`                 | Main       | Model of new sessions when the project sets none. Empty: no `--model`.            | [claude/cli.md](../claude/cli.md)                                                                         |
+| `defaultPermissionMode`   | string           | `acceptEdits`        | Main       | Permission mode of new sessions when the project sets none.                       | [claude/cli.md](../claude/cli.md)                                                                         |
+| `sessionIdleMinutes`      | integer          | `15`                 | Main       | A session process with no activity for this long is stopped.                      | [claude/cli.md](../claude/cli.md)                                                                         |
+| `autosave`                | boolean          | `true`               | every      | The editors save 1.5 s after the last edit.                                       | [ui/code.md](../ui/code.md)                                                                               |
+| `showHiddenFiles`         | boolean          | `false`              | every      | The file browser shows hidden files and folders.                                  | [ui/code.md](../ui/code.md)                                                                               |
+| `forge.enabled`           | boolean          | `false`              | Main       | This Main is the Forge. Onboarding turns it on for the Mac that creates the mesh. | [forge/pipeline.md](../forge/pipeline.md), [ui/onboarding.md](../ui/onboarding.md#use-this-mac-as-a-main) |
+| `forge.sourceProjectID`   | string           | `HEPH`               | Main       | Identifier of the project holding the Hephaestus source.                          | [forge/pipeline.md](../forge/pipeline.md)                                                                 |
+| `forge.branch`            | string           | `main`               | Main       | Branch the Forge pushes to and watches.                                           | [forge/pipeline.md](../forge/pipeline.md)                                                                 |
+| `forge.autoRegenerate`    | boolean          | `true`               | Main       | Regenerate automatically when the docs are ahead of the code.                     | [forge/pipeline.md](../forge/pipeline.md)                                                                 |
+| `updates.enabled`         | boolean          | `true`               | macOS      | New builds install automatically. False: this Mac only checks and offers Install. | [forge/update.md](../forge/update.md)                                                                     |
+| `updates.signingIdentity` | string           | `""`                 | macOS      | Code signing identity applied to updates. Empty: chosen automatically.            | [forge/update.md](../forge/update.md)                                                                     |
 
 "Main" settings are read only when `isMain` is true; on other devices they keep their stored values. The Settings
 screen is [ui/settings.md](../ui/settings.md). The `forge` settings other than `enabled` make the `ForgeConfig`
-([protocol/types.md](../protocol/types.md)) that the Forge host reports.
+([protocol/types.md](../protocol/types.md#forgeconfig)) that the Forge host reports, whose `repository` is the
+constant `ForgeConfig.publicRepository`: the GitHub repository is not a setting.
 
 ### Rules
 
@@ -158,7 +158,6 @@ of the table, and the first broken rule fails the change with `.invalid(<message
 | `defaultPermissionMode`                     | none                                                                       | a `PermissionMode` value                                         | `invalid permission mode`                                                           |
 | `sessionIdleMinutes`                        | none                                                                       | 1 to 1440                                                        | `the idle timeout must be between 1 and 1440 minutes`                               |
 | `forge.sourceProjectID`                     | `ProjectIdentifier.normalize`                                              | `^[A-Z]{2,8}$`                                                   | `the identifier must be 2 to 8 letters A to Z`                                      |
-| `forge.repository`                          | whitespace trimmed                                                         | `^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`                                | `the repository must be owner/name`                                                 |
 | `forge.branch`                              | whitespace trimmed                                                         | not empty, no whitespace                                         | `the branch must not be empty or contain spaces`                                    |
 | `updates.signingIdentity`                   | whitespace trimmed                                                         | no line break                                                    | `the signing identity must be on one line`                                          |
 
@@ -175,7 +174,10 @@ Paths starting with `~` are expanded with `NSString.expandingTildeInPath` where 
   the settings read always pass their rules.
 - `SettingsStore.update` applies a change, normalizes and validates it, writes the whole file, then publishes the new
   value. When validation or the write fails, it throws and the current settings stay as they were.
-- Keys that are not in the table are dropped at the next write.
+- Keys that are not in the table are ignored when the file is read and dropped at the next write. A `settings.json`
+  written by an earlier build may still hold `forge.repository`, which is no longer a setting
+  ([forge/pipeline.md](../forge/pipeline.md#forge-host-configuration)): the file loads as if the key were absent, and
+  the next `SettingsStore.update` writes it without the key.
 
 ```json
 {
@@ -190,7 +192,6 @@ Paths starting with `~` are expanded with `NSString.expandingTildeInPath` where 
     "autoRegenerate" : true,
     "branch" : "main",
     "enabled" : true,
-    "repository" : "Azavech/Hephaestus",
     "sourceProjectID" : "HEPH"
   },
   "isMain" : true,
@@ -551,7 +552,6 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
     public struct Forge: Codable, Sendable, Equatable {
         public var enabled: Bool = false
         public var sourceProjectID: String = "HEPH"
-        public var repository: String = "Azavech/Hephaestus"
         public var branch: String = "main"
         public var autoRegenerate: Bool = true
         public init()

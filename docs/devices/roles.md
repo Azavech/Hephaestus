@@ -124,14 +124,18 @@ public final class DeviceIdentityStore {
 
 ## Turning Main on (macOS)
 
-Entry points: onboarding "Use this Mac as a Main" ([../ui/onboarding.md](../ui/onboarding.md)) and the toggle "Use
-this Mac as a Main" of Settings ▸ General ([../ui/settings.md](../ui/settings.md)). The app wiring
+Entry points: onboarding "Use this Mac as a Main" ([../ui/onboarding.md](../ui/onboarding.md)), which first makes
+this Mac the Forge of the mesh it creates (`forge.enabled`,
+[../ui/onboarding.md](../ui/onboarding.md#use-this-mac-as-a-main)), and the toggle "Use this Mac as a Main" of
+Settings ▸ General ([../ui/settings.md](../ui/settings.md)), which does not. The app wiring
 ([../ui/shell.md](../ui/shell.md)) runs, in order:
 
 1. `identity.setIsMain(true)`.
 2. `try await HostService.shared.start()` ([../services/host.md](../services/host.md#31-start)). Its first step,
-   `mesh.ensureMesh()`, creates the mesh when this Mac has no mesh credentials ([mesh.md](mesh.md#credentials)); this
-   Mac's registry record then says `isMain: true` and carries its addresses and port.
+   `mesh.ensureMesh()`, reads `device.json` again and creates the mesh when this Mac has no mesh credentials
+   ([mesh.md](mesh.md#credentials)); this Mac's registry record then says `isMain: true` and carries its addresses and
+   port, and a new record carries the name of `device.json`, the one saved in onboarding
+   ([mesh.md](mesh.md#swift-api)).
 3. `workspace.setLocalHostLink(<loopback link>)`, which reloads the credentials, so a mesh created in step 2 is
    picked up ([../client/workspace.md](../client/workspace.md#lifecycle)); then
    `workspace.updateLocalDevice(identity.deviceInfo)`.

@@ -38,17 +38,25 @@ The `forge` settings of the Mac (`DeviceSettings.forge` in `settings.json`,
 [../data/app-storage.md](../data/app-storage.md)), edited in Settings ▸ Forge & Updates
 ([../ui/settings.md](../ui/settings.md)):
 
-| Key                     | Default              | Meaning                                                                    |
-|-------------------------|----------------------|----------------------------------------------------------------------------|
-| `forge.enabled`         | `false`              | "This Main is the Forge"                                                   |
-| `forge.sourceProjectID` | `HEPH`               | identifier of the source project, whose code folder is the repository      |
-| `forge.repository`      | `Azavech/Hephaestus` | GitHub repository, `owner/name`                                            |
-| `forge.branch`          | `main`               | branch the Forge follows                                                   |
-| `forge.autoRegenerate`  | `true`               | "Regenerate automatically"                                                 |
+| Key                     | Default | Meaning                                                               |
+|-------------------------|---------|-----------------------------------------------------------------------|
+| `forge.enabled`         | `false` | "Set as Forge"                                                        |
+| `forge.sourceProjectID` | `HEPH`  | identifier of the source project, whose code folder is the repository |
+| `forge.branch`          | `main`  | branch the Forge follows                                              |
+| `forge.autoRegenerate`  | `true`  | "Regenerate automatically"                                            |
 
-- The host calls `configure(_:)` with the `ForgeConfig` built from these settings while `forge.enabled` is true, and
-  with nil otherwise: at its start and after every change of a `forge` setting
-  ([../services/host.md](../services/host.md)); the Settings pane only writes the settings
+- The GitHub repository is not a setting: it is `ForgeConfig.publicRepository`, `Azavech/Hephaestus`, a constant of
+  the code that the user cannot change ([../protocol/types.md](../protocol/types.md#forgeconfig)). In this doc
+  `<repository>` is that constant, the repository's owner its part before the `/` (`Azavech`) and the repository's
+  name its part after the `/` (`Hephaestus`).
+- `forge.enabled` keeps its default, `false`, until the user turns it on, with one exception: the Mac that creates the
+  mesh is its Forge. Onboarding's "Use this Mac as a Main" turns `forge.enabled` on before the Mac becomes a Main
+  ([../ui/onboarding.md](../ui/onboarding.md#use-this-mac-as-a-main)). A Mac that joins a mesh, or turns Main on later
+  in Settings ▸ General, is not made the Forge, and the host never changes the setting, not even when its
+  `ensureMesh()` creates a mesh ([../devices/mesh.md](../devices/mesh.md#credentials)).
+- The host calls `configure(_:)` with the `ForgeConfig` built from these settings, its `repository` being
+  `ForgeConfig.publicRepository`, while `forge.enabled` is true, and with nil otherwise: at its start and after every
+  change of a `forge` setting ([../services/host.md](../services/host.md)); the Settings pane only writes the settings
   ([../ui/settings.md](../ui/settings.md)). The Forge is **enabled** from a `configure` with a configuration until
   `configure(nil)` or `shutdown()`. A new configuration applies at once; an active cycle continues with it.
 - `host.info` returns `forge` = `config()`: the `ForgeConfig` while enabled, absent otherwise. Clients find the Forge
@@ -56,18 +64,22 @@ The `forge` settings of the Mac (`DeviceSettings.forge` in `settings.json`,
 - The **repository root** is the source project's code folder (`<root>/<code>`,
   [../data/project-yml.md](../data/project-yml.md)). Every git command runs with it as working directory; `docs/` and
   `App/DocsHash.txt` are relative to it.
-- The source project is the clone of the repository that the user registered once as a project on the Forge host
-  (identifier `HEPH` by default). Its `.hephaestus/` folder, where the app keeps the project's data, is ignored by git
-  and never committed ([../architecture.md](../architecture.md)).
+- The source project is the clone of the repository registered as a project on the Forge host (identifier `HEPH` by
+  default): by the user, with Add Existing Folder… ([../ui/overview.md](../ui/overview.md#add-existing-folder)), or
+  by the Forge itself ([Registering the source project](#registering-the-source-project)). Its `.hephaestus/` folder,
+  where the app keeps the project's data, is ignored by git and never committed
+  ([../architecture.md](../architecture.md)).
 
 ### Configuration checks
 
 Run, in this order, when the Forge is enabled, at the start of every check, at the start of a regeneration step,
-before handling `forge.feedback` and at the start of the push tools. The first failure stops the list:
+before handling `forge.feedback` and at the start of the push tools. Before the first one, when this Main does not host
+the source project, the Forge registers it when it can
+([Registering the source project](#registering-the-source-project)). The first failure stops the list:
 
 | Check                                                                                                                                                                                              | Message                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| the source project is hosted on this Main (`registry.hosted(_:)`)                                                                                                                                  | `The Forge source project <ID> is not on this Main.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| the source project is hosted on this Main (`registry.hosted(_:)`)                                                                                                                                  | `The Forge source project <ID> is not on this Main.`, a space, then the text of the step of [Registering the source project](#registering-the-source-project) that failed                                                                                                                                                                                                                                                                                                                                                                    |
 | neither it nor one of its ancestors is migrating (`registry.checkWritable(_:)` throws no `locked`)                                                                                                 | `The Forge source project <ID> is being moved.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `host.info` reports `gitAvailable`                                                                                                                                                                 | `git is not available on this Main.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `git rev-parse --show-toplevel` prints the repository root (symlinks resolved on both sides)                                                                                                       | `<path> is not the top folder of a git repository.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -112,6 +124,47 @@ error clears once fixed. `<path>` is the repository root. When `git remote get-u
   command: without that ref it cannot tell what changed. A clone that is only behind `origin` passes; a change of the
   guardrail made there, committed or not, by the user or by a session, fails until it is pushed or undone, because the
   user's own git commands would run its hooks and its check with the user's credentials.
+
+### Registering the source project
+
+The Forge registers its source project itself when it can. Before the first configuration check, when this Main hosts
+no project `<ID>` (`registry.hosted(_:)` throws), it looks at `<folder>`, the folder the clone would have in the
+projects folder: `DeviceSettings.projectsFolderURL.appendingPathComponent(<name>).path`, that is the `projectsFolder`
+setting with a leading `~` expanded to the home folder ([../data/app-storage.md](../data/app-storage.md#settingsjson)),
+`/`, and `<name>`, the repository's name: the part of `ForgeConfig.publicRepository` after its `/`, `Hephaestus`
+(`~/Developer/Hephaestus` with the default settings).
+
+The steps run in this order. The first that fails ends the registration with nothing imported, and the first
+configuration check fails with `The Forge source project <ID> is not on this Main.`, a space, then the step's text:
+
+| Step | Passes when                                                                                                                                         | Text                                                                                                                                                                                                                               |
+|------|-----------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1    | `<folder>` is an existing folder                                                                                                                    | `There is no folder <folder>: clone github.com/<repository> there, or add your clone with Add Existing Folder… and choose it as the Source project in Settings ▸ Forge & Updates.`                                                 |
+| 2    | `host.info` reports `gitAvailable` and the `PATH` of the environment holds git ([Git operations](#git-operations))                                  | `git is not available on this Main.`                                                                                                                                                                                               |
+| 3    | `git rev-parse --show-toplevel`, run in `<folder>`, succeeds and prints `<folder>` (symlinks resolved on both sides)                                | `<folder> is not the top folder of a git repository: clone github.com/<repository> there, or add your clone with Add Existing Folder… and choose it as the Source project in Settings ▸ Forge & Updates.`                          |
+| 4    | `git remote get-url origin`, run in `<folder>`, succeeds and passes the test of the origin row of the [configuration checks](#configuration-checks) | `<folder> is not a clone of github.com/<repository>: set its origin remote to https://github.com/<repository>.git, or add your clone with Add Existing Folder… and choose it as the Source project in Settings ▸ Forge & Updates.` |
+| 5    | `<folder>/.hephaestus/project.yml` does not exist, or its `id` (`ProjectFile.load(projectRoot:)`) is `<ID>`                                         | `<folder> holds the project <other ID>: choose it as the Source project in Settings ▸ Forge & Updates, after adding it with Add Existing Folder… when it is not on this Mac.` (`<other ID>`: the file's `id`)                      |
+| 6    | the import succeeds                                                                                                                                 | `Adding <folder> failed: <message>` (`<message>`: the message of the import's error)                                                                                                                                               |
+
+- Step 4 fails when `origin` is missing (`git remote get-url origin` fails) as when it names another repository. A
+  `ProjectFile.load(projectRoot:)` that throws in step 5 fails the registration with the text of step 6, `<message>`
+  being its `DataError` message ([../data/project-yml.md](../data/project-yml.md)).
+- The import (step 6) is the logic of `projects.import`
+  ([../services/host.md](../services/host.md#74-projectsimport)):
+  `host.projects.importFolder(ProjectsImportParams(path: <folder>, name: <name>, identifier: <ID>))`. A project.yml
+  that exists, which step 5 checked, is used as it is, with the sub projects it lists; without one, a project.yml is
+  written with that name and identifier, then `.hephaestus/tasks/` and the docs folder when they are missing. The
+  project is registered and added to `projects.json`, and `projects.changed` is sent, as for any import. A successful
+  import is logged with `Log.host` at `notice` level, with the identifier; then the configuration checks go on.
+- The Forge never clones: it runs no `git clone` and registers only a folder that is already there.
+- The registration runs wherever the configuration checks run: when the Forge is enabled, at every check, in a
+  regeneration step, before `forge.feedback` and in the push tools. A clone that gets its `origin` later is registered
+  at the next check ([Checks and triggers](#checks-and-triggers)).
+- Its two git commands are the `top folder` and `origin URL` commands of [Git operations](#git-operations), run as
+  that section says, with `<folder>` as working directory and the environment that
+  `registerSourceProject(_:environment:)` gets ([Swift API](#swift-api)): the login environment in the configuration
+  checks. A command cancelled because the Forge is disabled ([Startup and shutdown](#startup-and-shutdown)) fails no
+  step: its `CancellationError` is rethrown, and nothing is imported.
 
 ## Private terms
 
@@ -162,12 +215,13 @@ Forge passes it as `HEPHAESTUS_PRIVATE_TERMS` to every check it runs ([MCP tools
   | `/usr/bin/security find-identity -v -p codesigning` (timeout 30 s)                                        | for each quoted identity name of the form `<kind>: <holder> (<id>)`: the holder, the id, then the team ID, that is each `OU=` value of the subject of that identity's certificate: the output of `/usr/bin/security find-certificate -a -c <identity name> -p` is the `input` of `/usr/bin/openssl x509 -noout -subject -nameopt sep_multiline`, which prints it on a line `OU=<team>` (timeout 30 s each). The id in parentheses of an Apple Development identity is not the team ID |
   | `gh auth status --json hosts` (timeout 10 s)                                                              | the `login` of every account of every host of `hosts` (the output holds no token)                                                                                                                                                                                                                                                                                                                                                                                                     |
 
-- Never suggested, compared case-insensitively: a term shorter than 3 characters; the owner of `forge.repository`;
-  `Hephaestus` and `HEPH`; the placeholders of [../general.md](../general.md#placeholders) and their words
-  (`Jane Appleseed`, `Jane`, `Appleseed`, `user`, `/Users/user`, `user@example.com`, `Sam's iPad`, `Sam's MacBook Pro`,
-  `Studio`, `Sams-Mac-mini.local`, `Sams-Mac-mini`, `ABCDE12345`, `Atlas`, `API`, `Fixture`); the default and model
-  names of devices: `Mac`, `Mac mini`, `MacBook`, `MacBook Air`, `MacBook Pro`, `iMac`, `Mac Studio`, `Mac Pro`, `iPad`,
-  `iPad Air`, `iPad Pro`, `iPad mini` and `iPhone` ([../devices/roles.md](../devices/roles.md)).
+- Never suggested, compared case-insensitively: a term shorter than 3 characters; the repository's owner, `Azavech`
+  (the part of `ForgeConfig.publicRepository` before its `/`); `Hephaestus` and `HEPH`; the placeholders of
+  [../general.md](../general.md#placeholders) and their words (`Jane Appleseed`, `Jane`, `Appleseed`, `user`,
+  `/Users/user`, `user@example.com`, `Sam's iPad`, `Sam's MacBook Pro`, `Studio`, `Sams-Mac-mini.local`,
+  `Sams-Mac-mini`, `ABCDE12345`, `Atlas`, `API`, `Fixture`); the default and model names of devices: `Mac`, `Mac mini`,
+  `MacBook`, `MacBook Air`, `MacBook Pro`, `iMac`, `Mac Studio`, `Mac Pro`, `iPad`, `iPad Air`, `iPad Pro`, `iPad mini`
+  and `iPhone` ([../devices/roles.md](../devices/roles.md)).
 - A suggested term holding the typographic apostrophe `’` (macOS computer names use it) is followed by the same term
   with `'` in its place. A suggested term holding a letter outside ASCII is followed by its precomposed form
   (`precomposedStringWithCanonicalMapping`), its decomposed form (`decomposedStringWithCanonicalMapping`, as macOS file
@@ -965,6 +1019,15 @@ extension GitHubError: LocalizedError {
 
 // Internal, used by ForgeService and by the tests (@testable import).
 
+extension ForgeService {
+    /// Registering the source project, run by the configuration checks before their first row (ForgeChecks.swift):
+    /// returns when `config.sourceProjectID` is hosted on this Main, at once or once <folder> is imported; else throws
+    /// ProtocolError(.unavailable, "The Forge source project <ID> is not on this Main. <text of the failed step>").
+    /// `environment`: the environment of its git commands, LoginEnvironment.shared.environment() in the configuration
+    /// checks; the tests pass the environment of a GitSandbox (testing.md). The Forge need not be enabled.
+    func registerSourceProject(_ config: ForgeConfig, environment: [String: String]) async throws
+}
+
 /// Runs the git commands of Git operations in a repository root with an environment.
 struct ForgeGit: Sendable {
     /// Keeps `environment` with `GIT_NO_REPLACE_OBJECTS` = `1` added.
@@ -1028,7 +1091,8 @@ Host members used ([../services/host.md](../services/host.md)): `registry.hosted
 `registry.checkWritable(_:)` (the source project or one of its ancestors migrating), `tasks` (`create`, `addComment`,
 `update`), `sessions` (`SessionService.start(_:)`, `sessions(projectID:)`), `emit(_:)`, `mesh.localDevice()`,
 `mesh.snapshot()` (also the devices of Private terms), `registry.all()` and `registry.descendants(of:)` (the projects of
-Private terms), `hostInfo.claudePath` (nil: the Claude CLI is not available) and `hostInfo.gitAvailable`, and the host's
+Private terms), `hostInfo.claudePath` (nil: the Claude CLI is not available) and `hostInfo.gitAvailable`,
+`projects.importFolder(_:)` and `settings()` (`projectsFolderURL`) for Registering the source project, and the host's
 `appSupport`.
 
 The files of this doc:
@@ -1036,7 +1100,7 @@ The files of this doc:
 | File                  | Holds                                                                                                                                                                                                                                       |
 |-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `ForgeService.swift`  | the actor and its state, Forge host configuration, MCP tools (steps 1 and 8, calling `ForgePushGate`), Broadcasting, Methods, Startup and shutdown, Concurrency                                                                             |
-| `ForgeChecks.swift`   | `extension ForgeService`: Configuration checks                                                                                                                                                                                              |
+| `ForgeChecks.swift`   | `extension ForgeService`: Configuration checks and Registering the source project (`registerSourceProject(_:environment:)`)                                                                                                                 |
 | `ForgeFeedback.swift` | `extension ForgeService`: Feedback intake, Items and the join rule                                                                                                                                                                          |
 | `ForgeCycles.swift`   | `extension ForgeService`: Cycles (regeneration step, session observation, Retry) and Completion                                                                                                                                             |
 | `ForgePolling.swift`  | `extension ForgeService`: Checks and triggers, Polling                                                                                                                                                                                      |
@@ -1053,25 +1117,30 @@ the user changes them by hand.
 
 ## Depends on
 
-| Name                                                                                                                                                                                     | Defined in                                                                                     |
-|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
-| `ForgeConfig`, `ForgeRelease`, `FeedbackContext`, `FeedbackSelection`, `ForgeFeedbackParams`, `ForgeFeedbackResult`, `ForgeRetryParams`, `ForgeChangedPayload`, `SessionInfo`            | [../protocol/types.md](../protocol/types.md), [../protocol/methods.md](../protocol/methods.md) |
-| `ProtocolError`                                                                                                                                                                          | [../protocol/envelope.md](../protocol/envelope.md)                                             |
-| `HostService` (`tasks`, `sessions`, `registry`, `mesh`, `hostInfo`, `emit`, `appSupport`), its calls of `configure`, `shutdown`, `config`, the `forge.*` functions and the notifications | [../services/host.md](../services/host.md)                                                     |
-| `UploadRef` (the feedback screenshot)                                                                                                                                                    | [../protocol/types.md](../protocol/types.md#uploadref)                                         |
-| `UploadService.check` (`host.uploads`)                                                                                                                                                   | [../services/files.md](../services/files.md#7-uploads)                                         |
-| `SessionService`, `SessionStart`, `ChildProcess`, `CapturedOutput`, `LoginEnvironment`, the permission rules and environment of the sessions of 3.5                                      | [../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)                      |
-| `RegenerationContext`, `RegenerationItem`, `FailedCIRun`, `FailedCIJob`, the feedback and regeneration prompts                                                                           | [../claude/prompts.md](../claude/prompts.md)                                                   |
-| `forge_push_docs`, `forge_push_regen`, `MCPHost`                                                                                                                                         | [../claude/mcp.md](../claude/mcp.md)                                                           |
-| `scripts/check-public.sh` (options, output, exit status), the hooks, the private terms format, the protected paths, "If personal data was pushed"                                        | [../public-repository.md](../public-repository.md)                                             |
-| the placeholders                                                                                                                                                                         | [../general.md](../general.md#placeholders)                                                    |
-| the `public-check` and `public-check-terms` jobs                                                                                                                                         | [ci.md](ci.md)                                                                                 |
-| `DeviceRecord` (names and addresses of Private terms)                                                                                                                                    | [../protocol/types.md](../protocol/types.md)                                                   |
-| `HostedProject`, `registry.all()`, `registry.descendants(of:)` (the projects of Private terms)                                                                                           | [../services/host.md](../services/host.md#6-projectregistry)                                   |
-| task creation, comments, attachments, statuses                                                                                                                                           | [../data/task-yml.md](../data/task-yml.md)                                                     |
-| `DeviceSettings.forge`, `AppSupport`, `JSONFile`, `AtomicFile`, `private-terms.txt` in Application Support                                                                               | [../data/app-storage.md](../data/app-storage.md)                                               |
-| the Forge pane writing the `forge` settings, its Private terms row                                                                                                                       | [../ui/settings.md](../ui/settings.md)                                                         |
-| `DocsHash`                                                                                                                                                                               | [generation.md](generation.md)                                                                 |
-| `Log.host`                                                                                                                                                                               | [../architecture.md](../architecture.md#logging)                                               |
-| the repository's `.gitignore` (it ignores `.hephaestus/`)                                                                                                                                | [../architecture.md](../architecture.md)                                                       |
-| the default device names                                                                                                                                                                 | [../devices/roles.md](../devices/roles.md)                                                     |
+| Name                                                                                                                                                                                               | Defined in                                                                                     |
+|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
+| `ForgeConfig` (`publicRepository`), `ForgeRelease`, `FeedbackContext`, `FeedbackSelection`, `ForgeFeedbackParams`, `ForgeFeedbackResult`, `ForgeRetryParams`, `ForgeChangedPayload`, `SessionInfo` | [../protocol/types.md](../protocol/types.md), [../protocol/methods.md](../protocol/methods.md) |
+| `ProtocolError`                                                                                                                                                                                    | [../protocol/envelope.md](../protocol/envelope.md)                                             |
+| `HostService` (`tasks`, `sessions`, `registry`, `mesh`, `hostInfo`, `emit`, `appSupport`), its calls of `configure`, `shutdown`, `config`, the `forge.*` functions and the notifications           | [../services/host.md](../services/host.md)                                                     |
+| `UploadRef` (the feedback screenshot)                                                                                                                                                              | [../protocol/types.md](../protocol/types.md#uploadref)                                         |
+| `UploadService.check` (`host.uploads`)                                                                                                                                                             | [../services/files.md](../services/files.md#7-uploads)                                         |
+| `SessionService`, `SessionStart`, `ChildProcess`, `CapturedOutput`, `LoginEnvironment`, the permission rules and environment of the sessions of 3.5                                                | [../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)                      |
+| `RegenerationContext`, `RegenerationItem`, `FailedCIRun`, `FailedCIJob`, the feedback and regeneration prompts                                                                                     | [../claude/prompts.md](../claude/prompts.md)                                                   |
+| `forge_push_docs`, `forge_push_regen`, `MCPHost`                                                                                                                                                   | [../claude/mcp.md](../claude/mcp.md)                                                           |
+| `scripts/check-public.sh` (options, output, exit status), the hooks, the private terms format, the protected paths, "If personal data was pushed"                                                  | [../public-repository.md](../public-repository.md)                                             |
+| the placeholders                                                                                                                                                                                   | [../general.md](../general.md#placeholders)                                                    |
+| the `public-check` and `public-check-terms` jobs                                                                                                                                                   | [ci.md](ci.md)                                                                                 |
+| `DeviceRecord` (names and addresses of Private terms)                                                                                                                                              | [../protocol/types.md](../protocol/types.md)                                                   |
+| `HostedProject`, `registry.all()`, `registry.descendants(of:)` (the projects of Private terms)                                                                                                     | [../services/host.md](../services/host.md#6-projectregistry)                                   |
+| task creation, comments, attachments, statuses                                                                                                                                                     | [../data/task-yml.md](../data/task-yml.md)                                                     |
+| `DeviceSettings.forge`, `DeviceSettings.projectsFolderURL`, `AppSupport`, `JSONFile`, `AtomicFile`, `private-terms.txt` in Application Support                                                     | [../data/app-storage.md](../data/app-storage.md)                                               |
+| the Forge pane writing the `forge` settings, its Source project and Private terms rows                                                                                                             | [../ui/settings.md](../ui/settings.md)                                                         |
+| `DocsHash`                                                                                                                                                                                         | [generation.md](generation.md)                                                                 |
+| `Log.host`                                                                                                                                                                                         | [../architecture.md](../architecture.md#logging)                                               |
+| the repository's `.gitignore` (it ignores `.hephaestus/`)                                                                                                                                          | [../architecture.md](../architecture.md)                                                       |
+| the default device names                                                                                                                                                                           | [../devices/roles.md](../devices/roles.md)                                                     |
+| `host.projects.importFolder(_:)` (`projects.import`) and `host.settings()`, used to register the source project                                                                                    | [../services/host.md](../services/host.md#74-projectsimport)                                   |
+| `ProjectsImportParams`                                                                                                                                                                             | [../protocol/methods.md](../protocol/methods.md#projectsimport)                                |
+| `ProjectFile.load(projectRoot:)` (the identifier of an existing project.yml)                                                                                                                       | [../data/project-yml.md](../data/project-yml.md)                                               |
+| Add Existing Folder…                                                                                                                                                                               | [../ui/overview.md](../ui/overview.md#add-existing-folder)                                     |
+| `GitSandbox` (the tests of Registering the source project)                                                                                                                                         | [../testing.md](../testing.md#support-files)                                                   |

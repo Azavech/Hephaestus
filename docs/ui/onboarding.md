@@ -13,7 +13,7 @@ switches every window to the shell.
 
 | Platform       | Choices                                                                              |
 |----------------|--------------------------------------------------------------------------------------|
-| macOS          | "Use this Mac as a Main" (creates the mesh) or "Join a Mesh"                         |
+| macOS          | "Use this Mac as a Main" (creates the mesh and is its Forge) or "Join a Mesh"        |
 | iOS and iPadOS | "Join a Mesh" (only a Mac can be a Main, [../devices/roles.md](../devices/roles.md)) |
 
 ## Welcome screen
@@ -49,13 +49,20 @@ when it throws, its message shows in red under the field and nothing else happen
 macOS only. While it runs, its button shows the `ProgressView` and every control of the screen is disabled.
 
 1. The name is saved (above).
-2. `try await appModel.becomeMain()` ([shell.md](shell.md#33-main-toggle)): the host starts and creates the
-   mesh ([../devices/roles.md](../devices/roles.md#turning-main-on-macos)). `AppModel.phase` stays `.onboarding` while
-   it runs ([shell.md](shell.md#3-appmodel)), so this screen stays with its progress indicator.
-3. Success: `AppModel.phase` becomes `.ready`; every window shows the shell. A listener that could not start does not
+2. This Mac becomes the Forge of the mesh it creates: the stored value of `forge.enabled` is remembered, then
+   `try appModel.settings.update { $0.forge.enabled = true }`
+   ([../data/app-storage.md](../data/app-storage.md#settingsjson),
+   [../forge/pipeline.md](../forge/pipeline.md#forge-host-configuration)). When it throws, its message shows in red
+   under the field, as when saving the name fails, and nothing else happens.
+3. `try await appModel.becomeMain()` ([shell.md](shell.md#33-main-toggle)): the host starts, creates the
+   mesh ([../devices/roles.md](../devices/roles.md#turning-main-on-macos)) and, `forge.enabled` being on, enables the
+   Forge ([../forge/pipeline.md](../forge/pipeline.md#startup-and-shutdown)). `AppModel.phase` stays `.onboarding`
+   while it runs ([shell.md](shell.md#3-appmodel)), so this screen stays with its progress indicator.
+4. Success: `AppModel.phase` becomes `.ready`; every window shows the shell. A listener that could not start does not
    stop onboarding: the Main runs and Settings shows the error ([settings.md](settings.md#general)).
-4. Failure: an alert titled "This Mac could not become a Main" with the error's message and an OK button; the screen
-   stays.
+5. Failure: `try? appModel.settings.update { $0.forge.enabled = <the value remembered in step 2> }`, so a Mac that
+   then joins a mesh, or turns Main on later in Settings, is not made the Forge; then an alert titled "This Mac could
+   not become a Main" with the error's message and an OK button; the screen stays.
 
 ## Join a Mesh
 
@@ -81,8 +88,10 @@ struct OnboardingChoiceButton: View {
 
 ## Depends on
 
-| Name                                                                                                                            | Defined in                                 |
-|---------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------|
-| `AppModel` (`phase`, `identity`, `setLocalName`, `becomeMain`), `RootView`, `AppModel.preview()`, `previewWindow(_:selection:)` | [shell.md](shell.md)                       |
-| `JoinMeshView`                                                                                                                  | [devices.md](devices.md)                   |
-| default device names, name rule, turning Main on                                                                                | [../devices/roles.md](../devices/roles.md) |
+| Name                                                                                                                                        | Defined in                                       |
+|---------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------|
+| `AppModel` (`phase`, `identity`, `settings`, `setLocalName`, `becomeMain`), `RootView`, `AppModel.preview()`, `previewWindow(_:selection:)` | [shell.md](shell.md)                             |
+| `JoinMeshView`                                                                                                                              | [devices.md](devices.md)                         |
+| default device names, name rule, turning Main on                                                                                            | [../devices/roles.md](../devices/roles.md)       |
+| `SettingsStore.update`, `forge.enabled`                                                                                                     | [../data/app-storage.md](../data/app-storage.md) |
+| the Forge, enabled while `forge.enabled` is on                                                                                              | [../forge/pipeline.md](../forge/pipeline.md)     |

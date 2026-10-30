@@ -45,7 +45,14 @@ it through the `Workspace` of their environment. On macOS the shell sets `releas
 ### Requests
 
 Sent with the request API of the `MainConnection` of `forgeHostID` ([../client/workspace.md](../client/workspace.md));
-without a Forge host they throw `ProtocolError(.unavailable, "No Forge is online.")`.
+without a Forge host they throw `ProtocolError(.unavailable, "No Forge is online.")`. When the screenshot upload of
+`sendFeedback` fails with `notFound` (the Forge host hosts no project `<ID>`: its `uploads.begin` answers
+`notFound` before the Forge's own configuration checks run,
+[../forge/pipeline.md](../forge/pipeline.md#registering-the-source-project)), `sendFeedback` sends no
+`forge.feedback` and throws `ProtocolError(.notFound, "The Forge on <Forge host name> has no source project <ID> yet.
+Its Forge screen says what is missing.")`: `<Forge host name>` is the `name` of the Forge host's connection, as
+[../forge/feedback.md](../forge/feedback.md#content) names a Main, and `<ID>` the `sourceProjectID` of
+`forgeConfigs[forgeHostID]`. Other upload errors are rethrown as they are.
 
 | Function                                             | Connection call                                                                                                                                                                                                                                                                              | Method                        |
 |------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------|
@@ -75,9 +82,11 @@ While `forgeHostID` is set and `state` is nil, Pipeline, CI Run and Latest Relea
 `ProgressView` with `Loading…`, or `loadError` in red when set.
 
 Hashes show their first 12 characters in a monospaced font; their context menu has `Copy`, which copies the full
-value. Commits show their first 8 characters as a link to `https://github.com/<repository>/commit/<sha>`. Links open
-with the environment's `openURL` (the default browser). Relative dates use `.relative(presentation: .named)`. Requests
-run through `banners.perform` of the window's `WindowBanners`, which shows a failure in the window's error banner.
+value. Commits show their first 8 characters as a link to `https://github.com/<repository>/commit/<sha>`, where
+`<repository>` is the `repository` of the Forge's `ForgeConfig`: the Forge host always sets it to the constant
+`ForgeConfig.publicRepository` ([../protocol/types.md](../protocol/types.md#forgeconfig)). Links open with the
+environment's `openURL` (the default browser). Relative dates use `.relative(presentation: .named)`. Requests run
+through `banners.perform` of the window's `WindowBanners`, which shows a failure in the window's error banner.
 
 ### Forge
 
@@ -91,12 +100,15 @@ With a Forge host, `LabeledContent` rows, from `forgeConfigs[forgeHostID]`:
 | Branch                   | `branch`                                                                                   |
 | Regenerate automatically | `On` or `Off`                                                                              |
 
-- Footer (caption): `Change these in Settings ▸ Forge & Updates on <host name>.`
+- Repository is a link only: the repository is a constant of the code, and nothing on this screen or in Settings
+  edits it.
+- Footer (caption): `Change the source project, the branch and automatic regeneration in Settings ▸ Forge & Updates
+  on <host name>.`
 - When `forgeHostIDs` has more than one Main, a row in orange: `Several Mains are set as the Forge: <names>. Feedback
   goes to <first name>.`
 
-Without a Forge host: the headline `No Forge online` and the secondary text `The Forge is the Main where “This Main is
-the Forge” is on in Settings ▸ Forge & Updates.`
+Without a Forge host: the headline `No Forge online` and the secondary text `The Forge is the Main where “Set as
+Forge” is on in Settings ▸ Forge & Updates.`
 
 ### Docs Hashes
 
@@ -233,7 +245,8 @@ Settings ▸ Forge & Updates embeds it on macOS ([settings.md](settings.md)).
     public func refresh() async
     public func regenerate() async throws
     public func retry(itemTaskID: String) async throws
-    /// Uploads the screenshot (when there is one) to the Forge's source project, then sends forge.feedback.
+    /// Uploads the screenshot (when there is one) to the Forge's source project, then sends forge.feedback. An upload
+    /// that fails with notFound throws "The Forge on <Forge host name> has no source project <ID> yet. …" (Requests).
     public func sendFeedback(screenshot: Data?, comment: String, context: FeedbackContext,
                              progress: @escaping @MainActor (TransferProgress) -> Void) async throws
         -> ForgeFeedbackResult
@@ -255,15 +268,15 @@ public struct UpdateStatusView: View { public init() }
 
 ## Depends on
 
-| Name                                                                                                                                                                                            | Defined in                                                                                       |
-|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
-| `ForgeState`, `ForgeConfig`, `ForgeCycle`, `ForgeItem`, `ForgeHead`, `ForgeRun`, `ForgeRelease`, `ForgeStage`, `ForgeTrigger`, `FeedbackContext`, `ForgeFeedbackResult`, `DeviceRecord`         | [../protocol/types.md](../protocol/types.md), [../forge/pipeline.md](../forge/pipeline.md#types) |
-| `forge.status`, `forge.regenerate`, `forge.retry`, `forge.feedback`, `uploads.*`, `host.info`, `forge.changed`                                                                                  | [../forge/pipeline.md](../forge/pipeline.md), [../protocol/methods.md](../protocol/methods.md)   |
-| `Workspace` (`forge`, `mains`, `connection(_:)`, `mesh`, `presence`, the calls of the Inputs table), `MainConnection` (request API, `upload`), `TransferProgress`, `Selection`                  | [../client/workspace.md](../client/workspace.md)                                                 |
-| `UpdateModel` (`checkNow`, `install`, `restartNow`), update texts                                                                                                                               | [../forge/update.md](../forge/update.md)                                                         |
-| `DocsHash.embedded`                                                                                                                                                                             | [../forge/generation.md](../forge/generation.md)                                                 |
-| `SettingsStore` (`updates.enabled`)                                                                                                                                                             | [../data/app-storage.md](../data/app-storage.md)                                                 |
-| sidebar section, `releaseObserver` wiring, `UpdateModel` in the environment, `WindowContext` (`selection`, `navigate`), `WindowBanners` (`perform`, error banner), `StatusDot`, `PresenceLabel` | [shell.md](shell.md)                                                                             |
-| Settings ▸ Forge & Updates                                                                                                                                                                      | [settings.md](settings.md)                                                                       |
-| `SessionCenter` (the pattern `ForgeModel` follows)                                                                                                                                              | [sessions.md](sessions.md)                                                                       |
-| `ProtocolError`                                                                                                                                                                                 | [../protocol/envelope.md](../protocol/envelope.md)                                               |
+| Name                                                                                                                                                                                                         | Defined in                                                                                       |
+|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
+| `ForgeState`, `ForgeConfig` (`publicRepository`), `ForgeCycle`, `ForgeItem`, `ForgeHead`, `ForgeRun`, `ForgeRelease`, `ForgeStage`, `ForgeTrigger`, `FeedbackContext`, `ForgeFeedbackResult`, `DeviceRecord` | [../protocol/types.md](../protocol/types.md), [../forge/pipeline.md](../forge/pipeline.md#types) |
+| `forge.status`, `forge.regenerate`, `forge.retry`, `forge.feedback`, `uploads.*`, `host.info`, `forge.changed`                                                                                               | [../forge/pipeline.md](../forge/pipeline.md), [../protocol/methods.md](../protocol/methods.md)   |
+| `Workspace` (`forge`, `mains`, `connection(_:)`, `mesh`, `presence`, the calls of the Inputs table), `MainConnection` (request API, `upload`, `name`), `TransferProgress`, `Selection`                       | [../client/workspace.md](../client/workspace.md)                                                 |
+| `UpdateModel` (`checkNow`, `install`, `restartNow`), update texts                                                                                                                                            | [../forge/update.md](../forge/update.md)                                                         |
+| `DocsHash.embedded`                                                                                                                                                                                          | [../forge/generation.md](../forge/generation.md)                                                 |
+| `SettingsStore` (`updates.enabled`)                                                                                                                                                                          | [../data/app-storage.md](../data/app-storage.md)                                                 |
+| sidebar section, `releaseObserver` wiring, `UpdateModel` in the environment, `WindowContext` (`selection`, `navigate`), `WindowBanners` (`perform`, error banner), `StatusDot`, `PresenceLabel`              | [shell.md](shell.md)                                                                             |
+| Settings ▸ Forge & Updates                                                                                                                                                                                   | [settings.md](settings.md)                                                                       |
+| `SessionCenter` (the pattern `ForgeModel` follows)                                                                                                                                                           | [sessions.md](sessions.md)                                                                       |
+| `ProtocolError`                                                                                                                                                                                              | [../protocol/envelope.md](../protocol/envelope.md)                                               |
