@@ -22,6 +22,8 @@ struct PathBar: View {
                 }
             }
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 2)
     }
 
     private var separator: some View {
