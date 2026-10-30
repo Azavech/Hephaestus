@@ -106,9 +106,12 @@ permissions and Keychain access across updates.
 - The mesh credentials item ([../data/app-storage.md](../data/app-storage.md#keychain)) can be read without a prompt
   only by a build whose signature matches the build that created it, or by a build allowed with "Always Allow". The
   first re-signed build after an ad-hoc one (such as the release installed by hand as the README says) and, when no
-  identity is used, every update (each ad-hoc build has a new signature) make macOS ask at their first launch whether
-  Hephaestus may use the `ca.azavech.hephaestus.mesh` item; "Always Allow" stops it. Until it is answered the
-  Keychain call waits: the Mac does not connect to the mesh and, as a Main, does not serve its devices.
+  identity is used, every update (each ad-hoc build has a new signature) make macOS ask for the login keychain
+  password at each Keychain call on the `ca.azavech.hephaestus.mesh` item, from their first launch until the user
+  answers "Always Allow". The credential store keeps the item's value once it has read it
+  ([../data/app-storage.md](../data/app-storage.md#value-in-memory)), so a launch asks at most once; after "Deny"
+  the read fails, and the next read asks again. Until the prompt is answered the Keychain call waits: the Mac does not
+  connect to the mesh and, as a Main, does not serve its devices.
 - The first re-signing with an identity (for example the user's Apple Development identity) may show a macOS Keychain
   prompt asking to let `codesign` use the identity's key; "Always Allow" stops it from appearing again. A prompt left
   unanswered ends with the 120 s timeout of step 2 and the failure of step 3.

@@ -350,15 +350,40 @@ deleted through a `MeshCredentialStore`:
 - `save(_:)` deletes every item of the service, then adds the new item. Deleting every item of the service calls
   `SecItemDelete` with the class and the service until it returns `errSecItemNotFound`, at most 64 times.
 - The value is `{"meshID":"<UUID>","meshKey":"<base64 of the 32-byte key>"}`.
-- `load()` queries the service with `kSecMatchLimitOne` and `kSecReturnData`, and decodes the data with
-  `WireCoding.makeDecoder()`. `errSecItemNotFound` gives `nil`; data that does not decode throws
-  `.unreadable("Keychain item: <decoding error>")`.
+- `load()` reads the item when the store does not know its value ([Value in memory](#value-in-memory)): it queries
+  the service with `kSecMatchLimitOne` and `kSecReturnData`, and decodes the data with `WireCoding.makeDecoder()`.
+  `errSecItemNotFound` gives `nil`; data that does not decode throws `.unreadable("Keychain item: <decoding error>")`.
 - `delete()` deletes every item of the service. `errSecItemNotFound` from a delete is a success.
 - On macOS the item is in the login keychain: `kSecUseDataProtectionKeychain` is not set. A build whose code signature
-  differs from the one of the build that created the item makes macOS ask once whether Hephaestus may use it ("Always
-  Allow" stops it); until it is answered the Keychain call waits ([forge/update.md](../forge/update.md#re-signing)).
+  the item does not trust (a signature other than the one of the build that created the item, not yet allowed with
+  "Always Allow") makes macOS ask for the login keychain password at each Keychain call, until the user answers
+  "Always Allow"; until the prompt is answered, the Keychain call waits
+  ([forge/update.md](../forge/update.md#re-signing)). Since the store reads the item once and keeps its value
+  ([Value in memory](#value-in-memory)), a launch asks at most once, unless the user answers "Deny": that read fails,
+  and the next `load()` asks again.
 - A Keychain call that returns another status throws `.io("Keychain error <status>")`.
-- `init(service:)` makes the service name injectable; `shared` is `KeychainCredentialStore(service: defaultService)`.
+- `init(service:keychain:)` makes the service name and the Keychain calls injectable. `keychain` is a `KeychainCalls`:
+  the store calls its `copyMatching`, `add` and `delete` where it would call `SecItemCopyMatching`, `SecItemAdd` and
+  `SecItemDelete`, with the same arguments. Its default, `KeychainCalls.system`, is those three functions; tests pass
+  a fake ([testing.md](../testing.md#hephcoretests)). `shared` is `KeychainCredentialStore(service: defaultService)`.
+
+### Value in memory
+
+`KeychainCredentialStore` keeps the item's value in memory and reads the item only when it does not know the value: as
+long as none of its calls fails, it reads the item at most once per process.
+
+- A new store does not know the value. `load()` returns the value when the store knows it (the credentials, or `nil`
+  for no item), without a Keychain call. Otherwise it reads the item, remembers the result and returns it.
+- Concurrent `load()` calls while the value is unknown make one read: the others wait for it and return its result,
+  the credentials or the error it threw.
+- A read that throws is not remembered: the value stays unknown, and the next `load()` reads again.
+- After a successful `save(_:)`, the store knows the saved credentials; after a successful `delete()`, it knows `nil`.
+  When either fails, the value becomes unknown, so the next `load()` reads the item again.
+- The store keeps what it knows in a `Mutex`. Each read, save and delete runs while holding another `Mutex`, which it
+  releases only once it has recorded its result, so the store makes one at a time: a call that needs the Keychain
+  waits for the one in progress, and the value of a read never replaces the one of a later save or delete.
+- Nothing else writes the item: the app creates one store, `shared`, and every save and delete of the mesh
+  credentials goes through it ([Credential store](#credential-store)), so the remembered value stays right.
 
 ## Caches
 
@@ -616,7 +641,23 @@ public protocol MeshCredentialStore: AnyObject, Sendable {
     func changes() -> AsyncStream<MeshCredentials?>
 }
 
-/// The Keychain item of the Keychain section.
+/// The Keychain calls of a KeychainCredentialStore (Keychain item section): the Security functions in the app, fakes
+/// in tests.
+public struct KeychainCalls: Sendable {
+    /// Called as SecItemCopyMatching(query, result).
+    public let copyMatching: @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    /// Called as SecItemAdd(attributes, result).
+    public let add: @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    /// Called as SecItemDelete(query).
+    public let delete: @Sendable (CFDictionary) -> OSStatus
+    public init(copyMatching: @escaping @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus,
+                add: @escaping @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus,
+                delete: @escaping @Sendable (CFDictionary) -> OSStatus)
+    /// SecItemCopyMatching, SecItemAdd and SecItemDelete.
+    public static let system: KeychainCalls
+}
+
+/// The Keychain item of the Keychain section, its value kept in memory (Value in memory).
 public final class KeychainCredentialStore: MeshCredentialStore {
     /// "ca.azavech.hephaestus.mesh"
     public static let defaultService: String
@@ -624,7 +665,8 @@ public final class KeychainCredentialStore: MeshCredentialStore {
     public static let shared: KeychainCredentialStore
     /// kSecAttrService of the item.
     public let service: String
-    public init(service: String = KeychainCredentialStore.defaultService)
+    /// Tests pass a fake keychain.
+    public init(service: String = KeychainCredentialStore.defaultService, keychain: KeychainCalls = .system)
 }
 
 /// Tests and previews: the credentials in memory; never throws.
