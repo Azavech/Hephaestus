@@ -1,0 +1,27 @@
+# Build products
+build/
+.build/
+DerivedData/
+
+# Xcode and SwiftPM user state
+xcuserdata/
+*.xcuserstate
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# Personal and machine data: never in this public repository (docs/public-repository.md)
+.hephaestus/
+.claude/
+CLAUDE.local.md
+.mcp.json
+Signing.local.xcconfig
+.env
+.env.*
+*.p12
+*.mobileprovision
+*.provisionprofile
+*.cer
+*.pem
+*.key

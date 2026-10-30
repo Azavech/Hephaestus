@@ -1,0 +1,51 @@
+#!/bin/bash
+# Refuses a push that would publish personal data: checks the name of each pushed ref and every commit the push
+# adds to the remote, with this clone's check and, when the remote's commit holds another one, with that one too.
+# Pushes only commits to branches: refuses every tag (tags are created only by CI releases), every other ref outside
+# refs/heads/ and every object that is not a commit. See docs/public-repository.md.
+# Arguments: <remote name> <remote URL>. Standard input, one line per pushed ref:
+# <local ref> <local sha> <remote ref> <remote sha>
+export GIT_NO_REPLACE_OBJECTS=1 # the objects as git pushes them, never their replacements (git replace)
+url=$2
+status=0 listed=0 heads=''
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case $local_sha in *[!0]*) ;; *) continue ;; esac # a deletion publishes nothing
+  case $remote_ref in
+    refs/heads/*) ;;
+    refs/tags/*) echo 'Tags are created only by CI releases.'; status=1; continue ;;
+    *) echo 'Only branches are pushed: refs/heads/<name>.'; status=1; continue ;;
+  esac
+  if [ "$(git cat-file -t "$local_sha" 2>/dev/null)" != commit ]; then
+    echo 'Only commits are pushed.'; status=1; continue
+  fi
+  base=''
+  if git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+    range=("$remote_sha..$local_sha")
+    base=$remote_sha
+  else
+    # A new branch, or a remote commit this clone does not have: the commits that no branch of the remote has now.
+    # Remote-tracking refs are not trusted: one left by a branch deleted on the remote still holds its commits.
+    if [ $listed -eq 0 ]; then
+      heads=$(git ls-remote --heads "$url" </dev/null 2>/dev/null) || {
+        echo 'Cannot list the branches of the remote.'
+        exit 1
+      }
+      listed=1
+    fi
+    range=("$local_sha" --not)
+    for sha in $heads; do # "<sha> <ref>" pairs; a branch whose commit this clone does not have excludes nothing
+      case $sha in refs/*) continue ;; esac
+      git cat-file -e "$sha^{commit}" 2>/dev/null && range+=("$sha")
+    done
+  fi
+  bash scripts/check-public.sh --ref "$remote_ref" --commits "${range[@]}" </dev/null || status=1
+  # The pushed commits cannot weaken the check that judges them: the remote's check runs too when it differs.
+  if [ -n "$base" ] && published=$(git rev-parse -q --verify "$base:scripts/check-public.sh") &&
+    [ "$published" != "$(git hash-object scripts/check-public.sh 2>/dev/null)" ]; then
+    copy=$(mktemp "${TMPDIR:-/tmp}/check-public.XXXXXX") || exit 1
+    git cat-file blob "$published" >"$copy" &&
+      bash "$copy" --ref "$remote_ref" --commits "${range[@]}" </dev/null || status=1
+    rm -f "$copy"
+  fi
+done
+exit $status

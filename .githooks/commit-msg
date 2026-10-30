@@ -1,0 +1,3 @@
+#!/bin/bash
+# Refuses a commit message that holds personal data or a CI skip marker. See docs/public-repository.md.
+exec bash scripts/check-public.sh --message "$1"

@@ -1,0 +1,4 @@
+{"type":"control_request","request_id":"init","request":{"subtype":"initialize","hooks":null}}
+{"type":"user","message":{"role":"user","content":"Write the English words for the numbers one to three hundred, separated by commas."},"parent_tool_use_id":null,"session_id":""}
+{"type":"control_request","request_id":"interrupt-1","request":{"subtype":"interrupt"}}
+{"type":"user","message":{"role":"user","content":"Now reply with exactly: SECOND-TURN-OK"},"parent_tool_use_id":null,"session_id":""}

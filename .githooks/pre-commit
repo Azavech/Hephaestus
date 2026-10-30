@@ -1,0 +1,3 @@
+#!/bin/bash
+# Refuses a commit whose staged files hold personal data. See docs/public-repository.md.
+exec bash scripts/check-public.sh --staged

@@ -1,0 +1,3 @@
+{"type":"control_request","request_id":"req_init","request":{"subtype":"initialize","hooks":null}}
+{"type":"user","message":{"role":"user","content":"Use the Bash tool to run exactly: touch probe-file.txt && ls. Then report the listing."},"parent_tool_use_id":null,"session_id":""}
+{"type":"control_response","response":{"subtype":"success","request_id":"00000000-0000-4000-8000-000000000301","response":{"behavior":"allow","updatedInput":{"command":"touch probe-file.txt && ls","description":"Create probe-file.txt and list directory contents"}}}}

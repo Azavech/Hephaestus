@@ -1,0 +1,3 @@
+// Signing of the Hephaestus target (docs/architecture.md). This file is public: never put a team ID in it.
+// Your team ID goes in Config/Signing.local.xcconfig, ignored by git, for example DEVELOPMENT_TEAM = ABCDE12345
+#include? "Signing.local.xcconfig"

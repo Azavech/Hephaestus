@@ -1,0 +1,221 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-check:
+    if: ${{ github.event_name != 'push' || !github.event.deleted }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check for personal data
+        env:
+          EVENT: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
+          BEFORE: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -f "$RUNNER_TEMP/private-terms.txt" ]; then
+            export HEPHAESTUS_PRIVATE_TERMS="$RUNNER_TEMP/private-terms.txt"
+          fi
+          out="$RUNNER_TEMP/public-check.txt"
+          status=0
+          : > "$out"
+          if git ls-tree -r HEAD -- scripts/check-public.sh .githooks/ | grep -v '^100755 ' | grep -q .; then
+            echo 'scripts/check-public.sh and the files of .githooks/ must have mode 100755.' >> "$out"
+            status=1
+          fi
+          refs=() range=() base=''
+          if [ "$EVENT" = push ]; then
+            case $GITHUB_REF in refs/tags/*) echo 'Tags are created only by CI releases.' >> "$out"; status=1 ;; esac
+            refs=(--ref "$GITHUB_REF")
+            if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              range=("$BEFORE..$GITHUB_SHA")
+              base=$BEFORE
+            else
+              range=("$GITHUB_SHA" --not "--exclude=$BRANCH" --tags='build-*')
+            fi
+          elif [ "$EVENT" = pull_request ]; then
+            range=("$BASE_SHA..$HEAD_SHA")
+            base=$BASE_SHA
+          fi
+          if [ -z "$base" ]; then
+            base=$(git tag --list 'build-*' --sort=-v:refname | head -n 1)
+          fi
+          check() {
+            bash "$1" "${refs[@]}" --tree HEAD >> "$out" 2>&1 || status=1
+            if [ ${#range[@]} -gt 0 ]; then
+              bash "$1" --commits "${range[@]}" >> "$out" 2>&1 || status=1
+            fi
+          }
+          check scripts/check-public.sh
+          if [ -n "$base" ] && git cat-file -e "$base:scripts/check-public.sh" 2>/dev/null &&
+            [ "$(git rev-parse "$base:scripts/check-public.sh")" != "$(git rev-parse HEAD:scripts/check-public.sh 2>/dev/null)" ]; then
+            git show "$base:scripts/check-public.sh" > "$RUNNER_TEMP/check-public-base.sh"
+            check "$RUNNER_TEMP/check-public-base.sh"
+          fi
+          if [ -n "${HEPHAESTUS_PRIVATE_TERMS:-}" ] && grep -q '^Note: ' "$out"; then
+            echo 'The secret PRIVATE_TERMS is missing or holds no private terms.' >> "$out"
+            status=1
+          fi
+          cat "$out"
+          if [ "$status" -ne 0 ]; then
+            {
+              echo "## Personal data check failed"
+              echo ""
+              sed 's/^/    /' "$out"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
+
+  public-check-terms:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && !github.event.deleted }}
+    runs-on: ubuntu-latest
+    environment: private-terms
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Write the private terms
+        env:
+          PRIVATE_TERMS: ${{ secrets.PRIVATE_TERMS }}
+        run: |
+          printf '%s\n' "$PRIVATE_TERMS" > "$RUNNER_TEMP/private-terms.txt"
+      - name: Check for personal data
+        env:
+          EVENT: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
+          BEFORE: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -f "$RUNNER_TEMP/private-terms.txt" ]; then
+            export HEPHAESTUS_PRIVATE_TERMS="$RUNNER_TEMP/private-terms.txt"
+          fi
+          out="$RUNNER_TEMP/public-check.txt"
+          status=0
+          : > "$out"
+          if git ls-tree -r HEAD -- scripts/check-public.sh .githooks/ | grep -v '^100755 ' | grep -q .; then
+            echo 'scripts/check-public.sh and the files of .githooks/ must have mode 100755.' >> "$out"
+            status=1
+          fi
+          refs=() range=() base=''
+          if [ "$EVENT" = push ]; then
+            case $GITHUB_REF in refs/tags/*) echo 'Tags are created only by CI releases.' >> "$out"; status=1 ;; esac
+            refs=(--ref "$GITHUB_REF")
+            if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+              range=("$BEFORE..$GITHUB_SHA")
+              base=$BEFORE
+            else
+              range=("$GITHUB_SHA" --not "--exclude=$BRANCH" --tags='build-*')
+            fi
+          elif [ "$EVENT" = pull_request ]; then
+            range=("$BASE_SHA..$HEAD_SHA")
+            base=$BASE_SHA
+          fi
+          if [ -z "$base" ]; then
+            base=$(git tag --list 'build-*' --sort=-v:refname | head -n 1)
+          fi
+          check() {
+            bash "$1" "${refs[@]}" --tree HEAD >> "$out" 2>&1 || status=1
+            if [ ${#range[@]} -gt 0 ]; then
+              bash "$1" --commits "${range[@]}" >> "$out" 2>&1 || status=1
+            fi
+          }
+          check scripts/check-public.sh
+          if [ -n "$base" ] && git cat-file -e "$base:scripts/check-public.sh" 2>/dev/null &&
+            [ "$(git rev-parse "$base:scripts/check-public.sh")" != "$(git rev-parse HEAD:scripts/check-public.sh 2>/dev/null)" ]; then
+            git show "$base:scripts/check-public.sh" > "$RUNNER_TEMP/check-public-base.sh"
+            check "$RUNNER_TEMP/check-public-base.sh"
+          fi
+          if [ -n "${HEPHAESTUS_PRIVATE_TERMS:-}" ] && grep -q '^Note: ' "$out"; then
+            echo 'The secret PRIVATE_TERMS is missing or holds no private terms.' >> "$out"
+            status=1
+          fi
+          cat "$out"
+          if [ "$status" -ne 0 ]; then
+            {
+              echo "## Personal data check failed"
+              echo ""
+              sed 's/^/    /' "$out"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
+
+  docs-sync:
+    needs: [public-check, public-check-terms]
+    if: ${{ !cancelled() && needs.public-check.result == 'success' && (needs.public-check-terms.result == 'success' || needs.public-check-terms.result == 'skipped') && (github.event_name != 'push' || github.ref == 'refs/heads/main') }}
+    runs-on: ubuntu-latest
+    outputs:
+      in_sync: ${{ steps.check.outputs.in_sync }}
+      docs_hash: ${{ steps.check.outputs.docs_hash }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: check
+        name: Compare the docs hash with App/DocsHash.txt
+        run: |
+          actual="$(scripts/docs-hash.sh)"
+          recorded="$(tr -d '[:space:]' < App/DocsHash.txt 2>/dev/null || true)"
+          echo "docs_hash=$actual" >> "$GITHUB_OUTPUT"
+          if [ "$actual" = "$recorded" ]; then
+            echo "in_sync=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "in_sync=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Docs are ahead of the code — waiting for regeneration"
+              echo ""
+              echo "- Docs hash of \`docs/\`: \`$actual\`"
+              echo "- \`App/DocsHash.txt\`: \`${recorded:-missing}\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  build:
+    needs: [public-check, public-check-terms, docs-sync]
+    if: ${{ !cancelled() && needs.docs-sync.result == 'success' && needs.docs-sync.outputs.in_sync == 'true' }}
+    runs-on: xcode-27
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test
+        run: scripts/test.sh
+      - name: Build iOS
+        run: scripts/build.sh ios
+      - name: Build macOS release
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: scripts/build.sh macos-release
+      - name: Package
+        run: scripts/package-macos.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Hephaestus-macOS
+          path: build/Hephaestus-macOS.zip
+          if-no-files-found: error
+      - name: Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DOCS_HASH: ${{ needs.docs-sync.outputs.docs_hash }}
+        run: |
+          printf 'Commit: %s\nDocs hash: %s\n' "$GITHUB_SHA" "$DOCS_HASH" > build/release-notes.md
+          gh release create "build-$GITHUB_RUN_NUMBER" build/Hephaestus-macOS.zip \
+            --target "$GITHUB_SHA" \
+            --title "Hephaestus 1.0 ($GITHUB_RUN_NUMBER)" \
+            --notes-file build/release-notes.md

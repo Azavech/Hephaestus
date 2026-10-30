@@ -1,0 +1,2 @@
+{"type":"control_request","request_id":"req_init","request":{"subtype":"initialize","hooks":null}}
+{"type":"user","message":{"role":"user","content":"Run the shell command `echo hello-from-test` with the Bash tool, then tell me its output."},"parent_tool_use_id":null,"session_id":""}
