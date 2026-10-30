@@ -43,6 +43,8 @@ public final class Workspace {
     /// The mesh credentials in use; nil without a mesh.
     @ObservationIgnored private(set) var credentials: MeshCredentials?
     @ObservationIgnored var topicHolders: [TopicKey: Int] = [:]
+    /// The last `subscribe` or `unsubscribe` request queued per Main; the next one waits for it.
+    @ObservationIgnored var topicQueues: [UUID: Task<Void, Never>] = [:]
     /// The downloads in progress, by destination path.
     @ObservationIgnored var downloadGates: [String: DownloadGate] = [:]
     @ObservationIgnored private var isStarted = false

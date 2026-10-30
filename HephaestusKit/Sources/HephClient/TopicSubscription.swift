@@ -3,7 +3,7 @@ import HephCore
 import Synchronization
 
 /// A held subscription to a topic of a Main (docs/client/workspace.md, "Subscriptions"). The Workspace counts the
-/// holders of each topic: the first one subscribes, the last `cancel()` unsubscribes.
+/// holders of each topic: the first one holds it, the last `cancel()` releases it.
 @MainActor
 public final class TopicSubscription {
     public let mainDeviceID: UUID
@@ -50,26 +50,20 @@ public final class TopicSubscription {
 }
 
 extension Workspace {
-    /// Holds `topic` on the Main `mainDeviceID`. The first holder sends `subscribe` when the connection is connected
-    /// and awaits the answer; a failure is logged and the topic stays held. On every handshake the held topics are
-    /// subscribed again.
+    /// Holds `topic` on the Main `mainDeviceID`. The first holder queues `subscribe` and awaits its answer; a failure
+    /// is logged and the topic stays held. On every handshake the held topics are subscribed again.
     public func subscribe(_ topic: Topic, on mainDeviceID: UUID) async -> TopicSubscription {
         let subscription = TopicSubscription(workspace: self, mainDeviceID: mainDeviceID, topic: topic)
         let key = TopicKey(mainDeviceID: mainDeviceID, topic: topic)
         let holders = topicHolders[key, default: 0]
         topicHolders[key] = holders + 1
-        if holders == 0, let connection = connection(mainDeviceID), connection.isConnected {
-            do {
-                try await connection.subscribeTopics([topic])
-            } catch {
-                let message = Workspace.message(of: error)
-                Log.client.error("Could not subscribe to \(topic.rawValue, privacy: .public): \(message)")
-            }
+        if holders == 0, let request = enqueueTopicRequest(subscribe: true, topic, on: mainDeviceID) {
+            await request.value
         }
         return subscription
     }
 
-    /// One holder of the topic is gone; the last one sends `unsubscribe` when connected, without waiting.
+    /// One holder of the topic is gone; the last one queues `unsubscribe`, without waiting.
     func releaseTopic(_ topic: Topic, on mainDeviceID: UUID) {
         let key = TopicKey(mainDeviceID: mainDeviceID, topic: topic)
         guard let holders = topicHolders[key] else { return }
@@ -78,15 +72,39 @@ extension Workspace {
             return
         }
         topicHolders[key] = nil
-        guard let connection = connection(mainDeviceID), connection.isConnected else { return }
-        Task {
+        enqueueTopicRequest(subscribe: false, topic, on: mainDeviceID)
+    }
+
+    /// Queues a `subscribe` or `unsubscribe` request behind the earlier ones of the Main: it is sent once the previous
+    /// one has been answered, when the connection is connected on the same peer as when it was queued (a close drops
+    /// it) and the request is still needed: `subscribe` while the topic is held, `unsubscribe` while it is not.
+    @discardableResult
+    private func enqueueTopicRequest(subscribe: Bool, _ topic: Topic, on mainDeviceID: UUID) -> Task<Void, Never>? {
+        guard let connection = connection(mainDeviceID) else { return nil }
+        let generation = connection.generation
+        let key = TopicKey(mainDeviceID: mainDeviceID, topic: topic)
+        let previous = topicQueues[mainDeviceID]
+        let request = Task { [weak self, weak connection] in
+            await previous?.value
+            guard let self, let connection, connection.isConnected, connection.generation == generation,
+                  (self.topicHolders[key] != nil) == subscribe else { return }
             do {
-                try await connection.unsubscribeTopics([topic])
+                if subscribe {
+                    try await connection.subscribeTopics([topic])
+                } else {
+                    try await connection.unsubscribeTopics([topic])
+                }
             } catch {
                 let message = Workspace.message(of: error)
-                Log.client.error("Could not unsubscribe from \(topic.rawValue, privacy: .public): \(message)")
+                if subscribe {
+                    Log.client.error("Could not subscribe to \(topic.rawValue, privacy: .public): \(message)")
+                } else {
+                    Log.client.error("Could not unsubscribe from \(topic.rawValue, privacy: .public): \(message)")
+                }
             }
         }
+        topicQueues[mainDeviceID] = request
+        return request
     }
 
     /// The topics held on a Main, for the re-subscription of the reconnect sequence.

@@ -72,8 +72,9 @@ public final class MainConnection: Identifiable {
     @ObservationIgnored private(set) var peer: RPCPeer?
     /// Counts the failed attempts and the drops since the last successful handshake.
     @ObservationIgnored private var failures = 0
-    /// Incremented for each new peer and each teardown: work of an older peer is ignored.
-    @ObservationIgnored private var generation = 0
+    /// Incremented for each new peer and each teardown: work of an older peer is ignored, and the topic requests
+    /// queued before a close are dropped.
+    @ObservationIgnored private(set) var generation = 0
     /// The generation whose `peer.run()` returned.
     @ObservationIgnored private var finishedGeneration = -1
     /// The attempts and their backoff sleeps.
