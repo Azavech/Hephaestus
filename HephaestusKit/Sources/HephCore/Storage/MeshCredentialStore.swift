@@ -41,8 +41,33 @@ private struct ChangeStreams {
     }
 }
 
+/// The Keychain calls of a KeychainCredentialStore (Keychain item section): the Security functions in the app, fakes
+/// in tests.
+public struct KeychainCalls: Sendable {
+    /// Called as SecItemCopyMatching(query, result).
+    public let copyMatching: @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    /// Called as SecItemAdd(attributes, result).
+    public let add: @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    /// Called as SecItemDelete(query).
+    public let delete: @Sendable (CFDictionary) -> OSStatus
+
+    public init(copyMatching: @escaping @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus,
+                add: @escaping @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus,
+                delete: @escaping @Sendable (CFDictionary) -> OSStatus) {
+        self.copyMatching = copyMatching
+        self.add = add
+        self.delete = delete
+    }
+
+    /// SecItemCopyMatching, SecItemAdd and SecItemDelete.
+    public static let system = KeychainCalls(copyMatching: { SecItemCopyMatching($0, $1) },
+                                             add: { SecItemAdd($0, $1) },
+                                             delete: { SecItemDelete($0) })
+}
+
 /// The Keychain item of the Keychain section: one generic password item of the service, account `meshID.uuidString`,
-/// in the login keychain on macOS.
+/// in the login keychain on macOS. The store keeps its value in memory and reads it only when it does not know it
+/// (Value in memory).
 public final class KeychainCredentialStore: MeshCredentialStore {
     /// "ca.azavech.hephaestus.mesh"
     public static let defaultService = "ca.azavech.hephaestus.mesh"
@@ -51,13 +76,107 @@ public final class KeychainCredentialStore: MeshCredentialStore {
     /// kSecAttrService of the item.
     public let service: String
 
-    private let streams = Mutex(ChangeStreams())
-
-    public init(service: String = KeychainCredentialStore.defaultService) {
-        self.service = service
+    /// The item's value as the store knows it.
+    private enum Value {
+        case unknown
+        /// The credentials, or nil for no item.
+        case known(MeshCredentials?)
     }
 
+    /// What the store knows: the value, the number of reads made, and the error of the last read when it threw, which
+    /// the loads that waited for that read throw too.
+    private struct Memory {
+        var value: Value = .unknown
+        var reads = 0
+        var readError: (any Error)?
+    }
+
+    private let keychain: KeychainCalls
+    private let streams = Mutex(ChangeStreams())
+    private let memory = Mutex(Memory())
+    /// Held during each read, save and delete until its result is recorded, so that the store makes one at a time and
+    /// the value of a read never replaces the one of a later save or delete.
+    private let keychainLock = Mutex(())
+
+    public init(service: String = KeychainCredentialStore.defaultService, keychain: KeychainCalls = .system) {
+        self.service = service
+        self.keychain = keychain
+    }
+
+    /// The value when the store knows it, without a Keychain call; otherwise one read, whose result the concurrent
+    /// loads share. A read that throws is not remembered.
     public func load() throws -> MeshCredentials? {
+        let before = memory.withLock { $0 }
+        if case .known(let credentials) = before.value {
+            return credentials
+        }
+        return try keychainLock.withLock { _ in
+            let now = memory.withLock { $0 }
+            if case .known(let credentials) = now.value {
+                return credentials
+            }
+            if now.reads != before.reads, let error = now.readError {
+                throw error
+            }
+            do {
+                let credentials = try readItem()
+                memory.withLock { memory in
+                    memory.value = .known(credentials)
+                    memory.reads += 1
+                    memory.readError = nil
+                }
+                return credentials
+            } catch {
+                memory.withLock { memory in
+                    memory.reads += 1
+                    memory.readError = error
+                }
+                throw error
+            }
+        }
+    }
+
+    public func save(_ credentials: MeshCredentials) throws {
+        try write(credentials) {
+            let data: Data
+            do {
+                data = try WireCoding.makeEncoder().encode(credentials)
+            } catch {
+                throw DataError.io("Keychain item: \(error.localizedDescription)")
+            }
+            try deleteItems()
+            let attributes: [CFString: Any] = [
+                kSecClass: kSecClassGenericPassword,
+                kSecAttrService: service,
+                kSecAttrAccount: credentials.meshID.uuidString,
+                kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlock,
+                kSecValueData: data,
+            ]
+            let status = keychain.add(attributes as CFDictionary, nil)
+            guard status == errSecSuccess else {
+                throw keychainError(status)
+            }
+        }
+        yield(credentials)
+    }
+
+    public func delete() throws {
+        try write(nil) {
+            try deleteItems()
+        }
+        yield(nil)
+    }
+
+    public func changes() -> AsyncStream<MeshCredentials?> {
+        streams.withLock { streams in
+            streams.make { [weak self] id in
+                self?.streams.withLock { _ = $0.continuations.removeValue(forKey: id) }
+            }
+        }
+    }
+
+    /// One read of the item, made while holding the Keychain lock.
+    private func readItem() throws -> MeshCredentials? {
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
@@ -65,7 +184,7 @@ public final class KeychainCredentialStore: MeshCredentialStore {
             kSecReturnData: true,
         ]
         var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        let status = keychain.copyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound {
             return nil
         }
@@ -81,38 +200,17 @@ public final class KeychainCredentialStore: MeshCredentialStore {
         }
     }
 
-    public func save(_ credentials: MeshCredentials) throws {
-        let data: Data
-        do {
-            data = try WireCoding.makeEncoder().encode(credentials)
-        } catch {
-            throw DataError.io("Keychain item: \(error.localizedDescription)")
-        }
-        try deleteItems()
-        let attributes: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: credentials.meshID.uuidString,
-            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlock,
-            kSecValueData: data,
-        ]
-        let status = SecItemAdd(attributes as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw keychainError(status)
-        }
-        yield(credentials)
-    }
-
-    public func delete() throws {
-        try deleteItems()
-        yield(nil)
-    }
-
-    public func changes() -> AsyncStream<MeshCredentials?> {
-        streams.withLock { streams in
-            streams.make { [weak self] id in
-                self?.streams.withLock { _ = $0.continuations.removeValue(forKey: id) }
+    /// Runs a save or a delete while holding the Keychain lock. Then the store knows `value`; when `body` throws, the
+    /// value becomes unknown.
+    private func write(_ value: MeshCredentials?, _ body: () throws -> Void) throws {
+        try keychainLock.withLock { _ in
+            do {
+                try body()
+            } catch {
+                memory.withLock { $0.value = .unknown }
+                throw error
             }
+            memory.withLock { $0.value = .known(value) }
         }
     }
 
@@ -124,7 +222,7 @@ public final class KeychainCredentialStore: MeshCredentialStore {
             kSecAttrService: service,
         ]
         for _ in 0..<64 {
-            let status = SecItemDelete(query as CFDictionary)
+            let status = keychain.delete(query as CFDictionary)
             if status == errSecItemNotFound {
                 return
             }
