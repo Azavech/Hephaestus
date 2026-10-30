@@ -90,8 +90,9 @@ public actor MeshService: HostMethodHandler {
 
     // MARK: - Lifecycle (services/host.md §3)
 
-    /// Loads the credentials, creating the mesh without them; loads the registry and applies the own-record rule;
-    /// starts iterating `credentialStore.changes()` the first time only. Throws a DataError when the credential store
+    /// Reads device.json again, so a new own record carries the name saved in onboarding; loads the credentials,
+    /// creating the mesh without them; loads the registry and applies the own-record rule; starts iterating
+    /// `credentialStore.changes()` the first time only. Throws a DataError when device.json or the credential store
     /// fails.
     public func ensureMesh() async throws {
         resigned = false
@@ -447,15 +448,14 @@ public actor MeshService: HostMethodHandler {
 
     // MARK: - Registry and presence
 
-    /// device.json, the credentials (created when missing), the registry read from registry.json at every call, the
-    /// own-record rule; the credential observer the first time only.
+    /// device.json, read at every call; the credentials (created when missing); the registry read from registry.json
+    /// at every call; the own-record rule; the credential observer the first time only. A missing device.json throws
+    /// DataError.notFound and an unreadable one the DeviceFile.load error; the identity read before is then kept.
     func loadMesh() async throws {
-        if identity == nil {
-            guard let loaded = try DeviceFile.load(appSupport) else {
-                throw DataError.notFound("device.json: the file does not exist")
-            }
-            identity = loaded
+        guard let deviceFile = try DeviceFile.load(appSupport) else {
+            throw DataError.notFound("device.json: the file does not exist")
         }
+        identity = deviceFile
         var stored = try credentialStore.load()
         if let invalid = stored, invalid.meshKey.count != 32 {
             Log.host.error("Ignoring mesh credentials whose key has \(invalid.meshKey.count, privacy: .public) bytes")

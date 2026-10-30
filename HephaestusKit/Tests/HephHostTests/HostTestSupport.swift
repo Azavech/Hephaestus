@@ -47,8 +47,9 @@ extension XCTestCase {
 
     /// A started TestHost, stopped and removed at teardown.
     @MainActor
-    func startTestHost(prepare: (TestHost.Folders) throws -> Void = { _ in }) async throws -> TestHost {
-        let testHost = try await TestHost.start(prepare: prepare)
+    func startTestHost(prepare: (TestHost.Folders) throws -> Void = { _ in },
+                       beforeStart: (DeviceIdentityStore) throws -> Void = { _ in }) async throws -> TestHost {
+        let testHost = try await TestHost.start(prepare: prepare, beforeStart: beforeStart)
         addTeardownBlock { @MainActor in
             await testHost.stop()
             testHost.removeFolders()
@@ -134,9 +135,11 @@ final class TestHost {
     }
 
     /// Creates the folders, the settings (`isMain` true, `projectsFolder`) and the identity, lets `prepare` write
-    /// what the host must find at start, then starts a HostService. Use `XCTestCase.startTestHost(prepare:)` to stop
-    /// it and remove its folders at teardown, or call `stop()` and `removeFolders()`.
-    static func start(prepare: (Folders) throws -> Void = { _ in }) async throws -> TestHost {
+    /// what the host must find at start, creates a HostService, lets `beforeStart` change the identity, then starts
+    /// the host. Use `XCTestCase.startTestHost(prepare:beforeStart:)` to stop it and remove its folders at teardown, or
+    /// call `stop()` and `removeFolders()`.
+    static func start(prepare: (Folders) throws -> Void = { _ in },
+                      beforeStart: (DeviceIdentityStore) throws -> Void = { _ in }) async throws -> TestHost {
         let fileManager = FileManager.default
         // 1. Application Support, projects and Trash.
         let base = fileManager.temporaryDirectory
@@ -161,10 +164,12 @@ final class TestHost {
             // 3. What the host must find at start.
             try prepare(Folders(appSupport: supportFolder, projectsFolder: projectsFolder, trashFolder: trashFolder,
                                 deviceID: identity.id))
-            // 4. The host.
+            // 4. The host; `beforeStart` runs once the host and its MeshService exist, as onboarding runs after the
+            //    app's launch created them; then start().
             let host = HostService(appSupport: appSupport, settings: settings,
                                    credentialStore: InMemoryCredentialStore(testCredentials),
                                    options: HostOptions(listenerHost: "127.0.0.1", listenerPort: 0, bonjour: false))
+            try beforeStart(identity)
             try await host.start()
             guard let port = await host.boundListenerPort() else {
                 await host.stop()

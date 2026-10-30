@@ -368,9 +368,10 @@ enum TestMesh {
                      presence: [])
     }
 
-    static func hostInfo(_ device: DeviceInfo) -> HostInfoResult {
+    /// `forge`: the Forge config the Main reports, none by default.
+    static func hostInfo(_ device: DeviceInfo, forge: ForgeConfig? = nil) -> HostInfoResult {
         HostInfoResult(device: device, projectsFolder: "/Users/user/Developer", claudeAvailable: true,
-                       claudePath: "/Users/user/.local/bin/claude", gitAvailable: true)
+                       claudePath: "/Users/user/.local/bin/claude", gitAvailable: true, forge: forge)
     }
 
     static func summary(_ id: String, mainID: UUID, children: [ProjectSummary] = [],
@@ -390,11 +391,12 @@ enum TestMesh {
                  comments: [])
     }
 
-    /// A FakeMain answering host.info, projects.list (with `projects`), skills.list and subscribe.
+    /// A FakeMain answering host.info (with `forge`), projects.list (with `projects`), skills.list and subscribe.
     @MainActor
-    static func fakeMain(_ device: DeviceInfo, registry: MeshSnapshot, projects: [ProjectSummary] = []) -> FakeMain {
+    static func fakeMain(_ device: DeviceInfo, registry: MeshSnapshot, projects: [ProjectSummary] = [],
+                         forge: ForgeConfig? = nil) -> FakeMain {
         let fakeMain = FakeMain(device: device, snapshot: registry)
-        fakeMain.answer("host.info", with: hostInfo(device))
+        fakeMain.answer("host.info", with: hostInfo(device, forge: forge))
         fakeMain.answer("projects.list", with: ProjectsListResult(projects: projects))
         fakeMain.answer("skills.list", with: SkillsListResult(skills: []))
         fakeMain.answer("subscribe", with: EmptyPayload())
@@ -425,14 +427,14 @@ extension XCTestCase {
         return workspace
     }
 
-    /// A Workspace connected to one FakeMain at `Sams-Mac-mini.local`.
+    /// A Workspace connected to one FakeMain at `Sams-Mac-mini.local`, whose host.info reports `forge`.
     @MainActor
     func connectedWorkspace(projects: [ProjectSummary] = [], name: String = "Studio", mainID: UUID = UUID(),
-                            configure: (FakeMain) -> Void = { _ in }) async throws
+                            forge: ForgeConfig? = nil, configure: (FakeMain) -> Void = { _ in }) async throws
         -> (workspace: Workspace, fakeMain: FakeMain, environment: TestEnvironment) {
         let device = TestMesh.main(name, id: mainID)
         let registry = TestMesh.registry([(device, "Sams-Mac-mini.local")])
-        let fakeMain = TestMesh.fakeMain(device, registry: registry, projects: projects)
+        let fakeMain = TestMesh.fakeMain(device, registry: registry, projects: projects, forge: forge)
         configure(fakeMain)
         let environment = makeEnvironment(fakeMains: ["Sams-Mac-mini.local": fakeMain], registry: registry)
         let workspace = startWorkspace(environment)

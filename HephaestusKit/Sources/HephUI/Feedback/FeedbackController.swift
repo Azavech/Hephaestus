@@ -183,7 +183,7 @@ public final class FeedbackController {
         let comment = draft.comment.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !comment.isEmpty else { return }
         guard let hostID = workspace.forge.forgeHostID else {
-            draft.errorMessage = "No Forge is online. Feedback goes to the Main where “This Main is the Forge” is on "
+            draft.errorMessage = "No Forge is online. Feedback goes to the Main where “Set as Forge” is on "
                 + "(Settings ▸ Forge & Updates)."
             return
         }

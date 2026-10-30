@@ -22,9 +22,9 @@ enum PrivateTerms {
     /// The prefix of a line that dismisses a suggestion.
     static let dismissedPrefix = "# not private: "
 
-    /// Never suggested, compared case-insensitively (with the owner of `forge.repository` and the terms shorter than
-    /// 3 characters): the app's names, the placeholders of docs/general.md and their words, the default and model
-    /// names of devices.
+    /// Never suggested, compared case-insensitively (with the repository's owner, the part of
+    /// ForgeConfig.publicRepository before its `/`, and the terms shorter than 3 characters): the app's names, the
+    /// placeholders of docs/general.md and their words, the default and model names of devices.
     static let neverSuggested: [String] = [
         "Hephaestus", "HEPH",
         "Jane Appleseed", "Jane", "Appleseed", "user", "/Users/user", "user@example.com", "Sam's iPad",
@@ -386,7 +386,8 @@ extension ForgeService {
         try AtomicFile.write(Data(PrivateTerms.appending(line, to: content).utf8), to: privateTermsURL)
     }
 
-    /// The values of the sources of Private terms and the owner of `forge.repository`.
+    /// The values of the sources of Private terms and the repository's owner, the part of ForgeConfig.publicRepository
+    /// before its `/`.
     private func suggestedTermSources() async -> (suggestions: [String], owner: String) {
         let environment = await LoginEnvironment.shared.environment()
         let gitAvailable = await host.hostInfo.gitAvailable
@@ -394,13 +395,12 @@ extension ForgeService {
         let gh = ForgeGit.locate("gh", environment: environment)
         let devices = await host.mesh.snapshot().devices
         let settings = await host.settings().forge
-        let repository = configuration?.repository ?? settings.repository
         let sourceProjectID = configuration?.sourceProjectID ?? settings.sourceProjectID
         let excluded = Set([sourceProjectID] + (await host.registry.descendants(of: sourceProjectID)))
         let projects = await host.registry.all().filter { !excluded.contains($0.id) }
         let suggestions = await PrivateTerms.suggestions(devices: devices, projects: projects,
                                                          environment: environment, git: git, gh: gh)
-        let owner = String(repository.split(separator: "/").first ?? "")
+        let owner = String(ForgeConfig.publicRepository.split(separator: "/").first ?? "")
         return (suggestions, owner)
     }
 }

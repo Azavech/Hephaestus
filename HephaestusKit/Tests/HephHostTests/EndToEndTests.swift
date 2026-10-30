@@ -158,6 +158,18 @@ final class EndToEndTests: XCTestCase {
         XCTAssertTrue(results.contains { $0.kind == .tasks && $0.projectID == "HEPH" && $0.itemID == "HEPH-1" },
                       "\(results)")
     }
+
+    /// No Workspace (docs/devices/mesh.md, "Swift API"): the name saved after the host's MeshService read device.json
+    /// with the default name, as onboarding saves the typed name after the app's launch created the host, is the name
+    /// of this Main and of its record once the host starts.
+    func testNameSavedBeforeStart() async throws {
+        let testHost = try await startTestHost(beforeStart: { try $0.setName("Studio") })
+        let local = await testHost.host.mesh.localDevice()
+        XCTAssertEqual(local.name, "Studio")
+        let snapshot = await testHost.host.mesh.snapshot()
+        let record = snapshot.devices.first { $0.id == testHost.identity.id }
+        XCTAssertEqual(record?.name, "Studio")
+    }
 }
 
 /// Records the server events of a Workspace's `events()` stream, in arrival order.

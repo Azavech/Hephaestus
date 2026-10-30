@@ -125,7 +125,9 @@ public final class ForgeModel {
         await refresh()
     }
 
-    /// Uploads the screenshot (when there is one) to the Forge's source project, then sends forge.feedback.
+    /// Uploads the screenshot (when there is one) to the Forge's source project, then sends forge.feedback. An upload
+    /// that fails with notFound throws "The Forge on <Forge host name> has no source project <ID> yet. …" (Requests)
+    /// and sends no forge.feedback; other upload errors are rethrown as they are.
     public func sendFeedback(screenshot: Data?, comment: String, context: FeedbackContext,
                              progress: @escaping @MainActor (TransferProgress) -> Void) async throws
         -> ForgeFeedbackResult {
@@ -135,8 +137,13 @@ public final class ForgeModel {
         let connection = try connection(hostID)
         var reference: UploadRef?
         if let screenshot {
-            reference = try await connection.upload(fileName: "screenshot.png", projectID: config.sourceProjectID,
-                                                    source: .data(screenshot), progress: progress)
+            do {
+                reference = try await connection.upload(fileName: "screenshot.png", projectID: config.sourceProjectID,
+                                                        source: .data(screenshot), progress: progress)
+            } catch let error as ProtocolError where error.code == .notFound {
+                throw ProtocolError(.notFound, "The Forge on \(connection.name) has no source project "
+                                        + "\(config.sourceProjectID) yet. Its Forge screen says what is missing.")
+            }
         }
         return try await connection.sendFeedback(screenshot: reference, comment: comment, context: context)
     }

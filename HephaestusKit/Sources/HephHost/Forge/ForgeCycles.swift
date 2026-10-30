@@ -304,7 +304,7 @@ extension ForgeService {
     /// Completion step 2: a comment and the status `done` for each item of the cycle, in order. A task that no longer
     /// exists removes its item. Returns false when another error stopped it (the cycle stays `released`).
     func completeItems() async -> Bool {
-        guard let config = configuration, let cycle, let release = cycle.release, let run = cycle.run else {
+        guard configuration != nil, let cycle, let release = cycle.release, let run = cycle.run else {
             return true
         }
         let author = await host.mesh.localDevice().name
@@ -313,7 +313,7 @@ extension ForgeService {
                   item.state == .released
             else { continue }
             let body = Self.completionComment(item: item, cycle: cycle, run: run, release: release,
-                                              repository: config.repository)
+                                              repository: ForgeConfig.publicRepository)
             do {
                 _ = try await host.tasks.addComment(projectID: item.projectID, taskID: taskID, body: body,
                                                     attachments: [], author: author)

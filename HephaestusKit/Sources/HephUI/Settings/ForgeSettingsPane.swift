@@ -14,7 +14,6 @@ struct ForgeSettingsPane: View {
     @Environment(\.controlActiveState) private var controlActiveState
     /// The error message under each control, from its last write.
     @State private var errors: [Control: String] = [:]
-    @State private var repository = ""
     @State private var branch = ""
     @FocusState private var focusedField: Control?
     /// The number of private terms (`n`).
@@ -29,7 +28,7 @@ struct ForgeSettingsPane: View {
     @State private var identities: [SigningIdentity]?
 
     private enum Control: Hashable {
-        case enabled, sourceProject, repository, branch, autoRegenerate, updatesEnabled, signingIdentity
+        case enabled, sourceProject, branch, autoRegenerate, updatesEnabled, signingIdentity
     }
 
     init() {}
@@ -40,16 +39,10 @@ struct ForgeSettingsPane: View {
             updatesSection
         }
         .formStyle(.grouped)
-        .onChange(of: settings.settings.forge.repository, initial: true) {
-            repository = settings.settings.forge.repository
-        }
         .onChange(of: settings.settings.forge.branch, initial: true) {
             branch = settings.settings.forge.branch
         }
         .onChange(of: focusedField) { previous, current in
-            if previous == .repository, current != .repository {
-                commitRepository()
-            }
             if previous == .branch, current != .branch {
                 commitBranch()
             }
@@ -90,17 +83,11 @@ struct ForgeSettingsPane: View {
     private var forgeSection: some View {
         Section {
             if appModel.identity.isMain {
-                Toggle("This Main is the Forge", isOn: forgeEnabled)
+                Toggle("Set as Forge", isOn: forgeEnabled)
                 errorText(.enabled)
                 Group {
                     sourceProjectPicker
                     errorText(.sourceProject)
-                    TextField("Repository", text: $repository, prompt: Text("owner/name"))
-                        .focused($focusedField, equals: .repository)
-                        .onSubmit {
-                            commitRepository()
-                        }
-                    errorText(.repository)
                     TextField("Branch", text: $branch)
                         .focused($focusedField, equals: .branch)
                         .onSubmit {
@@ -129,11 +116,12 @@ struct ForgeSettingsPane: View {
         }
     }
 
-    /// The projects of this Mac's tree, depth first, and the stored identifier when it is not among them.
+    /// The projects of this Mac's tree, depth first, and the stored identifier when it is not among them. The caption
+    /// names the folder the Forge registers as its source project when this Main does not host it.
     private var sourceProjectPicker: some View {
         let projects = Self.depthFirst(workspace.localConnection?.projects ?? [])
         let stored = settings.settings.forge.sourceProjectID
-        return Picker("Source project", selection: sourceProject) {
+        return Picker(selection: sourceProject) {
             ForEach(projects, id: \.id) { project in
                 Text(project.name + " — " + project.id)
                     .tag(project.id)
@@ -142,8 +130,20 @@ struct ForgeSettingsPane: View {
                 Text(stored + " (not on this Mac)")
                     .tag(stored)
             }
+        } label: {
+            Text("Source project")
+            Text("When this project is not on this Mac, the Forge adds it from the clone at " + sourceFolder + ".")
         }
         .pickerStyle(.menu)
+    }
+
+    /// The folder the Forge registers as its source project: the projects folder followed by the repository's name,
+    /// the part of ForgeConfig.publicRepository after its `/`, written with `~` for the home folder.
+    private var sourceFolder: String {
+        let repository = ForgeConfig.publicRepository
+        let name = repository.split(separator: "/").last.map(String.init) ?? repository
+        return (settings.settings.projectsFolderURL.appendingPathComponent(name).path as NSString)
+            .abbreviatingWithTildeInPath
     }
 
     @ViewBuilder
@@ -297,18 +297,6 @@ struct ForgeSettingsPane: View {
         } catch {
             errors[control] = Banner.message(of: error)
             return false
-        }
-    }
-
-    private func commitRepository() {
-        let stored = settings.settings.forge.repository
-        let value = repository.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard value != stored else {
-            repository = stored
-            return
-        }
-        if !write(.repository, { $0.forge.repository = value }) {
-            repository = stored
         }
     }
 

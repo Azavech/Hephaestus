@@ -130,14 +130,24 @@ public struct OnboardingView: View {
     }
 
     #if os(macOS)
-    /// Starts the host, which creates the mesh; the phase then becomes `.ready` and every window shows the shell.
+    /// Makes this Mac the Forge of the mesh it creates (`forge.enabled`), then starts the host, which creates the mesh
+    /// and enables the Forge; the phase then becomes `.ready` and every window shows the shell. When this Mac cannot
+    /// become a Main, `forge.enabled` gets back the value it had.
     private func useThisMacAsMain() {
         guard saveName() else { return }
+        let wasForge = appModel.settings.settings.forge.enabled
+        do {
+            try appModel.settings.update { $0.forge.enabled = true }
+        } catch {
+            saveError = Banner.message(of: error)
+            return
+        }
         isBecomingMain = true
         Task {
             do {
                 try await appModel.becomeMain()
             } catch {
+                try? appModel.settings.update { $0.forge.enabled = wasForge }
                 becomeMainError = Banner.message(of: error)
                 isBecomeMainErrorPresented = true
             }

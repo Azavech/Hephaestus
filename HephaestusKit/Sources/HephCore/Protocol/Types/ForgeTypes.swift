@@ -69,8 +69,12 @@ public struct FeedbackSelection: Codable, Sendable, Hashable {
     }
 }
 
-/// The Forge settings of the Forge host.
+/// The Forge settings of the Forge host, with the GitHub repository.
 public struct ForgeConfig: Codable, Sendable, Hashable {
+    /// The GitHub repository of Hephaestus, `owner/name`: a constant that no setting changes. Every `ForgeConfig` the
+    /// Forge host builds has it as `repository`.
+    public static let publicRepository = "Azavech/Hephaestus"
+
     public var sourceProjectID: String
     public var repository: String
     public var branch: String

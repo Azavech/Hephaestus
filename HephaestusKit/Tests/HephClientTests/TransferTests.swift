@@ -167,4 +167,40 @@ final class TransferTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)))
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path(percentEncoded: false) + ".download"))
     }
+
+    /// The screenshot upload of `sendFeedback` (docs/ui/forge.md, "Requests") on the Forge `Studio`, whose
+    /// `uploads.begin` the FakeMain answers with `notFound`, then with `internal`.
+    func testFeedbackNotHosted() async throws {
+        let forge = ForgeConfig(sourceProjectID: "HEPH", repository: "Azavech/Hephaestus", branch: "main",
+                                autoRegenerate: true)
+        let (workspace, fakeMain, _) = try await connectedWorkspace(forge: forge) { fakeMain in
+            fakeMain.fail("uploads.begin", with: ProtocolError(.notFound, "Project HEPH is not hosted on this Main."))
+            fakeMain.fail("uploads.begin", with: ProtocolError(.internal, "Disk full."))
+        }
+        try await waitUntil { workspace.forge.forgeHostID == fakeMain.device.id }
+        let local = TestMesh.local
+        let context = FeedbackContext(deviceID: local.id, deviceName: local.name, platform: local.platform,
+                                      appVersion: local.appVersion, build: local.build, docsHash: "",
+                                      selection: FeedbackSelection())
+
+        do {
+            _ = try await workspace.forge.sendFeedback(screenshot: pattern(1024), comment: "Fix", context: context) {
+                _ in
+            }
+            XCTFail("sendFeedback succeeded")
+        } catch let error as ProtocolError {
+            XCTAssertEqual(error, ProtocolError(.notFound, "The Forge on Studio has no source project HEPH yet. "
+                                                    + "Its Forge screen says what is missing."))
+        }
+        XCTAssertEqual(fakeMain.requests("forge.feedback").count, 0)
+
+        do {
+            _ = try await workspace.forge.sendFeedback(screenshot: pattern(1024), comment: "Fix", context: context) {
+                _ in
+            }
+            XCTFail("sendFeedback succeeded")
+        } catch let error as ProtocolError {
+            XCTAssertEqual(error, ProtocolError(.internal, "Disk full."))
+        }
+    }
 }

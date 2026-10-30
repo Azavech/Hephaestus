@@ -92,7 +92,8 @@ public struct ForgeView: View {
             } header: {
                 Text("Forge")
             } footer: {
-                Text("Change these in Settings ▸ Forge & Updates on " + hostName + ".")
+                Text("Change the source project, the branch and automatic regeneration in Settings ▸ Forge & Updates "
+                    + "on " + hostName + ".")
                     .font(.caption)
             }
         } else {
@@ -100,7 +101,7 @@ public struct ForgeView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("No Forge online")
                         .font(.headline)
-                    Text("The Forge is the Main where “This Main is the Forge” is on in Settings ▸ Forge & Updates.")
+                    Text("The Forge is the Main where “Set as Forge” is on in Settings ▸ Forge & Updates.")
                         .foregroundStyle(.secondary)
                 }
             }

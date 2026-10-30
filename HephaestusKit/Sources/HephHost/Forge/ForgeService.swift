@@ -17,7 +17,7 @@ public actor ForgeService {
     var configuration: ForgeConfig?
     /// forge.json was loaded in this process.
     var storeLoaded = false
-    /// The client of the configured repository, with the token read at enabling.
+    /// The client of ForgeConfig.publicRepository, with the token read at enabling.
     var github: GitHubClient?
     /// `DocsHash.embedded` of the running app.
     var appDocsHash = DocsHash.embedded
@@ -223,9 +223,6 @@ public actor ForgeService {
             await enable(config)
             return
         }
-        if config.repository != configuration?.repository {
-            github = GitHubClient(repository: config.repository, token: await GitHubClient.readToken())
-        }
         configuration = config
         await broadcastIfChanged()
     }
@@ -237,7 +234,7 @@ public actor ForgeService {
             loadStore()
             storeLoaded = true
         }
-        github = GitHubClient(repository: config.repository, token: await GitHubClient.readToken())
+        github = GitHubClient(repository: ForgeConfig.publicRepository, token: await GitHubClient.readToken())
         appDocsHash = DocsHash.embedded
         hostDeviceID = await host.mesh.localDevice().id
         configuration = config

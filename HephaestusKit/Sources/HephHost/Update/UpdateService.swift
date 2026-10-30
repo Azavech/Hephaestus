@@ -159,7 +159,7 @@ public actor UpdateService {
         }
         // 2 to 4. The latest release.
         let settings = Self.readSettings()
-        let client = GitHubClient(repository: settings.forge.repository, token: await GitHubClient.readToken())
+        let client = GitHubClient(repository: ForgeConfig.publicRepository, token: await GitHubClient.readToken())
         let release: GitHubRelease?
         do {
             release = try await client.latestRelease()

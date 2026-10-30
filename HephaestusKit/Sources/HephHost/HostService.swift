@@ -259,10 +259,11 @@ public actor HostService {
 
     // MARK: - Settings changes (§3.4)
 
-    /// The ForgeConfig of the forge settings while forge.enabled is true; nil otherwise.
+    /// The ForgeConfig of the forge settings, with the repository ForgeConfig.publicRepository, while forge.enabled is
+    /// true; nil otherwise.
     static func forgeConfig(_ settings: DeviceSettings) -> ForgeConfig? {
         guard settings.forge.enabled else { return nil }
-        return ForgeConfig(sourceProjectID: settings.forge.sourceProjectID, repository: settings.forge.repository,
+        return ForgeConfig(sourceProjectID: settings.forge.sourceProjectID, repository: ForgeConfig.publicRepository,
                            branch: settings.forge.branch, autoRegenerate: settings.forge.autoRegenerate)
     }
 

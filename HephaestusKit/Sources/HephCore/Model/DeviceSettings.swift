@@ -7,7 +7,6 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
     public struct Forge: Codable, Sendable, Equatable {
         public var enabled: Bool = false
         public var sourceProjectID: String = "HEPH"
-        public var repository: String = "Azavech/Hephaestus"
         public var branch: String = "main"
         public var autoRegenerate: Bool = true
 
@@ -90,10 +89,6 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
                 let normalized = ProjectIdentifier.normalize(value)
                 if ProjectIdentifier.isValid(normalized) { forge.sourceProjectID = normalized }
             }
-            if let value = try? forgeContainer.decodeIfPresent(String.self, forKey: .repository) {
-                let normalized = Self.trimmed(value)
-                if Self.isValidRepository(normalized) { forge.repository = normalized }
-            }
             if let value = try? forgeContainer.decodeIfPresent(String.self, forKey: .branch) {
                 let normalized = Self.trimmed(value)
                 if Self.isValidBranch(normalized) { forge.branch = normalized }
@@ -117,7 +112,6 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
         claudePath = Self.trimmed(claudePath)
         defaultModel = Self.trimmed(defaultModel)
         forge.sourceProjectID = ProjectIdentifier.normalize(forge.sourceProjectID)
-        forge.repository = Self.trimmed(forge.repository)
         forge.branch = Self.trimmed(forge.branch)
         updates.signingIdentity = Self.trimmed(updates.signingIdentity)
     }
@@ -151,9 +145,6 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
         guard ProjectIdentifier.isValid(forge.sourceProjectID) else {
             throw DataError.invalid("the identifier must be 2 to 8 letters A to Z")
         }
-        guard Self.isValidRepository(forge.repository) else {
-            throw DataError.invalid("the repository must be owner/name")
-        }
         guard Self.isValidBranch(forge.branch) else {
             throw DataError.invalid("the branch must not be empty or contain spaces")
         }
@@ -176,7 +167,7 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
     // MARK: - Rules
 
     private enum ForgeKeys: String, CodingKey {
-        case enabled, sourceProjectID, repository, branch, autoRegenerate
+        case enabled, sourceProjectID, branch, autoRegenerate
     }
 
     private enum UpdatesKeys: String, CodingKey {
@@ -226,21 +217,8 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
         (1...1440).contains(value)
     }
 
-    /// `^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`
-    private static func isValidRepository(_ value: String) -> Bool {
-        let parts = value.split(separator: "/", omittingEmptySubsequences: false)
-        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return false }
-        let owner = parts[0].unicodeScalars.allSatisfy { isASCIIAlphanumeric($0) || $0 == "-" }
-        let name = parts[1].unicodeScalars.allSatisfy { isASCIIAlphanumeric($0) || $0 == "." || $0 == "_" || $0 == "-" }
-        return owner && name
-    }
-
     /// Not empty, no whitespace.
     private static func isValidBranch(_ value: String) -> Bool {
         !value.isEmpty && !value.contains { $0.isWhitespace }
-    }
-
-    private static func isASCIIAlphanumeric(_ scalar: Unicode.Scalar) -> Bool {
-        ("a"..."z").contains(scalar) || ("A"..."Z").contains(scalar) || ("0"..."9").contains(scalar)
     }
 }

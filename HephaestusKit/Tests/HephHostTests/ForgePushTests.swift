@@ -5,8 +5,9 @@ import XCTest
 @testable import HephHost
 
 /// The Forge push gate (docs/forge/pipeline.md, "MCP tools"): `ForgePushGate` alone, without a HostService, on the
-/// repositories of a GitSandbox, the rules of `ForgeSessionRules` (docs/claude/cli.md 3.5) and `PrivateTerms`
-/// (docs/forge/pipeline.md, "Private terms").
+/// repositories of a GitSandbox; the rules of `ForgeSessionRules` (docs/claude/cli.md 3.5); `PrivateTerms`
+/// (docs/forge/pipeline.md, "Private terms"); and, with a TestHost, the registration of the source project
+/// (docs/forge/pipeline.md, "Registering the source project").
 final class ForgePushTests: XCTestCase {
     /// A repository from `makeRepository()` with a second commit adding `docs/a.md` and `App/DocsHash.txt`, its origin
     /// from `makeOrigin`, and the gate.
@@ -18,6 +19,18 @@ final class ForgePushTests: XCTestCase {
         let pushed: String
         let gate: ForgePushGate
     }
+
+    /// The sandbox and the TestHost of the `testRegister…` cases, and `<folder>`: the TestHost's projects folder
+    /// followed by `/Hephaestus`, the name of `ForgeConfig.publicRepository`.
+    private struct Registration {
+        let sandbox: GitSandbox
+        let testHost: TestHost
+        let folder: URL
+    }
+
+    /// The config the `testRegister…` cases pass to `registerSourceProject(_:environment:)`.
+    private static let sourceConfig = ForgeConfig(sourceProjectID: "HEPH", repository: "Azavech/Hephaestus",
+                                                  branch: "main", autoRegenerate: true)
 
     // MARK: - Cases
 
@@ -372,6 +385,94 @@ final class ForgePushTests: XCTestCase {
         XCTAssertEqual(PrivateTerms.pending(["alpha", "bravo"], in: text), ["alpha", "bravo"])
     }
 
+    @MainActor
+    func testRegisterClone() async throws {
+        let registration = try await makeRegistration()
+        try makeClone(registration)
+        try await register(registration)
+        let projects = try await projectsList(registration.testHost)
+        XCTAssertEqual(projects.map(\.id), ["HEPH"])
+        XCTAssertEqual(projects.first?.name, "Hephaestus")
+        XCTAssertEqual(projects.first?.rootPath, registration.folder.path)
+        let file = try ProjectFile.load(projectRoot: registration.folder)
+        XCTAssertEqual(file.id, "HEPH")
+        XCTAssertEqual(file.name, "Hephaestus")
+
+        try await register(registration)
+        let again = try await projectsList(registration.testHost)
+        XCTAssertEqual(again, projects)
+    }
+
+    @MainActor
+    func testRegisterExistingFile() async throws {
+        let registration = try await makeRegistration()
+        try makeClone(registration)
+        try ProjectFile.create(ProjectFile(id: "HEPH", name: "Fixture", description: nil),
+                               projectRoot: registration.folder)
+        let projectFile = ProjectFile.url(projectRoot: registration.folder)
+        let bytes = try Data(contentsOf: projectFile)
+        try await register(registration)
+        let projects = try await projectsList(registration.testHost)
+        XCTAssertEqual(projects.map(\.id), ["HEPH"])
+        XCTAssertEqual(projects.first?.name, "Fixture")
+        XCTAssertEqual(projects.first?.rootPath, registration.folder.path)
+        XCTAssertEqual(try Data(contentsOf: projectFile), bytes)
+    }
+
+    @MainActor
+    func testRegisterNotAClone() async throws {
+        let registration = try await makeRegistration()
+        let folder = registration.folder
+        let dataFolder = folder.appendingPathComponent(".hephaestus", isDirectory: true)
+        let notTopFolder = "\(folder.path) is not the top folder of a git repository: clone "
+            + "github.com/Azavech/Hephaestus there, or add your clone with Add Existing Folder… and choose it as the "
+            + "Source project in Settings ▸ Forge & Updates."
+        let notAClone = "\(folder.path) is not a clone of github.com/Azavech/Hephaestus: set its origin remote to "
+            + "https://github.com/Azavech/Hephaestus.git, or add your clone with Add Existing Folder… and choose it as "
+            + "the Source project in Settings ▸ Forge & Updates."
+
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try await assertRefused(registration, notTopFolder)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dataFolder.path))
+
+        // <folder> inside the repository of the projects folder.
+        try registration.sandbox.git(["init", "-b", "main"], in: registration.testHost.projectsFolder)
+        try await assertRefused(registration, notTopFolder)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dataFolder.path))
+
+        // A repository of its own, without origin, then with the origin of another repository.
+        try registration.sandbox.git(["init", "-b", "main"], in: folder)
+        try await assertRefused(registration, notAClone)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dataFolder.path))
+        try registration.sandbox.git(["remote", "add", "origin", "https://github.com/Azavech/Atlas.git"], in: folder)
+        try await assertRefused(registration, notAClone)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dataFolder.path))
+    }
+
+    @MainActor
+    func testRegisterWithoutFolder() async throws {
+        let registration = try await makeRegistration()
+        let folder = registration.folder
+        try await assertRefused(registration, "There is no folder \(folder.path): clone github.com/Azavech/Hephaestus "
+                                    + "there, or add your clone with Add Existing Folder… and choose it as the Source "
+                                    + "project in Settings ▸ Forge & Updates.")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
+    }
+
+    @MainActor
+    func testRegisterOtherProject() async throws {
+        let registration = try await makeRegistration()
+        let folder = registration.folder
+        try makeClone(registration)
+        try ProjectFile.create(ProjectFile(id: "ATLAS", name: "Atlas", description: nil), projectRoot: folder)
+        let projectFile = ProjectFile.url(projectRoot: folder)
+        let bytes = try Data(contentsOf: projectFile)
+        try await assertRefused(registration, "\(folder.path) holds the project ATLAS: choose it as the Source project "
+                                    + "in Settings ▸ Forge & Updates, after adding it with Add Existing Folder… when "
+                                    + "it is not on this Mac.")
+        XCTAssertEqual(try Data(contentsOf: projectFile), bytes)
+    }
+
     // MARK: - Rules of claude/cli.md 3.5
 
     /// `--allowedTools` of feedback sessions.
@@ -560,6 +661,59 @@ final class ForgePushTests: XCTestCase {
             XCTFail("Expected a refusal, got \(error)", file: file, line: line)
         }
         return nil
+    }
+
+    // MARK: - Registering the source project
+
+    /// A sandbox (its folder removed at teardown), a TestHost from `startTestHost()`, whose Forge is never enabled,
+    /// and `<folder>`, which does not exist yet.
+    @MainActor
+    private func makeRegistration() async throws -> Registration {
+        let sandbox = try GitSandbox()
+        let sandboxFolder = sandbox.folder
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: sandboxFolder)
+        }
+        let testHost = try await startTestHost()
+        return Registration(sandbox: sandbox, testHost: testHost,
+                            folder: testHost.projectsFolder.appendingPathComponent("Hephaestus", isDirectory: true))
+    }
+
+    /// A clone: `<folder>` created, then `git init -b main` and the origin `https://github.com/Azavech/Hephaestus.git`,
+    /// which contact nothing.
+    @MainActor
+    private func makeClone(_ registration: Registration) throws {
+        try FileManager.default.createDirectory(at: registration.folder, withIntermediateDirectories: true)
+        try registration.sandbox.git(["init", "-b", "main"], in: registration.folder)
+        try registration.sandbox.git(["remote", "add", "origin", "https://github.com/Azavech/Hephaestus.git"],
+                                     in: registration.folder)
+    }
+
+    /// `registerSourceProject(_:environment:)` of the TestHost's Forge, its git commands run with the sandbox's
+    /// environment.
+    @MainActor
+    private func register(_ registration: Registration) async throws {
+        try await registration.testHost.host.forge.registerSourceProject(Self.sourceConfig,
+                                                                         environment: registration.sandbox.environment)
+    }
+
+    /// The registration throws `unavailable` "The Forge source project HEPH is not on this Main. <text>", and nothing
+    /// is registered.
+    @MainActor
+    private func assertRefused(_ registration: Registration, _ text: String, file: StaticString = #filePath,
+                               line: UInt = #line) async throws {
+        await assertProtocolError(.unavailable, "The Forge source project HEPH is not on this Main. \(text)",
+                                  file: file, line: line) {
+            try await self.register(registration)
+        }
+        let projects = try await projectsList(registration.testHost)
+        XCTAssertEqual(projects, [], file: file, line: line)
+    }
+
+    /// `projects.list` of the TestHost (`TestHost.perform`).
+    @MainActor
+    private func projectsList(_ testHost: TestHost) async throws -> [ProjectSummary] {
+        try await testHost.perform(.projectsList, EmptyPayload(), as: ProjectsListResult.self).projects
     }
 }
 #endif
