@@ -16,7 +16,8 @@ public final class HephaestusAppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    /// Stops the app wiring first (at most 10 s), then lets the app terminate.
+    /// Stops the app wiring first (at most 10 s), then lets the app terminate. The reply comes from a main-actor task,
+    /// so `terminate` is called only from the run loop, never inside a main-actor job.
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard !isTerminating else { return .terminateLater }
         isTerminating = true

@@ -382,8 +382,10 @@ public actor UpdateService {
             return
         }
         Log.host.notice("Installing build \(build, privacy: .public); the app quits")
+        // From a timer of the main run loop, once this main-actor job has returned: called inside it, `terminate`
+        // would wait in a nested event loop for a reply that only another main-actor task sends.
         await MainActor.run {
-            NSApplication.shared.terminate(nil)
+            NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
         }
     }
 
