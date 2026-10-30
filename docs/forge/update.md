@@ -158,8 +158,11 @@ Commands run with `ChildProcess.capture` ([../claude/cli.md](../claude/cli.md)),
    ```
 
    `<pid>` is the app's process id; paths are absolute.
-5. `NSApplication.shared.terminate(nil)` on the main actor. The shell's termination handling stops the host first
-   ([../ui/shell.md](../ui/shell.md)).
+5. On the main actor, `NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)`: a timer of
+   the main run loop calls `terminate` once the current main-actor job has returned. Called inside that job,
+   `terminate` waits for the shell's reply in a nested event loop that never returns, because the main-actor task that
+   sends the reply never starts. The shell's termination handling stops the host first
+   ([../ui/shell.md](../ui/shell.md#21-hephaestusappdelegate-macos)).
 
 The script waits for the app to exit, moves the installed app to `Updates/previous/`, moves the new app into its
 place (restoring the old one when that fails) and opens the result with `open`.

@@ -100,6 +100,10 @@ struct HephaestusApp: App {
 
 `shutdown()` waits at most 10 s: after 10 s the reply is sent even if the host has not finished stopping.
 
+The app calls `terminate` only from the run loop: the Quit menu item, an Apple event, or a timer such as the one of
+the self-update ([../forge/update.md](../forge/update.md#steps)). It never calls it inside a main-actor job: the reply
+comes from a main-actor task, which does not start while that job waits in AppKit's nested event loop.
+
 ## 3. AppModel
 
 `AppModel` (`@MainActor @Observable`, `AppModel.shared`) is the root object. It owns what lives as long as the app and
