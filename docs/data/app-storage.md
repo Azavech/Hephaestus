@@ -47,6 +47,7 @@ Content:
 | `private-terms.txt`        | Forge host   | words the personal data check refuses, one per line             | [public-repository.md](../public-repository.md#private-terms), [forge/pipeline.md](../forge/pipeline.md) |
 | `Skills/`                  | Main         | skills library                                                  | [claude/skills.md](../claude/skills.md)                                                                  |
 | `SessionPlugins/`          | Main         | per session (`<sessionID>/`): plugin folder, `system-prompt.md` | [claude/skills.md](../claude/skills.md), [claude/cli.md](../claude/cli.md)                               |
+| `Worktrees/`               | Main         | git worktrees of bundle tasks (`<projectID>/<task id>/`)        | [services/bundles.md](../services/bundles.md#worktrees)                                                  |
 | `Updates/`                 | macOS        | downloaded updates                                              | [forge/update.md](../forge/update.md)                                                                    |
 
 A file or folder is created the first time it is written. Nothing else is stored in this folder.
@@ -115,25 +116,26 @@ The identity of this device ([devices/roles.md](../devices/roles.md) creates and
 
 The settings of this device. Nested keys are JSON objects: `forge.enabled` is `{"forge": {"enabled": …}}`.
 
-| Key                       | JSON type        | Default              | Used on    | Meaning                                                                           | Used by                                                                                                   |
-|---------------------------|------------------|----------------------|------------|-----------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
-| `isMain`                  | boolean          | `false`              | macOS      | This Mac is a Main.                                                               | [devices/roles.md](../devices/roles.md)                                                                   |
-| `projectsFolder`          | string           | `~/Developer`        | Main       | Folder where new projects and moved-in projects are created.                      | [services/host.md](../services/host.md)                                                                   |
-| `listenerPort`            | integer          | `47100`              | Main       | TCP port of the mesh listener.                                                    | [devices/mesh.md](../devices/mesh.md)                                                                     |
-| `pairingPort`             | integer          | `47101`              | Main       | TCP port of the pairing listener.                                                 | [devices/mesh.md](../devices/mesh.md)                                                                     |
-| `additionalAddresses`     | array of strings | `[]`                 | Main       | Extra host names or IP addresses of this Main, added to its device record.        | [devices/mesh.md](../devices/mesh.md)                                                                     |
-| `claudePath`              | string           | `""`                 | Main       | Path of the Claude CLI. Empty: found automatically.                               | [claude/cli.md](../claude/cli.md)                                                                         |
-| `defaultModel`            | string           | `""`                 | Main       | Model of new sessions when the project sets none. Empty: no `--model`.            | [claude/cli.md](../claude/cli.md)                                                                         |
-| `defaultPermissionMode`   | string           | `acceptEdits`        | Main       | Permission mode of new sessions when the project sets none.                       | [claude/cli.md](../claude/cli.md)                                                                         |
-| `sessionIdleMinutes`      | integer          | `15`                 | Main       | A session process with no activity for this long is stopped.                      | [claude/cli.md](../claude/cli.md)                                                                         |
-| `autosave`                | boolean          | `true`               | every      | The editors save 1.5 s after the last edit.                                       | [ui/code.md](../ui/code.md)                                                                               |
-| `showHiddenFiles`         | boolean          | `false`              | every      | The file browser shows hidden files and folders.                                  | [ui/code.md](../ui/code.md)                                                                               |
-| `forge.enabled`           | boolean          | `false`              | Main       | This Main is the Forge. Onboarding turns it on for the Mac that creates the mesh. | [forge/pipeline.md](../forge/pipeline.md), [ui/onboarding.md](../ui/onboarding.md#use-this-mac-as-a-main) |
-| `forge.sourceProjectID`   | string           | `HEPH`               | Main       | Identifier of the project holding the Hephaestus source.                          | [forge/pipeline.md](../forge/pipeline.md)                                                                 |
-| `forge.branch`            | string           | `main`               | Main       | Branch the Forge pushes to and watches.                                           | [forge/pipeline.md](../forge/pipeline.md)                                                                 |
-| `forge.autoRegenerate`    | boolean          | `true`               | Main       | Regenerate automatically when the docs are ahead of the code.                     | [forge/pipeline.md](../forge/pipeline.md)                                                                 |
-| `updates.enabled`         | boolean          | `true`               | macOS      | New builds install automatically. False: this Mac only checks and offers Install. | [forge/update.md](../forge/update.md)                                                                     |
-| `updates.signingIdentity` | string           | `""`                 | macOS      | Code signing identity applied to updates. Empty: chosen automatically.            | [forge/update.md](../forge/update.md)                                                                     |
+| Key                       | JSON type        | Default       | Used on | Meaning                                                                           | Used by                                                                                                   |
+|---------------------------|------------------|---------------|---------|-----------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| `isMain`                  | boolean          | `false`       | macOS   | This Mac is a Main.                                                               | [devices/roles.md](../devices/roles.md)                                                                   |
+| `projectsFolder`          | string           | `~/Developer` | Main    | Folder where new projects and moved-in projects are created.                      | [services/host.md](../services/host.md)                                                                   |
+| `listenerPort`            | integer          | `47100`       | Main    | TCP port of the mesh listener.                                                    | [devices/mesh.md](../devices/mesh.md)                                                                     |
+| `pairingPort`             | integer          | `47101`       | Main    | TCP port of the pairing listener.                                                 | [devices/mesh.md](../devices/mesh.md)                                                                     |
+| `additionalAddresses`     | array of strings | `[]`          | Main    | Extra host names or IP addresses of this Main, added to its device record.        | [devices/mesh.md](../devices/mesh.md)                                                                     |
+| `claudePath`              | string           | `""`          | Main    | Path of the Claude CLI. Empty: found automatically.                               | [claude/cli.md](../claude/cli.md)                                                                         |
+| `defaultModel`            | string           | `""`          | Main    | Model of new sessions when the project sets none. Empty: no `--model`.            | [claude/cli.md](../claude/cli.md)                                                                         |
+| `defaultPermissionMode`   | string           | `acceptEdits` | Main    | Permission mode of new sessions when the project sets none.                       | [claude/cli.md](../claude/cli.md)                                                                         |
+| `sessionIdleMinutes`      | integer          | `15`          | Main    | A session process with no activity for this long is stopped.                      | [claude/cli.md](../claude/cli.md)                                                                         |
+| `bundles.maxParallel`     | integer          | `4`           | Main    | Task sessions of one bundle that run at the same time.                            | [services/bundles.md](../services/bundles.md)                                                             |
+| `autosave`                | boolean          | `true`        | every   | The editors save 1.5 s after the last edit.                                       | [ui/code.md](../ui/code.md)                                                                               |
+| `showHiddenFiles`         | boolean          | `false`       | every   | The file browser shows hidden files and folders.                                  | [ui/code.md](../ui/code.md)                                                                               |
+| `forge.enabled`           | boolean          | `false`       | Main    | This Main is the Forge. Onboarding turns it on for the Mac that creates the mesh. | [forge/pipeline.md](../forge/pipeline.md), [ui/onboarding.md](../ui/onboarding.md#use-this-mac-as-a-main) |
+| `forge.sourceProjectID`   | string           | `HEPH`        | Main    | Identifier of the project holding the Hephaestus source.                          | [forge/pipeline.md](../forge/pipeline.md)                                                                 |
+| `forge.branch`            | string           | `main`        | Main    | Branch the Forge pushes to and watches.                                           | [forge/pipeline.md](../forge/pipeline.md)                                                                 |
+| `forge.autoRegenerate`    | boolean          | `true`        | Main    | Regenerate automatically when the docs are ahead of the code.                     | [forge/pipeline.md](../forge/pipeline.md)                                                                 |
+| `updates.enabled`         | boolean          | `true`        | macOS   | New builds install automatically. False: this Mac only checks and offers Install. | [forge/update.md](../forge/update.md)                                                                     |
+| `updates.signingIdentity` | string           | `""`          | macOS   | Code signing identity applied to updates. Empty: chosen automatically.            | [forge/update.md](../forge/update.md)                                                                     |
 
 "Main" settings are read only when `isMain` is true; on other devices they keep their stored values. The Settings
 screen is [ui/settings.md](../ui/settings.md). The `forge` settings other than `enabled` make the `ForgeConfig`
@@ -146,20 +148,21 @@ constant `ForgeConfig.publicRepository`: the GitHub repository is not a setting.
 of the table, and the first broken rule fails the change with `.invalid(<message>)`. Trimming removes
 `.whitespacesAndNewlines`.
 
-| Key                                         | Normalization                                                              | Rule                                                             | Message                                                                             |
-|---------------------------------------------|----------------------------------------------------------------------------|------------------------------------------------------------------|-------------------------------------------------------------------------------------|
-| `isMain`                                    | none                                                                       | false on iOS and iPadOS                                          | `only a Mac can be a Main`                                                          |
-| `projectsFolder`                            | whitespace trimmed                                                         | starts with `/` or `~/`, or is `~`                               | `the projects folder must be an absolute path`                                      |
-| `listenerPort`                              | none                                                                       | 1024 to 65535                                                    | `the listener port must be between 1024 and 65535`                                  |
-| `pairingPort`                               | none                                                                       | 1024 to 65535, not equal to `listenerPort`                       | `the pairing port must be between 1024 and 65535 and differ from the listener port` |
-| `additionalAddresses`                       | each trimmed; empty entries and repeats removed (first kept)               | no whitespace inside an entry                                    | `an address must not contain spaces`                                                |
-| `claudePath`                                | whitespace trimmed                                                         | empty, or starts with `/` or `~/`                                | `the Claude CLI path must be absolute`                                              |
-| `defaultModel`                              | whitespace trimmed                                                         | no line break                                                    | `the model must be on one line`                                                     |
-| `defaultPermissionMode`                     | none                                                                       | a `PermissionMode` value                                         | `invalid permission mode`                                                           |
-| `sessionIdleMinutes`                        | none                                                                       | 1 to 1440                                                        | `the idle timeout must be between 1 and 1440 minutes`                               |
-| `forge.sourceProjectID`                     | `ProjectIdentifier.normalize`                                              | `^[A-Z]{2,8}$`                                                   | `the identifier must be 2 to 8 letters A to Z`                                      |
-| `forge.branch`                              | whitespace trimmed                                                         | not empty, no whitespace                                         | `the branch must not be empty or contain spaces`                                    |
-| `updates.signingIdentity`                   | whitespace trimmed                                                         | no line break                                                    | `the signing identity must be on one line`                                          |
+| Key                       | Normalization                                                | Rule                                       | Message                                                                             |
+|---------------------------|--------------------------------------------------------------|--------------------------------------------|-------------------------------------------------------------------------------------|
+| `isMain`                  | none                                                         | false on iOS and iPadOS                    | `only a Mac can be a Main`                                                          |
+| `projectsFolder`          | whitespace trimmed                                           | starts with `/` or `~/`, or is `~`         | `the projects folder must be an absolute path`                                      |
+| `listenerPort`            | none                                                         | 1024 to 65535                              | `the listener port must be between 1024 and 65535`                                  |
+| `pairingPort`             | none                                                         | 1024 to 65535, not equal to `listenerPort` | `the pairing port must be between 1024 and 65535 and differ from the listener port` |
+| `additionalAddresses`     | each trimmed; empty entries and repeats removed (first kept) | no whitespace inside an entry              | `an address must not contain spaces`                                                |
+| `claudePath`              | whitespace trimmed                                           | empty, or starts with `/` or `~/`          | `the Claude CLI path must be absolute`                                              |
+| `defaultModel`            | whitespace trimmed                                           | no line break                              | `the model must be on one line`                                                     |
+| `defaultPermissionMode`   | none                                                         | a `PermissionMode` value                   | `invalid permission mode`                                                           |
+| `sessionIdleMinutes`      | none                                                         | 1 to 1440                                  | `the idle timeout must be between 1 and 1440 minutes`                               |
+| `bundles.maxParallel`     | none                                                         | 1 to 16                                    | `the parallel task sessions must be between 1 and 16`                               |
+| `forge.sourceProjectID`   | `ProjectIdentifier.normalize`                                | `^[A-Z]{2,8}$`                             | `the identifier must be 2 to 8 letters A to Z`                                      |
+| `forge.branch`            | whitespace trimmed                                           | not empty, no whitespace                   | `the branch must not be empty or contain spaces`                                    |
+| `updates.signingIdentity` | whitespace trimmed                                           | no line break                              | `the signing identity must be on one line`                                          |
 
 Paths starting with `~` are expanded with `NSString.expandingTildeInPath` where they are used:
 `DeviceSettings.projectsFolderURL` and `DeviceSettings.claudeURL` (nil when `claudePath` is empty).
@@ -494,6 +497,7 @@ public struct AppSupport: Sendable {
     public var sessionPluginsFolder: URL  // SessionPlugins/
     public var uploadsFolder: URL         // Uploads/
     public var updatesFolder: URL         // Updates/
+    public var worktreesFolder: URL       // Worktrees/
 }
 
 public enum DataError: Error, Sendable, Equatable, CustomStringConvertible {
@@ -581,6 +585,10 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
         public var autoRegenerate: Bool = true
         public init()
     }
+    public struct Bundles: Codable, Sendable, Equatable {
+        public var maxParallel: Int = 4
+        public init()
+    }
     public struct Updates: Codable, Sendable, Equatable {
         public var enabled: Bool = true
         public var signingIdentity: String = ""
@@ -597,6 +605,7 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
     public var sessionIdleMinutes: Int = 15
     public var autosave: Bool = true
     public var showHiddenFiles: Bool = false
+    public var bundles = Bundles()
     public var forge = Forge()
     public var updates = Updates()
 

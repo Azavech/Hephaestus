@@ -52,6 +52,7 @@ its type is public (`EventHub`, `UploadService`, `MeshService`, `MigrationServic
 | `watcher`   | `FileWatcher`      | this doc §11                            | FSEvents → events                                |
 | `projects`  | `ProjectService`   | this doc §7                             | `projects.*` except `projects.migrate`           |
 | `tasks`     | `TaskService`      | this doc §8                             | `tasks.*`, `attachments.read`, task cache        |
+| `bundles`   | `BundleService`    | [bundles.md](bundles.md)                | `bundles.*`, worktrees, bundle coordinators      |
 | `tabs`      | `TabService`       | this doc §9                             | `tabs.*`                                         |
 | `hostInfo`  | `HostInfoService`  | this doc §10                            | `host.info`, `host.listDirectories`              |
 | `files`     | `FileService`      | [files.md](files.md)                    | `files.*`                                        |
@@ -121,6 +122,7 @@ public actor HostService {
     nonisolated var watcher: FileWatcher { get }
     nonisolated var projects: ProjectService { get }
     nonisolated var tasks: TaskService { get }
+    nonisolated var bundles: BundleService { get }
     nonisolated var tabs: TabService { get }
     nonisolated var hostInfo: HostInfoService { get }
     nonisolated var files: FileService { get }
@@ -385,12 +387,15 @@ public actor EventHub {
 - `HostService.emit(_:)` calls `publish` when `event.topic` is set and `broadcast` otherwise. Then, for
   `sessionChanged`, it records the session's pending permission count with
   `registry.setPendingPermissions(projectID, sessionID: session.id, count: session.pendingPermissions.count)`, and
-  for `sessionRemoved` with `count: 0` (§6.1). Last, it notifies the Forge of the events it follows
-  ([../forge/pipeline.md](../forge/pipeline.md)): `sessionChanged` → `forge.sessionChanged(projectID:session:)`,
-  `sessionRemoved` → `forge.sessionRemoved(projectID:sessionID:)` (the id's `uuidString`), `taskChanged` →
-  `forge.taskChanged(projectID:task:)`, `taskRemoved` → `forge.taskRemoved(projectID:taskID:)`. The services of this doc, of [files.md](files.md), [runs.md](runs.md) and
-  [search.md](search.md), the host protocol requirements (§12) and the Forge emit through `emit`; other services may
-  call `events.broadcast` directly for events the Forge does not follow (`mesh.changed`, `migration.progress`).
+  for `sessionRemoved` with `count: 0` (§6.1). For `sessionChanged` it then calls
+  `bundles.sessionChanged(projectID:session:)` ([bundles.md](bundles.md#observing-the-task-sessions)). Last, it
+  notifies the Forge of the events it follows ([../forge/pipeline.md](../forge/pipeline.md)): `sessionChanged` →
+  `forge.sessionChanged(projectID:session:)`, `sessionRemoved` → `forge.sessionRemoved(projectID:sessionID:)` (the
+  id's `uuidString`), `taskChanged` → `forge.taskChanged(projectID:task:)`, `taskRemoved` →
+  `forge.taskRemoved(projectID:taskID:)`. The services of this doc, of [files.md](files.md), [bundles.md](bundles.md),
+  [runs.md](runs.md) and [search.md](search.md), the host protocol requirements (§12) and the Forge emit through
+  `emit`; other services may call `events.broadcast` directly for events the Forge does not follow (`mesh.changed`,
+  `migration.progress`).
 - Events given in sequence by one caller reach each connection in that order (each channel sends its frames in order).
   Events are not stored.
 
@@ -497,16 +502,19 @@ project.yml that appears or becomes valid) and `reloaded` (an entry added to `su
 2. `conflict` "<path> is already a project of this Main." when `realRoot` equals the `realRoot` of a registered project;
    `conflict` "Identifier <id> is already used by <name> on this Main." when a registered project has the identifier
    (this check is local; the mesh check is §6.7).
-3. Stores the `HostedProject`, creates its `ProjectWriteQueue`, calls `tasks.load(projectID:)`.
+3. Stores the `HostedProject`, creates its `ProjectWriteQueue`, calls `tasks.load(projectID:)` and
+   `bundles.load(projectID:)`.
 4. Registers its sub projects (§6.3); a sub project that fails a check is logged and skipped.
 5. Top-level only: `ProjectsFile.add(root.path)` and save; `watcher.watch(root)`.
 6. Emits `projectsChanged {deviceID, projects: summaries()}`.
 
 ### 6.5 unregister(_:forget:)
 
-Removes the project and its descendants from memory, with their task caches (`tasks.unload`) and write queues
-(operations still queued fail with `notFound`). For a top-level project with `forget == true` (project removed or
-moved away) it also removes the path from `projects.json` and calls `watcher.unwatch(root)`. With `forget == false`
+Removes the project and its descendants from memory, with their task and bundle caches (`tasks.unload`,
+`bundles.unload`) and write queues (operations still queued fail with `notFound`). With `forget == true` (project
+removed or moved away) it calls `bundles.removeWorktrees(projectID:)` for each of them
+([bundles.md](bundles.md#projects-removed-or-moved)), and for a top-level project it also removes the path from
+`projects.json` and calls `watcher.unwatch(root)`. With `forget == false`
 (project.yml or folder gone, §11) both stay. Emits `projectsChanged`. Unregistering a project that is not registered
 does nothing.
 
@@ -617,7 +625,8 @@ its sub projects in `children`.
 
 ### 7.2 projects.snapshot
 
-`project`: `registry.project(projectID)`; `tasks`: `tasks.list(projectID:)` (by task number); `sessions`:
+`project`: `registry.project(projectID)`; `tasks`: `tasks.list(projectID:)` (by task number); `bundles`:
+`bundles.list(projectID:)` (by bundle number); `sessions`:
 `sessions.sessions(projectID:)` reordered by `created` ascending; `runs`: `runs.list(projectID:)` in reverse order
 (newest `startedAt` first). Served while the project is migrating.
 
@@ -968,6 +977,9 @@ implemented as follows. §12.4 lists the members the Forge uses directly.
 - `settings()`: `settings()`.
 - `claudeProject(_:)`: from `registry.hosted(_:)`, below.
 - `claudeTask(projectID:taskID:)`: from `tasks.task(projectID:taskID:)`, below.
+- `claudeBundle(projectID:bundleID:)`: from the cached `BundleItem` and `tasks.task(projectID:taskID:)`, below.
+- `bundleWorkFolder(projectID:taskID:)`: `bundles.workFolder(projectID:taskID:)`
+  ([bundles.md](bundles.md#working-folder-of-a-task-session)).
 - `checkWritable(_:)`: `registry.checkWritable(_:)`.
 - `sessionArchive(_:)`: one `SessionArchive(projectRoot: root)` per registered project, created on first use, dropped at
   unregistration.
@@ -987,6 +999,9 @@ Built values:
 - `ClaudeTaskContext`: `id`, `name`, `description`, `parseError` from the cached `TaskItem`; `yaml` = the text of
   the task file read from disk; `attachments` = `TaskFile.attachmentsFolder` + `file` for every attachment of every
   comment, in comment then attachment order.
+- `ClaudeBundleContext`: `id`, `name`, `base` (`""` while unset), `tasks` = one `ClaudeBundleTask` per task of the
+  bundle, in order (`name` and `status` of its `TaskItem`; `""` and nil for a deleted task), `maxParallel` = the setting
+  `bundles.maxParallel`.
 
 ### 12.2 SkillsHost ([../claude/skills.md](../claude/skills.md))
 
@@ -1016,6 +1031,8 @@ migration checks, [../devices/migration.md](../devices/migration.md#outcome-chec
 - `localProjectRoot(_:)`: `registry.hosted(_:).root`, `nil` when not hosted.
 - `forgePushDocs(sessionID:)`: `forge.pushDocs(sessionID: sessionID)`.
 - `forgePushRegen(sessionID:)`: `forge.pushRegen(sessionID: sessionID)`.
+- `bundleTool(_:projectID:bundleID:arguments:)`: the `BundleService` function of the tool
+  ([bundles.md](bundles.md#tools-of-the-coordinator)), its result encoded as the tool's JSON text.
 
 ### 12.4 ForgeService ([../forge/pipeline.md](../forge/pipeline.md#swift-api))
 
@@ -1061,6 +1078,8 @@ routed to them (§4.4). The host calls `migration.recover()` (§3.1), `migration
 | `project.changed`  | `ProjectRegistry` | the wire `Project` changed: a write, the watcher, `setMigrating`, `markInvalid`                                         |
 | `task.changed`     | `TaskService`     | a task method wrote the file; the watcher found a difference                                                            |
 | `task.removed`     | `TaskService`     | `tasks.delete`; the watcher found the file gone                                                                         |
+| `bundle.changed`   | `BundleService`   | a bundle method or tool wrote the bundle file ([bundles.md](bundles.md))                                                |
+| `bundle.removed`   | `BundleService`   | `bundles.delete`                                                                                                        |
 | `files.changed`    | `FileWatcher`     | each batch with paths of the project                                                                                    |
 
 `projects.changed` carries `{deviceID: <this Main>, projects: registry.summaries()}`.

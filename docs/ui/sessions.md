@@ -72,6 +72,7 @@ A session has a live CLI process when its status is `idle`, `starting`, `running
 | `task`         | Task         |
 | `feedback`     | Feedback     |
 | `regeneration` | Regeneration |
+| `bundle`       | Bundle       |
 
 Models: the aliases offered are `opus`, `sonnet` and `haiku`; any other model name can be typed; an empty model means
 the default.
@@ -107,11 +108,12 @@ section appears, pushes its session at once.
 Sessions come from `store.sessions`, in groups; a group without sessions is hidden; inside a group, by `updated`
 descending.
 
-| Group | Sessions                           | Row line 2 (caption, secondary)                          |
-|-------|------------------------------------|----------------------------------------------------------|
-| Chats | kind `project`                     | relative `updated`                                       |
-| Tasks | kind `task`                        | "<task id> · <mode> · <relative updated>"                |
-| Forge | kind `feedback` and `regeneration` | "<kind title> · <task id when set> · <relative updated>" |
+| Group   | Sessions                           | Row line 2 (caption, secondary)                          |
+|---------|------------------------------------|----------------------------------------------------------|
+| Chats   | kind `project`                     | relative `updated`                                       |
+| Tasks   | kind `task`                        | "<task id> · <mode> · <relative updated>"                |
+| Bundles | kind `bundle`                      | "<bundle id> · <relative updated>"                       |
+| Forge   | kind `feedback` and `regeneration` | "<kind title> · <task id when set> · <relative updated>" |
 
 - Row line 1: the title (one line) and, trailing, the status indicator.
 - Context menu: the [session context menu](#session-context-menu).
@@ -171,9 +173,10 @@ its own `SessionModel` when it appears, calls `appear()` in `onAppear` and `disa
 ### Header
 
 - Title: the session title (headline, one line).
-- Context (secondary): task session "<task id> · <mode>"; feedback "Feedback · <task id>"; regeneration
-  "Regeneration". With `showsTaskLink` and a task id, the task id is a link that calls
-  `context.navigate(mainDeviceID: store.mainDeviceID, projectID: store.projectID, section: .tasks, item: <task id>)`.
+- Context (secondary): task session "<task id> · <mode>", followed by " · <bundle id>" for a task session of a bundle;
+  feedback "Feedback · <task id>"; regeneration "Regeneration"; bundle "Bundle · <bundle id>". With `showsTaskLink` and
+  a task id, the task id is a link that calls `context.navigate(mainDeviceID: store.mainDeviceID, projectID:
+  store.projectID, section: .tasks, item: <task id>)`.
 - Capsules: the permission mode title; the model, or "Default model" when nil.
 - Options: `SessionOptionsMenu` (button `ellipsis.circle`).
 

@@ -445,6 +445,11 @@ nil and `attachments` to `[]`.
 | Tasks    | `updateComment(projectID: String, taskID: String, commentID: UUID, body: String) -> TaskItem`                                                                                                                         | `tasks.updateComment`     |
 | Tasks    | `deleteComment(projectID: String, taskID: String, commentID: UUID) -> TaskItem`                                                                                                                                       | `tasks.deleteComment`     |
 | Tasks    | `readAttachment(projectID: String, taskID: String, fileName: String, offset: Int?, length: Int?) -> AttachmentsReadResult`                                                                                            | `attachments.read`        |
+| Bundles  | `createBundle(projectID: String, name: String, taskIDs: [String]) -> BundleItem`                                                                                                                                      | `bundles.create`          |
+| Bundles  | `updateBundle(projectID: String, bundleID: String, patch: BundlePatch) -> BundleItem`                                                                                                                                 | `bundles.update`          |
+| Bundles  | `deleteBundle(projectID: String, bundleID: String)`                                                                                                                                                                   | `bundles.delete`          |
+| Bundles  | `startBundle(projectID: String, bundleID: String) -> BundleItem`                                                                                                                                                      | `bundles.start`           |
+| Bundles  | `stopBundle(projectID: String, bundleID: String) -> BundleItem`                                                                                                                                                       | `bundles.stop`            |
 | Files    | `listFiles(projectID: String, path: String) -> [FileEntry]`                                                                                                                                                           | `files.list`              |
 | Files    | `readFile(projectID: String, path: String, offset: Int?, length: Int?) -> FilesReadResult` (a whole read when both are nil)                                                                                           | `files.read`              |
 | Files    | `writeFile(projectID: String, path: String, data: Data, baseRevision: String?) -> String` (the new revision)                                                                                                          | `files.write`             |
@@ -633,12 +638,14 @@ public final class ProjectStore {
     public private(set) var phase: Phase
     public private(set) var project: Project?
     public private(set) var tasks: [TaskItem]        // by task number, ascending
+    public private(set) var bundles: [BundleItem]    // by bundle number, ascending
     public private(set) var sessions: [SessionInfo]  // by created, then id
     public private(set) var runs: [RunInfo]          // by startedAt, then id; trimmed to 20 (running runs stay)
     public private(set) var isRemoved: Bool
     public var connection: MainConnection? { get }
     public func reload() async
     public func task(_ id: String) -> TaskItem?
+    public func bundle(_ id: String) -> BundleItem?
     public func session(_ id: UUID) -> SessionInfo?
     public func run(_ id: UUID) -> RunInfo?
 }
@@ -648,14 +655,14 @@ public final class ProjectStore {
   creating it with phase `idle` when missing; a new store starts loading when its Main is connected. A store stays
   until its project leaves its Main's tree or its Main leaves the registry; `reset()` drops every store.
 - `reload()` returns at once while a load runs. Otherwise: phase `loading` (the data stays visible) and request
-  `projects.snapshot`; events for this store that arrive meanwhile are queued. On success `project`, `tasks`,
+  `projects.snapshot`; events for this store that arrive meanwhile are queued. On success `project`, `tasks`, `bundles`,
   `sessions` and `runs` are replaced (sorted, runs trimmed), the queued events are applied in order, phase `loaded`,
   then `sessionCenter.handleSessions(mainDeviceID:projectID:sessions:)` gets the store's `sessions`
-  ([ui/sessions.md](../ui/sessions.md#sessioncenter)). On failure the queued events are dropped;
-  `notFound` sets `isRemoved = true` and drops the store; otherwise a store that never loaded gets phase
-  `failed(message)`, and a store that had data returns to `loaded` and the failure is reported
-  ([Error reports](#error-reports)).
-- Sorting: tasks by the number after the last `-` of the id (ids without a number last, by id); sessions by `created`,
+  ([ui/sessions.md](../ui/sessions.md#sessioncenter)). On failure the queued events are dropped; `notFound` sets
+  `isRemoved = true` and drops the store; otherwise a store that never loaded gets phase `failed(message)`, and a store
+  that had data returns to `loaded` and the failure is reported ([Error reports](#error-reports)).
+- Sorting: tasks by the number after the last `-` of the id (ids without a number last, by id); bundles by the number
+  after the last `-B` of the id; sessions by `created`,
   then id; runs by `startedAt`, then id. Runs trim: while more than 20 runs are kept, the oldest run whose state is
   not `running` is dropped, as the Main does ([services/runs.md](../services/runs.md#7-history)); a `running` run is
   never dropped, so more than 20 can stay.
@@ -674,6 +681,8 @@ of `(M, projectID of the event)` when it exists.
 | `project.changed`      | The store's `project` replaced; when `M`'s projects are loaded and the id is not in its tree, `projects.list` again       |                                           |
 | `task.changed`         | Upsert of `task` in the store                                                                                             |                                           |
 | `task.removed`         | The task removed from the store (nothing when absent)                                                                     |                                           |
+| `bundle.changed`       | Upsert of `bundle` in the store                                                                                           |                                           |
+| `bundle.removed`       | The bundle removed from the store (nothing when absent)                                                                   |                                           |
 | `session.changed`      | Upsert of `session` in the store                                                                                          | `sessionCenter.handleSessionChanged`      |
 | `session.removed`      | The session removed from the store                                                                                        | `sessionCenter.handleSessionRemoved`      |
 | `session.event`        | When the store is loaded and lacks the session id, the store reloads                                                      | `sessionCenter.handleSessionEvent`        |

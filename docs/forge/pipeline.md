@@ -319,7 +319,8 @@ A cycle is one pass of regeneration, CI and release; `Identifiable` by `id`. It 
 
 ### ForgeItem
 
-One per feedback task; `var id: String { taskID }`.
+One per feedback task, and per task of a bundle of the source project whose coordinator pushed its docs
+([../services/bundles.md](../services/bundles.md)); `var id: String { taskID }`.
 
 | Field               | Type         | Meaning                                                           |
 |---------------------|--------------|-------------------------------------------------------------------|
@@ -327,7 +328,7 @@ One per feedback task; `var id: String { taskID }`.
 | `projectID`         | `String`     | the source project when the item was created                      |
 | `title`             | `String`     | the task name, kept current (Items)                               |
 | `state`             | `ForgeStage` | see Items                                                         |
-| `feedbackSessionID` | `UUID`       | the feedback session                                              |
+| `feedbackSessionID` | `UUID`       | the feedback session, or the coordinator that created the item    |
 | `docsCommit`        | `String?`    | full SHA of the last commit `forge_push_docs` pushed for the item |
 | `cycleID`           | `UUID?`      | the cycle the item is in                                          |
 | `error`             | `String?`    | the cycle's error while the item is `failed`                      |
@@ -424,16 +425,17 @@ When step 4 fails, no item is created, the task stays, and the error is returned
 
 ## Items
 
-| From                                         | Event                                                    | To                | Effects                                                                       |
-|----------------------------------------------|----------------------------------------------------------|-------------------|-------------------------------------------------------------------------------|
-| (none)                                       | `forge.feedback`                                         | `discussing`      | Feedback intake                                                               |
-| `discussing`, `docsPushed`, `done`, `failed` | `forge_push_docs` of its feedback session pushed `<sha>` | `docsPushed`      | `docsCommit` = `<sha>`; `cycleID`, `error` cleared; join rule; `tool` trigger |
-| `regenPushed`, `building`, `released`        | `forge_push_docs` of its feedback session pushed `<sha>` | unchanged         | `docsCommit` = `<sha>`                                                        |
-| `docsPushed`, `failed`                       | the join rule matches                                    | the cycle's state | `cycleID` = the cycle; task id added to `itemTaskIDs`                         |
-| in a cycle                                   | the cycle changes state                                  | the cycle's state | `error` = the cycle's error when `failed`, else nil                           |
-| `released`                                   | Completion writes its comment                            | `done`            | comment, task status `done`                                                   |
-| any                                          | its task changes name (`task.changed`)                   | unchanged         | `title` = the new name                                                        |
-| any                                          | its task is deleted (`task.removed`)                     | (removed)         | removed from `items` and from its cycle's `itemTaskIDs`                       |
+| From                                         | Event                                             | To                | Effects                                                                       |
+|----------------------------------------------|---------------------------------------------------|-------------------|-------------------------------------------------------------------------------|
+| (none)                                       | `forge.feedback`                                  | `discussing`      | Feedback intake                                                               |
+| (none)                                       | `forge_push_docs` of a coordinator pushed `<sha>` | `docsPushed`      | created for each task of the bundle without an item (MCP tools step 8)        |
+| `discussing`, `docsPushed`, `done`, `failed` | `forge_push_docs` of its session pushed `<sha>`   | `docsPushed`      | `docsCommit` = `<sha>`; `cycleID`, `error` cleared; join rule; `tool` trigger |
+| `regenPushed`, `building`, `released`        | `forge_push_docs` of its session pushed `<sha>`   | unchanged         | `docsCommit` = `<sha>`                                                        |
+| `docsPushed`, `failed`                       | the join rule matches                             | the cycle's state | `cycleID` = the cycle; task id added to `itemTaskIDs`                         |
+| in a cycle                                   | the cycle changes state                           | the cycle's state | `error` = the cycle's error when `failed`, else nil                           |
+| `released`                                   | Completion writes its comment                     | `done`            | comment, task status `done`                                                   |
+| any                                          | its task changes name (`task.changed`)            | unchanged         | `title` = the new name                                                        |
+| any                                          | its task is deleted (`task.removed`)              | (removed)         | removed from `items` and from its cycle's `itemTaskIDs`                       |
 
 An item's task is the task of `projectID` whose id is `taskID`. Its feedback session renames it when it rewrites the
 feedback as a task ([../claude/prompts.md](../claude/prompts.md#feedback-part)); `task.changed` of a task whose name
@@ -625,10 +627,11 @@ next check ([Checks and triggers](#checks-and-triggers)).
 call with its text. `<tool>` is the tool's name and `<branch>` the configured branch.
 
 1. **Session.**
-   - `forge_push_docs`: the session is the `feedbackSessionID` of an item, else `forge_push_docs is only available in
-     Forge feedback sessions.`; the cycle is not `regenerating`, else `A regeneration is working in this repository;
-     call forge_push_docs again when it has pushed.` (feedback and regeneration sessions share the working tree and
-     the branch).
+   - `forge_push_docs`: the session is the `feedbackSessionID` of an item, or the coordinator of a bundle of the source
+     project in `running` or `review` (`coordinatorSessionID`, [../services/bundles.md](../services/bundles.md)), else
+     `forge_push_docs is only available in Forge feedback sessions and in the bundle sessions of the source project.`;
+     the cycle is not `regenerating`, else `A regeneration is working in this repository; call forge_push_docs again
+     when it has pushed.` (feedback and regeneration sessions share the working tree and the branch).
    - `forge_push_regen`: the session is `cycle.sessionID` and the cycle is `regenerating`, or `failed` with
      `failedState` `regenerating`, else `forge_push_regen is only available in the current Forge regeneration
      session.`.
@@ -727,7 +730,10 @@ call with its text. `<tool>` is the tool's name and `<branch>` the configured br
    is written: the Forge trusts what it checked on a trusted base, and leaves the commits pushed elsewhere to the next
    check ([Checks and triggers](#checks-and-triggers)).
    - `forge_push_docs`: the session's item takes the event of [Items](#items); then, when it is `docsPushed`, the join
-     rule; then a check; then the `tool` trigger. Result, the first matching row:
+     rule; then a check; then the `tool` trigger. For a coordinator, its items are those of the tasks of its bundle:
+     a task without an item gets a new one first (`state` `docsPushed`, `title` = the task name, `feedbackSessionID` =
+     the coordinator, `created` = `updated` = now), and `<task id>` below is the bundle id. Result, the first matching
+     row:
 
      | Situation                                                            | Text                                                                                                                                                                                  |
      |----------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|

@@ -126,6 +126,11 @@ Methods marked W in the method table change a project. They are refused with `lo
 | `tasks.updateComment`     | `tasksUpdateComment`     | `TasksUpdateCommentParams`     | `TaskItem`                  | `anyDevice`   | W |
 | `tasks.deleteComment`     | `tasksDeleteComment`     | `TasksDeleteCommentParams`     | `TaskItem`                  | `anyDevice`   | W |
 | `attachments.read`        | `attachmentsRead`        | `AttachmentsReadParams`        | `AttachmentsReadResult`     | `anyDevice`   |   |
+| `bundles.create`          | `bundlesCreate`          | `BundlesCreateParams`          | `BundleItem`                | `anyDevice`   | W |
+| `bundles.update`          | `bundlesUpdate`          | `BundlesUpdateParams`          | `BundleItem`                | `anyDevice`   | W |
+| `bundles.delete`          | `bundlesDelete`          | `BundlesDeleteParams`          | `EmptyPayload`              | `anyDevice`   | W |
+| `bundles.start`           | `bundlesStart`           | `BundlesStartParams`           | `BundleItem`                | `anyDevice`   | W |
+| `bundles.stop`            | `bundlesStop`            | `BundlesStopParams`            | `BundleItem`                | `anyDevice`   | W |
 | `files.list`              | `filesList`              | `FilesListParams`              | `FilesListResult`           | `anyDevice`   |   |
 | `files.read`              | `filesRead`              | `FilesReadParams`              | `FilesReadResult`           | `anyDevice`   |   |
 | `files.write`             | `filesWrite`             | `FilesWriteParams`             | `FilesWriteResult`          | `anyDevice`   | W |
@@ -431,6 +436,7 @@ Everything a client mirrors for one project.
 |------------|-----------------|-----------------------------------------------------------------------------------|
 | `project`  | `Project`       | The project                                                                       |
 | `tasks`    | `[TaskItem]`    | Its tasks, broken ones included, ordered by task number                           |
+| `bundles`  | `[BundleItem]`  | Its bundles, ordered by bundle number                                             |
 | `sessions` | `[SessionInfo]` | Its sessions of every kind, ordered by `created`, with their `pendingPermissions` |
 | `runs`     | `[RunInfo]`     | Its runs kept in memory (at most 20), newest `startedAt` first                    |
 
@@ -755,6 +761,22 @@ Reads a range of a task attachment.
 - Errors: `badRequest` (`fileName` is not a valid stored file name; `offset` below 0 or above `size`; `length` below
   1); `notFound` (no such file in `.hephaestus/attachments/<task id>/`).
 
+## Bundles
+
+Task bundles, their files, worktrees and coordinator: [services/bundles.md](../services/bundles.md). Every method
+takes `projectID` (`String`); the statuses each one allows and its errors are in
+[services/bundles.md](../services/bundles.md#methods).
+
+| Method           | Params besides `projectID`                     | Result         | Writes                         | Events                                 |
+|------------------|------------------------------------------------|----------------|--------------------------------|----------------------------------------|
+| `bundles.create` | `name` (`String`), `taskIDs` (`[String]`)      | `BundleItem`   | `.hephaestus/bundles/<id>.yml` | `bundle.changed`                       |
+| `bundles.update` | `bundleID` (`String`), `patch` (`BundlePatch`) | `BundleItem`   | the bundle file                | `bundle.changed`                       |
+| `bundles.delete` | `bundleID` (`String`)                          | `EmptyPayload` | deletes the file, worktrees    | `bundle.removed`                       |
+| `bundles.start`  | `bundleID` (`String`)                          | `BundleItem`   | the bundle file, a session     | `bundle.changed`, `session.changed`, … |
+| `bundles.stop`   | `bundleID` (`String`)                          | `BundleItem`   | the bundle file                | `bundle.changed`, `session.changed`, … |
+
+The params structs are `Bundles<Name>Params` with these fields, in this order.
+
 ## Files
 
 File operations, path safety, atomic writes and revisions: [services/files.md](../services/files.md).
@@ -913,7 +935,8 @@ Session process: [claude/cli.md](../claude/cli.md). Prompts and generated messag
 - Process: a task session starts at once with its generated first message ([claude/prompts.md](../claude/prompts.md)).
   A project session starts at once when `message` or `attachments` is given, with `message` (empty when `nil`) and the
   attachments as the first user message, as `sessions.send` sends one; otherwise on the first `sessions.send`.
-- Errors: `badRequest` (`kind` is `feedback` or `regeneration`: only the Forge starts those; a project session with
+- Errors: `badRequest` (`kind` is `feedback` or `regeneration`: only the Forge starts those; `kind` is `bundle`:
+  `bundles.start` starts those; a project session with
   `taskID` or `mode`; a task session without `taskID` or `mode`, or with `attachments`; mode `custom` without a
   `message`; an empty `title` or `model`; a `title` with a line break; an upload named twice, of another project, or
   incomplete); `notFound` (task; an unknown upload); `conflict` (the task is broken: "The file is invalid: <parse

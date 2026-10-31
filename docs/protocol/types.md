@@ -4,6 +4,7 @@ files:
 - HephaestusKit/Sources/HephCore/Protocol/Types/DeviceTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/ProjectTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/TaskTypes.swift
+- HephaestusKit/Sources/HephCore/Protocol/Types/BundleTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/FileTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/SessionTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/RunTypes.swift
@@ -30,7 +31,8 @@ in [methods.md](methods.md), the event payloads in [events.md](events.md), the J
 - JSON field names are the field names. A type ending in `?` is optional: the member is omitted when `nil`.
 - No custom `CodingKeys` and no custom coding, except where a section says so.
 - Identifiers: `projectID` is the project identifier (2–8 letters A–Z, [data/project-yml.md](../data/project-yml.md));
-  `taskID` is `<projectID>-<n>` ([data/task-yml.md](../data/task-yml.md)); device, mesh, session, comment, web tab, run,
+  `taskID` is `<projectID>-<n>` ([data/task-yml.md](../data/task-yml.md)); `bundleID` is `<projectID>-B<n>`
+  ([services/bundles.md](../services/bundles.md#bundle-id)); device, mesh, session, comment, web tab, run,
   migration, upload and Forge cycle ids are `UUID`s; session event ids are strings (`SessionEvent`).
 - Names (project, sub project, task, run configuration, session title) are trimmed of surrounding white space and line
   breaks, must not be empty and must be on one line; they have no maximum length
@@ -254,6 +256,52 @@ Changes for `tasks.update`. A `nil` field leaves the value unchanged.
 | `description` | `String?`     | New description (Markdown)                |
 | `status`      | `TaskStatus?` | New status                                |
 
+## Bundles (BundleTypes.swift)
+
+Task bundles: [services/bundles.md](../services/bundles.md).
+
+### BundleStatus
+
+| Raw value | `displayName` | Meaning                                                     |
+|-----------|---------------|-------------------------------------------------------------|
+| `draft`   | Draft         | Not being worked on                                         |
+| `running` | Running       | Its coordinator and task sessions work on it                |
+| `review`  | Review        | Every task is done; the coordinator waits for the user's OK |
+| `done`    | Done          | Its work was brought in and its worktrees removed           |
+
+### BundleTask
+
+Identifiable by `taskID` (`var id: String { taskID }`).
+
+| Field       | Type     | Meaning                                                |
+|-------------|----------|--------------------------------------------------------|
+| `taskID`    | `String` | Task id                                                |
+| `sessionID` | `UUID?`  | The last task session the bundle started for this task |
+
+### BundleItem
+
+A bundle. Identifiable.
+
+| Field                  | Type           | Meaning                                                     |
+|------------------------|----------------|-------------------------------------------------------------|
+| `id`                   | `String`       | Bundle id, `<projectID>-B<n>`                               |
+| `name`                 | `String`       | Name                                                        |
+| `status`               | `BundleStatus` | Status                                                      |
+| `created`              | `Date`         | Creation date                                               |
+| `updated`              | `Date`         | Last change                                                 |
+| `base`                 | `String?`      | Branch the task branches start from; set when first started |
+| `coordinatorSessionID` | `UUID?`        | The coordinator session; set when first started             |
+| `tasks`                | `[BundleTask]` | Its tasks, in order                                         |
+
+### BundlePatch
+
+Changes for `bundles.update`. A `nil` field leaves the value unchanged.
+
+| Field     | Type        | Meaning                                                |
+|-----------|-------------|--------------------------------------------------------|
+| `name`    | `String?`   | New name, trimmed: not empty, on one line              |
+| `taskIDs` | `[String]?` | Replaces the tasks, in order (`draft` and `done` only) |
+
 ## Files (FileTypes.swift)
 
 ### FileEntry
@@ -283,12 +331,13 @@ upload of the request's project, sent before with `uploads.begin` and `uploads.c
 
 ### SessionKind
 
-| Raw value      | Meaning                                                               |
-|----------------|-----------------------------------------------------------------------|
-| `project`      | Project chat                                                          |
-| `task`         | Session bound to a task                                               |
-| `feedback`     | Forge feedback discussion ([forge/pipeline.md](../forge/pipeline.md)) |
-| `regeneration` | Forge regeneration ([forge/pipeline.md](../forge/pipeline.md))        |
+| Raw value      | Meaning                                                                      |
+|----------------|------------------------------------------------------------------------------|
+| `project`      | Project chat                                                                 |
+| `task`         | Session bound to a task                                                      |
+| `feedback`     | Forge feedback discussion ([forge/pipeline.md](../forge/pipeline.md))        |
+| `regeneration` | Forge regeneration ([forge/pipeline.md](../forge/pipeline.md))               |
+| `bundle`       | Coordinator of a task bundle ([services/bundles.md](../services/bundles.md)) |
 
 ### SessionMode
 
@@ -338,6 +387,7 @@ A Claude session ([data/sessions.md](../data/sessions.md)). Identifiable.
 | `kind`               | `SessionKind`         | Kind                                                                                                     |
 | `taskID`             | `String?`             | Task and feedback sessions: the task                                                                     |
 | `mode`               | `SessionMode?`        | Task sessions: the mode                                                                                  |
+| `bundleID`           | `String?`             | Bundle sessions, and task sessions started by a bundle: the bundle                                       |
 | `title`              | `String`              | Title                                                                                                    |
 | `created`            | `Date`                | Creation date                                                                                            |
 | `updated`            | `Date`                | Last change of a stored field                                                                            |

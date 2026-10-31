@@ -20,6 +20,8 @@ events of its method.
 | `project.changed`      | `projectChanged`      | `ProjectChangedPayload`      | broadcast                            | the hosting Main                 |
 | `task.changed`         | `taskChanged`         | `TaskChangedPayload`         | broadcast                            | the hosting Main                 |
 | `task.removed`         | `taskRemoved`         | `TaskRemovedPayload`         | broadcast                            | the hosting Main                 |
+| `bundle.changed`       | `bundleChanged`       | `BundleChangedPayload`       | broadcast                            | the hosting Main                 |
+| `bundle.removed`       | `bundleRemoved`       | `BundleRemovedPayload`       | broadcast                            | the hosting Main                 |
 | `files.changed`        | `filesChanged`        | `FilesChangedPayload`        | broadcast                            | the hosting Main                 |
 | `session.changed`      | `sessionChanged`      | `SessionChangedPayload`      | broadcast                            | the hosting Main                 |
 | `session.removed`      | `sessionRemoved`      | `SessionRemovedPayload`      | broadcast                            | the hosting Main                 |
@@ -56,6 +58,8 @@ public enum ServerEvent: Sendable, Hashable {
     case projectChanged(ProjectChangedPayload)
     case taskChanged(TaskChangedPayload)
     case taskRemoved(TaskRemovedPayload)
+    case bundleChanged(BundleChangedPayload)
+    case bundleRemoved(BundleRemovedPayload)
     case filesChanged(FilesChangedPayload)
     case sessionChanged(SessionChangedPayload)
     case sessionRemoved(SessionRemovedPayload)
@@ -162,6 +166,30 @@ public enum ServerEvent: Sendable, Hashable {
 - Emitted when a task file is deleted, whatever deleted it.
 - Client: removes the task from its mirror; a detail view showing it shows that the task was deleted
   ([ui/tasks.md](../ui/tasks.md)).
+
+### bundle.changed
+
+`BundleChangedPayload`:
+
+| Field       | Type         | Meaning                     |
+|-------------|--------------|-----------------------------|
+| `projectID` | `String`     | Project                     |
+| `bundle`    | `BundleItem` | The bundle after the change |
+
+- Emitted when `BundleService` creates or changes a bundle ([services/bundles.md](../services/bundles.md)).
+- Client: inserts or replaces the bundle in its mirror of that project.
+
+### bundle.removed
+
+`BundleRemovedPayload`:
+
+| Field       | Type     | Meaning        |
+|-------------|----------|----------------|
+| `projectID` | `String` | Project        |
+| `bundleID`  | `String` | Removed bundle |
+
+- Emitted when `bundles.delete` deletes a bundle.
+- Client: removes the bundle from its mirror.
 
 ### files.changed
 

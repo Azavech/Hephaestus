@@ -134,6 +134,7 @@ in General.")`.
 | New Sessions  | Default model                    | `ClaudeModelField(model:placeholder: "CLI Default", onCommit:)`  | `defaultModel`          |
 | New Sessions  | Default permission mode          | `PermissionModePicker(selection:defaultLabel: nil)`              | `defaultPermissionMode` |
 | Idle Sessions | Stop idle Claude processes after | menu `Picker`                                                    | `sessionIdleMinutes`    |
+| Bundles       | Parallel task sessions           | `Stepper` 1 to 16, its label "<n> per bundle"                    | `bundles.maxParallel`   |
 
 - Path: empty means the CLI is found automatically ([../claude/cli.md](../claude/cli.md)). "Choose…" opens an
   `NSOpenPanel` with `canChooseFiles = true`, `canChooseDirectories = false`, `showsHiddenFiles = true`,
@@ -145,6 +146,7 @@ in General.")`.
 - `ClaudeModelField` and `PermissionModePicker` are the controls of [sessions.md](sessions.md#labels). The model commits
   its trimmed text (empty: no `--model`). The permission mode picker has no default choice: it lists the five modes.
 - Caption of New Sessions: "Used for new sessions of projects that set no model or permission mode."
+- Caption of Bundles: "How many task sessions of a bundle run at the same time on this Mac."
 - Idle choices: "5 minutes", "10 minutes", "15 minutes", "30 minutes", "1 hour", "2 hours", "4 hours" (5, 10, 15, 30,
   60, 120, 240). A stored value that is not a choice is listed as an extra item "<n> minutes".
 

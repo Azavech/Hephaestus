@@ -61,18 +61,20 @@ path`, and a folder for which `FileManager` returns no enumerator `the folder ca
 
 `projects.migrate {projectID, targetDeviceID}` on S. Checks, in order:
 
-| Check                                                                                  | Error                                                                    |
-|----------------------------------------------------------------------------------------|--------------------------------------------------------------------------|
-| `projectID` is hosted here (`host.registry.hosted`)                                    | `notFound` "Project <id> is not hosted on this Main."                    |
-| it is a top-level project                                                              | `badRequest` "Sub projects move with their parent project."              |
-| it is not migrating                                                                    | `locked` "<name> is already being moved."                                |
-| `targetDeviceID` is not this Main                                                      | `badRequest` "<name> is already on this Main."                           |
-| the target is a non-revoked record of the registry                                     | `notFound` "No device <targetDeviceID>."                                 |
-| the target record has `isMain`                                                         | `badRequest` "<target name> is not a Main."                              |
-| S has an established outgoing peer link to the target (`mesh.connectedPeerMains()`)    | `unavailable` "<target name> is not connected."                          |
-| no project of the tree has live work                                                   | `conflict` "Stop the Claude sessions and runs of <name> first."          |
+| Check                                                                               | Error                                                           |
+|-------------------------------------------------------------------------------------|-----------------------------------------------------------------|
+| `projectID` is hosted here (`host.registry.hosted`)                                 | `notFound` "Project <id> is not hosted on this Main."           |
+| it is a top-level project                                                           | `badRequest` "Sub projects move with their parent project."     |
+| it is not migrating                                                                 | `locked` "<name> is already being moved."                       |
+| `targetDeviceID` is not this Main                                                   | `badRequest` "<name> is already on this Main."                  |
+| the target is a non-revoked record of the registry                                  | `notFound` "No device <targetDeviceID>."                        |
+| the target record has `isMain`                                                      | `badRequest` "<target name> is not a Main."                     |
+| S has an established outgoing peer link to the target (`mesh.connectedPeerMains()`) | `unavailable` "<target name> is not connected."                 |
+| no project of the tree has live work                                                | `conflict` "Stop the Claude sessions and runs of <name> first." |
+| no project of the tree has a bundle in `running` or `review`                        | `conflict` "Stop the bundles of <name> first."                  |
 
 - The tree is the project and every sub project at any depth (`host.registry.descendants(of:)`).
+- Bundles: `host.bundles.hasActiveBundle(projectID:)` ([../services/bundles.md](../services/bundles.md)).
 - Live work: a session with a CLI process (`host.sessions.hasProcess(projectID:)`, [../claude/cli.md](../claude/cli.md))
   or a running run (`host.runs.activeRunCount(projectID:)` > 0, [../services/runs.md](../services/runs.md)). The Move
   sheet stops them before it sends the request ([../ui/overview.md](../ui/overview.md#move-sheet)).

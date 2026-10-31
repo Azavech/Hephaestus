@@ -40,6 +40,7 @@ public struct MCPSessionContext: Sendable, Equatable {
     public var projectID: String
     public var kind: SessionKind
     public var taskID: String?
+    public var bundleID: String?
     public init(...)   // memberwise: one labeled parameter per property, in order, no default
 }
 
@@ -74,6 +75,9 @@ public protocol MCPHost: Sendable {
     /// ProtocolError whose message is the error text.
     func forgePushDocs(sessionID: UUID) async throws -> String
     func forgePushRegen(sessionID: UUID) async throws -> String
+    /// The BundleService function of a bundle tool (6.25–6.28): its result as JSON text, or a thrown ProtocolError
+    /// whose message is the error text.
+    func bundleTool(_ name: String, projectID: String, bundleID: String, arguments: Data) async throws -> String
 }
 
 public struct MCPMain: Sendable, Equatable {
@@ -214,7 +218,7 @@ errors (section 8), so Claude can correct them.
 ## 5. Sessions, tokens and `--mcp-config`
 
 - `SessionService` registers each session process before spawning it: `register(MCPSessionContext{sessionID,
-  projectID, kind, taskID})` returns a new token, 32 random bytes (`SecRandomCopyBytes`) as 64 lowercase hex
+  projectID, kind, taskID, bundleID})` returns a new token, 32 random bytes (`SecRandomCopyBytes`) as 64 lowercase hex
   characters. It unregisters the token when the process ends ([cli.md](cli.md#57-errors-and-the-end-of-a-process)).
 - A request's token selects its `MCPSessionContext`: the tools listed and callable depend on its `kind` (section 6),
   `get_task`, `update_task` and `comment_task` in a `feedback` session are limited to its `taskID`, and the Forge
@@ -234,12 +238,14 @@ mcp__hephaestus` lets sessions call them without permission prompts.
 written here (served compact by `tools/list`). Each definition has the session kinds that list it and may call it,
 given by `MCPToolKinds.kinds(for:)` from this table:
 
-| Tools                                                  | Session kinds                                     |
-|--------------------------------------------------------|---------------------------------------------------|
-| 6.1–6.6, 6.8, 6.10, 6.12–6.22                          | `project`, `task`                                 |
-| 6.7 `get_task`, 6.9 `update_task`, 6.11 `comment_task` | `project`, `task`, `feedback` (its own task only) |
-| 6.23 `forge_push_docs`                                 | `feedback`                                        |
-| 6.24 `forge_push_regen`                                | `regeneration`                                    |
+| Tools                                                        | Session kinds                                               |
+|--------------------------------------------------------------|-------------------------------------------------------------|
+| 6.1–6.6, 6.8, 6.10, 6.13, 6.16–6.22                          | `project`, `task`, `bundle`                                 |
+| 6.7 `get_task`, 6.9 `update_task`, 6.11 `comment_task`       | `project`, `task`, `bundle`, `feedback` (its own task only) |
+| 6.12 `start_task_session`, 6.14 `start_run`, 6.15 `stop_run` | `project`, `task`                                           |
+| 6.23 `forge_push_docs`                                       | `feedback`, `bundle`                                        |
+| 6.24 `forge_push_regen`                                      | `regeneration`                                              |
+| 6.25–6.28 the bundle tools                                   | `bundle`                                                    |
 
 A `feedback` session therefore lists `get_task`, `update_task`, `comment_task` and `forge_push_docs`, and a
 `regeneration` session lists `forge_push_regen` alone. A feedback session uses `update_task` and `comment_task` to turn
@@ -248,9 +254,14 @@ its feedback into a task ([prompts.md](prompts.md#feedback-part)). Forge session
 web tabs, sessions or skills of the mesh beyond their own feedback task, none that changes them beyond the name,
 description, status and comments of that task, and none that runs a command or starts a session, so nothing they call
 can push around the Forge push gate ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). `MCPToolKinds.swift`
-holds this table and nothing else: `kinds(for:)` names each tool of the table (the first row: the 19 tools of 6.1–6.6,
-6.8, 6.10 and 6.12–6.22) and returns an empty set for any other name, so a tool added to the catalog is listed and
-callable in no session until the table names it.
+holds this table and nothing else: `kinds(for:)` names each tool of the table (the first row: the 17 tools of 6.1–6.6,
+6.8, 6.10, 6.13 and 6.16–6.22) and returns an empty set for any other name, so a tool added to the catalog is listed
+and callable in no session until the table names it.
+
+A `bundle` session, the coordinator of a bundle ([../services/bundles.md](../services/bundles.md)), gets the tools
+that read and change projects and tasks, the bundle tools and `forge_push_docs`, which pushes only for the bundles of
+the Forge source project. It starts its task sessions with `start_bundle_task` alone, and gets no tool that runs a
+command: in the Forge source project it holds a push tool, like a feedback session.
 It is a protected path ([../public-repository.md](../public-repository.md#protected-paths)), so a regeneration never
 widens the tools of these sessions.
 
@@ -814,12 +825,12 @@ Calls `skills.files {name}` and `skills.readFile {name, path: "SKILL.md"}` on th
 3. `skills.writeFile {name, path: "SKILL.md", data: <content as UTF-8>}`.
 4. Result: the skill's `SkillSummary` from `skills.list`.
 
-### 6.23 forge_push_docs (feedback sessions only)
+### 6.23 forge_push_docs (feedback and bundle sessions)
 
 ```json
 {
   "name": "forge_push_docs",
-  "description": "Check the documentation commits of this feedback that are not on GitHub yet for personal data, then push them. Commit first, once the user agrees. On an error, do what the message says, then call it again.",
+  "description": "Check the documentation commits of this feedback or bundle that are not on GitHub yet for personal data, then push them. Commit first, once the user agrees. On an error, do what the message says, then call it again.",
   "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false}
 }
 ```
@@ -839,6 +850,73 @@ Calls `MCPHost.forgePushDocs(sessionID:)` with the token's session: the Forge pu
 
 Calls `MCPHost.forgePushRegen(sessionID:)` with the token's session, as for 6.23. Result: the returned text.
 
+### 6.25 get_bundle
+
+```json
+{
+  "name": "get_bundle",
+  "description": "Get the bundle this session coordinates: its tasks in order, each with the task, its task session, its branch and its work folder, and how many task sessions may run at once.",
+  "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false}
+}
+```
+
+Result: `BundleDetails` ([../services/bundles.md](../services/bundles.md#swift-api)).
+
+### 6.26 start_bundle_task
+
+```json
+{
+  "name": "start_bundle_task",
+  "description": "Start the task session of a task of your bundle: it implements the task in its own git worktree, on the branch task/<task id>, commits there and sets the task to review. When the task already has a session, send that session instructions instead.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[0-9]+$", "description": "Task id of your bundle, for example HEPH-12."},
+      "instructions": {"type": "string", "description": "Added to the first message of a new session; sent to the existing session of the task, where they are required."}
+    },
+    "required": ["task"],
+    "additionalProperties": false
+  }
+}
+```
+
+`BundleService.startTask` ([../services/bundles.md](../services/bundles.md#tools-of-the-coordinator)); `instructions`
+empty after trimming counts as absent. Result: the `SessionInfo`.
+
+### 6.27 update_bundle
+
+```json
+{
+  "name": "update_bundle",
+  "description": "Set the status of your bundle: review while you wait for the user's agreement on the combined work, running when work resumes.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {"type": "string", "enum": ["running", "review"], "description": "New status."}
+    },
+    "required": ["status"],
+    "additionalProperties": false
+  }
+}
+```
+
+`BundleService.setStatus`. Result: the `BundleItem`.
+
+### 6.28 finish_bundle
+
+```json
+{
+  "name": "finish_bundle",
+  "description": "Finish your bundle once the work of its tasks is on its base branch (and pushed, in the Forge repository): removes the worktrees, deletes the branches whose work is on the base branch, and marks the bundle done. Lists the branches it kept.",
+  "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false}
+}
+```
+
+`BundleService.finish`. Result: `{"bundle":<BundleItem>,"keptBranches":[…]}`.
+
+The bundle tools call `MCPHost.bundleTool(_:projectID:bundleID:arguments:)` with the token's `projectID` and
+`bundleID`.
+
 ## 7. Locating a project and forwarding
 
 A tool acting on a project (every tool with `project`, `task` or `parent`) finds the Main hosting it:
@@ -852,7 +930,7 @@ A tool acting on a project (every tool with `project`, `task` or `parent`) finds
 The tool's protocol calls then go to that Main with `MCPHost.perform(_:params:on:)`: on this Main they run in process,
 on another Main they are requests over the peer link ([../services/host.md](../services/host.md)), exactly like the
 requests of a remote device. Nothing else is forwarded: `list_devices` and the skills tools use this Main (the registry
-and the skills library are synced between Mains), and the Forge tools call the local Forge hooks.
+and the skills library are synced between Mains), and the Forge and bundle tools call the local hooks.
 
 ## 8. Results and errors
 
@@ -868,7 +946,7 @@ and the skills library are synced between Mains), and the Forge tools call the l
 | an argument is missing, of the wrong type, or breaks a rule of section 6 | true      | `Invalid arguments: <what is wrong>.`                                   |
 | a protocol call fails with `ProtocolError`                               | true      | `<code>: <message>`, for example `locked: Project HEPH is being moved.` |
 | a tool-specific check fails                                              | true      | the message given in section 6                                          |
-| a Forge tool's `MCPHost` call throws (6.23, 6.24)                        | true      | the error's message alone                                               |
+| a Forge or bundle tool's `MCPHost` call throws (6.23–6.28)               | true      | the error's message alone                                               |
 
 ## Depends on
 

@@ -31,18 +31,19 @@ events and keeps the live statuses. This doc defines what is stored and how `Ses
 `<id>.yml` follows the YAML coding, unknown-key and read-modify-write rules of
 [project-yml.md](project-yml.md#yaml-coding-all-yaml-files). Keys, in this order:
 
-| Key              | YAML type | Required                  | Written  | Meaning                                                            |
-|------------------|-----------|---------------------------|----------|--------------------------------------------------------------------|
-| `id`             | string    | yes                       | always   | Session id (a UUID); the id of the file name.                      |
-| `kind`           | string    | yes                       | always   | `project`, `task`, `feedback` or `regeneration`.                   |
-| `taskID`         | string    | for `task` and `feedback` | when set | Id of the task the session belongs to.                             |
-| `mode`           | string    | for `task`                | when set | `implement`, `debug`, `review`, `plan` or `custom`.                |
-| `title`          | string    | yes                       | always   | Title shown in the UI and passed to the CLI with `--name`.         |
-| `created`        | timestamp | yes                       | always   | Creation time.                                                     |
-| `updated`        | timestamp | yes                       | always   | Time of the last write (When it is written).                       |
-| `permissionMode` | string    | yes                       | always   | Permission mode of the next process start.                         |
-| `model`          | string    | no                        | when set | Model passed with `--model`. Absent: no `--model`.                 |
-| `status`         | string    | yes                       | always   | `stopped`, or `failed` when the last process failed (Status).      |
+| Key              | YAML type | Required                  | Written  | Meaning                                                       |
+|------------------|-----------|---------------------------|----------|---------------------------------------------------------------|
+| `id`             | string    | yes                       | always   | Session id (a UUID); the id of the file name.                 |
+| `kind`           | string    | yes                       | always   | `project`, `task`, `feedback`, `regeneration` or `bundle`.    |
+| `taskID`         | string    | for `task` and `feedback` | when set | Id of the task the session belongs to.                        |
+| `mode`           | string    | for `task`                | when set | `implement`, `debug`, `review`, `plan` or `custom`.           |
+| `bundleID`       | string    | for `bundle`              | when set | Id of the bundle the session coordinates or works for.        |
+| `title`          | string    | yes                       | always   | Title shown in the UI and passed to the CLI with `--name`.    |
+| `created`        | timestamp | yes                       | always   | Creation time.                                                |
+| `updated`        | timestamp | yes                       | always   | Time of the last write (When it is written).                  |
+| `permissionMode` | string    | yes                       | always   | Permission mode of the next process start.                    |
+| `model`          | string    | no                        | when set | Model passed with `--model`. Absent: no `--model`.            |
+| `status`         | string    | yes                       | always   | `stopped`, or `failed` when the last process failed (Status). |
 
 The values are those of `SessionKind`, `SessionMode`, `PermissionMode` and `SessionStatus`
 ([protocol/types.md](../protocol/types.md)). How a new session gets its title, permission mode and model is defined in
@@ -54,13 +55,14 @@ Applied when a file is read and before a file is written. A file that breaks a r
 break one fails with `.invalid(<message>)`, the message of the table without the file name, and writes nothing. The
 rules are checked in the order of the table, so the message is that of the first broken rule.
 
-| Key      | Normalization                                           | Rule                                                                                  | Message                                                  |
-|----------|---------------------------------------------------------|---------------------------------------------------------------------------------------|----------------------------------------------------------|
-| `id`     | none                                                    | the UUID of the file name                                                             | `id <id> does not match the file name <file name>`       |
-| `taskID` | `TaskID(_:)` form                                       | a task id; present for `task` and `feedback`, absent for `project` and `regeneration` | `taskID must be set for task and feedback sessions only` |
-| `mode`   | none                                                    | present for `task`, absent for the other kinds                                        | `mode must be set for task sessions only`                |
-| `title`  | leading and trailing whitespace and line breaks removed | not empty, no line break                                                              | `the title must not be empty and must be on one line`    |
-| `model`  | whitespace trimmed; empty becomes absent                | no line break                                                                         | `model must be on one line`                              |
+| Key        | Normalization                                           | Rule                                                                                   | Message                                                                       |
+|------------|---------------------------------------------------------|----------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
+| `id`       | none                                                    | the UUID of the file name                                                              | `id <id> does not match the file name <file name>`                            |
+| `taskID`   | `TaskID(_:)` form                                       | a task id; present for `task` and `feedback`, absent for the other kinds               | `taskID must be set for task and feedback sessions only`                      |
+| `mode`     | none                                                    | present for `task`, absent for the other kinds                                         | `mode must be set for task sessions only`                                     |
+| `bundleID` | `BundleID(_:)` form                                     | a bundle id; present for `bundle`, absent for `project`, `feedback` and `regeneration` | `bundleID must be set for bundle sessions and allowed for task sessions only` |
+| `title`    | leading and trailing whitespace and line breaks removed | not empty, no line break                                                               | `the title must not be empty and must be on one line`                         |
+| `model`    | whitespace trimmed; empty becomes absent                | no line break                                                                          | `model must be on one line`                                                   |
 
 A title has no maximum length; line breaks are those of
 [project-yml.md](project-yml.md#validation-and-normalization).
@@ -97,7 +99,7 @@ Each write sets `updated` to `YAMLCoding.now()`.
 
 ### Mapping to SessionInfo
 
-`SessionInfo` ([protocol/types.md](../protocol/types.md)) carries the ten keys of the file under the same names. Its
+`SessionInfo` ([protocol/types.md](../protocol/types.md)) carries the eleven keys of the file under the same names. Its
 `status` is the live status while a process exists, else the file's (Status). `statusLine`, `error` and
 `pendingPermissions` are kept in memory by `SessionService` and are not stored.
 
@@ -292,6 +294,7 @@ public struct SessionFile: Codable, Sendable, Equatable {
     public var kind: SessionKind
     public var taskID: String?
     public var mode: SessionMode?
+    public var bundleID: String?
     public var title: String
     public var created: Date
     public var updated: Date
@@ -300,9 +303,9 @@ public struct SessionFile: Codable, Sendable, Equatable {
     public var status: SessionStatus
 
     /// The values as given, except `created` and `updated`, which pass through YAMLCoding.wholeSeconds(_:).
-    public init(id: UUID, kind: SessionKind, taskID: String?, mode: SessionMode?, title: String, created: Date,
-                updated: Date, permissionMode: PermissionMode, model: String?, status: SessionStatus)
-    /// .mapping of the ten keys, each .value.
+    public init(id: UUID, kind: SessionKind, taskID: String?, mode: SessionMode?, bundleID: String?, title: String,
+                created: Date, updated: Date, permissionMode: PermissionMode, model: String?, status: SessionStatus)
+    /// .mapping of the eleven keys, each .value.
     public static let shape: YAMLShape
     /// id.uuidString.lowercased(): the name of the files and folder, and the CLI session id.
     public static func fileStem(_ id: UUID) -> String

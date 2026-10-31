@@ -193,10 +193,10 @@ reports `claudeAvailable` and `claudePath` from the stored result ([../services/
 The CLI transcript of a session is the file `<session id>.jsonl` in the folder
 `ClaudePathEncoding.transcriptsFolder(projectRoot: projectRoot.path, configDirectory:
 ClaudePathEncoding.configDirectory(environment: <login environment>, home:
-FileManager.default.homeDirectoryForCurrentUser))`: `CLAUDE_CONFIG_DIR` or `~/.claude`, then `projects/` and the
-CLI's folder name of the project root, computed on its `realpath(3)` and cut with a hash past 200 characters
-([../devices/migration.md](../devices/migration.md#claude-folder-names)). `<session id>` is the lowercase form
-(`SessionFile.fileStem(_:)`, [../data/sessions.md](../data/sessions.md)).
+FileManager.default.homeDirectoryForCurrentUser))`: `CLAUDE_CONFIG_DIR` or `~/.claude`, then `projects/` and the CLI's
+folder name of the session's working directory (section 3), passed as `projectRoot`, computed on its `realpath(3)` and
+cut with a hash past 200 characters ([../devices/migration.md](../devices/migration.md#claude-folder-names)). `<session
+id>` is the lowercase form (`SessionFile.fileStem(_:)`, [../data/sessions.md](../data/sessions.md)).
 
 ```swift
 public actor ClaudeLocator {
@@ -217,8 +217,10 @@ public actor ClaudeLocator {
 ## 3. The session process (`ClaudeProcess`)
 
 One `ClaudeProcess` is one running `claude` for one session. It is spawned with `ChildProcess` (stdin, stdout and
-stderr as separate pipes), working directory = the session's project root (a sub project's own root), environment =
-the login environment, with the changes of 3.5 for the sessions of 3.5.
+stderr as separate pipes), working directory = the session's project root (a sub project's own root), or, for a
+`task` session with a `bundleID`, its task's work folder (`SessionHost.bundleWorkFolder`,
+[../services/bundles.md](../services/bundles.md#working-folder-of-a-task-session)); environment = the login
+environment, with the changes of 3.5 for the sessions of 3.5.
 
 ### 3.1 Arguments
 
@@ -239,7 +241,7 @@ arguments (flag, value). `<session id>` is the lowercase form.
 | `--permission-mode <mode>`           | always: `manual`, `acceptEdits`, `auto`, `plan` or `bypassPermissions` (the CLI's accepted values)                                       |
 | `--model <model>`                    | only when the session has a model: an alias (`opus`, `sonnet`, `haiku`, `fable`) or a full model name, as stored                         |
 | `--mcp-config <JSON>`                | always: the session's MCP config ([mcp.md](mcp.md#5-sessions-tokens-and---mcp-config))                                                   |
-| `--allowedTools <rules>`             | always: the allowed rules of 3.5, in their order, for `feedback` and `regeneration` sessions; `mcp__hephaestus` for the others           |
+| `--allowedTools <rules>`             | always: the allowed rules of 3.5, in their order, for the sessions of 3.5 that have them (3.5); `mcp__hephaestus` for the others         |
 | `--disallowedTools <rules>`          | always: the denied rules of 3.5, in their order, for the sessions of 3.5; `Edit(**/.hephaestus/**)` for the others                       |
 | `--plugin-dir <folder>`              | always: `SessionPlugins/<session id>/hephaestus` in Application Support ([skills.md](skills.md#6-session-plugin-folder))                 |
 | `--append-system-prompt-file <file>` | always: `SessionPlugins/<session id>/system-prompt.md` in Application Support, holding the text of [prompts.md](prompts.md) (5.3 step 4) |
@@ -474,16 +476,17 @@ The Hephaestus repository is public ([../public-repository.md](../public-reposit
 the sessions that work in it:
 
 - the Forge's `feedback` and `regeneration` sessions;
-- while the setting `forge.enabled` is true on this Main, every `project` and `task` session whose project is
-  `forge.sourceProjectID` or one of its sub projects (the project, or an ancestor found through
+- while the setting `forge.enabled` is true on this Main, every `project`, `task` and `bundle` session whose project
+  is `forge.sourceProjectID` or one of its sub projects (the project, or an ancestor found through
   `ClaudeProjectContext.parent`, has that identifier, or an ancestor cannot be read), as read at each process start
   (5.3).
 
 They get the denied rules and the environment below, no permission suggestion (4.1), and the
 [Forge common part](prompts.md#forge-common-part) of the system prompt instead of the Common part, which names the
-mesh's devices. Feedback and regeneration sessions also get the allowed rules below and keep the permission mode
-`acceptEdits` (5.6); `project` and `task` sessions keep `mcp__hephaestus` as their allowed rule and their permission
-mode.
+mesh's devices. Feedback, regeneration and bundle sessions also get the allowed rules below and keep the permission
+mode `acceptEdits` (5.6); so do the `task` sessions of a bundle, which work without waiting for the user
+([../services/bundles.md](../services/bundles.md)). Other `project` and `task` sessions keep `mcp__hephaestus` as their
+allowed rule and their permission mode.
 
 Their commits are meant to reach GitHub only through the Forge push tools, which check them for personal data first
 ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)); a `project` or `task` session has no push tool, and the user
@@ -503,8 +506,10 @@ the lists and the environment of this section, and nothing else:
 ```swift
 /// The rules and the environment of the sessions of cli.md 3.5.
 enum ForgeSessionRules {
-    /// --allowedTools of feedback (regeneration: false) and regeneration sessions; branch: the setting forge.branch.
-    static func allowedTools(regeneration: Bool, branch: String) -> [String]
+    enum AllowedSet { case feedback, bundle, regeneration }
+    /// --allowedTools: .feedback for feedback sessions and the task sessions of a bundle, .bundle for bundle
+    /// sessions, .regeneration for regeneration sessions; branch: the setting forge.branch.
+    static func allowedTools(_ set: AllowedSet, branch: String) -> [String]
     /// --disallowedTools; repositoryRoot: the absolute path of the repository root (below), which starts with "/".
     static func disallowedTools(repositoryRoot: String) -> [String]
     /// The login environment with the changes below.
@@ -512,8 +517,8 @@ enum ForgeSessionRules {
 }
 ```
 
-`--allowedTools` of `feedback` sessions, one argument per line, in this order, `<branch>` being the setting
-`forge.branch`:
+`--allowedTools` of `feedback` sessions and of the `task` sessions of a bundle, one argument per line, in this order,
+`<branch>` being the setting `forge.branch`:
 
 ```text
 mcp__hephaestus
@@ -536,7 +541,15 @@ Bash(git branch *)
 Bash(scripts/check-public.sh --staged)
 ```
 
-`--allowedTools` of `regeneration` sessions: the same rules, followed by:
+`--allowedTools` of `bundle` sessions: the same rules, followed by these, with which the coordinator brings the task
+branches in ([prompts.md](prompts.md#bundle-part)):
+
+```text
+Bash(git cherry-pick *)
+Bash(git cherry *)
+```
+
+`--allowedTools` of `regeneration` sessions: the rules of `feedback` sessions, followed by:
 
 ```text
 Bash(xcodebuild *)
@@ -586,9 +599,10 @@ Edit(**/.hephaestus/**)
 `<repository root>` is the absolute path of the repository root, which starts with `/`, so that each of these rules
 starts with `Edit(//`: the code folder (`<root>/<code>`, [../data/project-yml.md](../data/project-yml.md)) of the
 project `forge.sourceProjectID`, as `claudeProject(_:)` reads it at each process start (5.3); for a `feedback` or
-`regeneration` session, and when that project cannot be read, the code folder of the session's own project. Every
-other session gets the last rule alone (3.1): the app's project data under `.hephaestus/`, run configurations
-included ([mcp.md](mcp.md#65-update_project)), changes only through the app.
+`regeneration` session, and when that project cannot be read, the code folder of the session's own project; for a `task`
+session of a bundle, its work folder, the code folder's place in its worktree, so that the rules cover the copies of the
+protected paths it works on. Every other session gets the last rule alone (3.1): the app's project data under
+`.hephaestus/`, run configurations included ([mcp.md](mcp.md#65-update_project)), changes only through the app.
 
 How the CLI applies them, as verified with CLI 2.1.309 in sessions driven like the app's:
 
@@ -785,6 +799,10 @@ public protocol SessionHost: Sendable {
     func claudeProject(_ projectID: String) async throws -> ClaudeProjectContext
     /// Throws ProtocolError notFound when the task does not exist.
     func claudeTask(projectID: String, taskID: String) async throws -> ClaudeTaskContext
+    /// Throws ProtocolError notFound when the bundle does not exist (services/bundles.md).
+    func claudeBundle(projectID: String, bundleID: String) async throws -> ClaudeBundleContext
+    /// BundleService.workFolder: the working directory of a task session of a bundle.
+    func bundleWorkFolder(projectID: String, taskID: String) async throws -> URL
     /// ProjectRegistry.checkWritable: throws locked when the project or an ancestor is migrating.
     func checkWritable(_ projectID: String) async throws
     /// The project's SessionArchive (data/sessions.md).
@@ -815,6 +833,7 @@ public struct SessionStart: Sendable {
     public var permissionMode: PermissionMode?
     public var model: String?
     public var deviceID: UUID                        // requesting device; this Main's id for the Forge
+    public var bundleID: String?                     // bundle sessions, and the task sessions a bundle starts
     public var regeneration: RegenerationContext?    // regeneration sessions (prompts.md)
     /// Memberwise: one labeled parameter per property, in order; the optional parameters default to nil and
     /// `attachments` to [].
@@ -877,12 +896,12 @@ creation, `update` at every `user` and `result` event, at `sessions.update`, whe
 1…5000 (paging and the 16 MiB cut of [../protocol/methods.md](../protocol/methods.md#sessionshistory),
 [../data/sessions.md](../data/sessions.md#reading-events)).
 
-`SessionInfo` fields: the ten keys of the session file; `status` (live while a process exists); `statusLine` (the last
-status line text of the current process; nil when there is no process and when a user message is written); `error`
-(the reason of the last failure, nil unless the status is `failed`); `pendingPermissions` (`PermissionBroker.pending`
-of the session, oldest first; empty when there is no process). A client that reconnects rebuilds its permission
-indicator and cards from them (`projects.snapshot`) and from `ProjectSummary.pendingPermissionCount` (`projects.list`),
-which the host counts from the `pendingPermissions` of the `session.changed` events it emits
+`SessionInfo` fields: the eleven keys of the session file; `status` (live while a process exists); `statusLine` (the
+last status line text of the current process; nil when there is no process and when a user message is written); `error`
+(the reason of the last failure, nil unless the status is `failed`); `pendingPermissions` (`PermissionBroker.pending` of
+the session, oldest first; empty when there is no process). A client that reconnects rebuilds its permission indicator
+and cards from them (`projects.snapshot`) and from `ProjectSummary.pendingPermissionCount` (`projects.list`), which the
+host counts from the `pendingPermissions` of the `session.changed` events it emits
 ([../services/host.md](../services/host.md#61-wire-values)).
 
 Settings used (`DeviceSettings`): `claudePath` (`claudeURL`), `defaultModel`, `defaultPermissionMode`,
@@ -894,14 +913,19 @@ and `forge.sourceProjectID` (the sessions of 3.5).
 Checks, in order (all `badRequest` unless noted):
 
 1. The project is hosted on this Main (`notFound`) and writable (`checkWritable`: `locked`).
-2. Over the wire, `kind` is `project` or `task` (`Only the Forge starts feedback and regeneration sessions.`);
-   `feedback` and `regeneration` sessions are started in process by the Forge.
+2. Over the wire, `kind` is `project` or `task` (`Only the Forge starts feedback and regeneration sessions.`, and
+   `Bundle sessions are started with bundles.start.` for `bundle`); `feedback` and `regeneration` sessions are
+   started in process by the Forge, `bundle` sessions and the task sessions of a bundle by `BundleService`
+   ([../services/bundles.md](../services/bundles.md)).
 3. `project`: no `taskID`, no `mode` (`A project session has no task and no mode.`).
 4. `task`: `taskID` and `mode` are present (`A task session needs a task and a mode.`); `taskID` names an existing task
    of the project (`notFound`) that is not broken (`conflict`, `The file is invalid: <parseError>`); mode `custom`
    needs a `message` that is not empty after trimming (`Mode custom needs instructions.`).
 5. `feedback`: `taskID` is present (`A feedback session needs a task.`) and names an existing task (`notFound`) that is
-   not broken (`conflict`, as in 4). `regeneration`: no `taskID` (`A regeneration session has no task.`).
+   not broken (`conflict`, as in 4). `regeneration`: no `taskID` (`A regeneration session has no task.`). `bundle`:
+   `bundleID` names a bundle of the project (`notFound`), no `taskID` and no `mode` (`A bundle session has no task
+   and no mode.`). `bundleID` is given only to `bundle` sessions and to `task` sessions
+   (`Only bundle and task sessions belong to a bundle.`).
 6. `title`, when given, is not empty after trimming and holds no line break (no maximum length; the message of the
    `title` rule of [../data/sessions.md](../data/sessions.md)); `model`, when given, is not empty after trimming
    (`The model must not be empty.`).
@@ -918,8 +942,9 @@ Creation:
 - `id` = a new `UUID`.
 - `title`: the given title, trimmed; otherwise by kind: `project` → `Chat <n>`, n = 1 + the number of `project`
   sessions of the project; `task` → `<mode displayName> <task id>` (`Implement HEPH-12`); `feedback` → `Feedback <task
-  id>`; `regeneration` → `Regeneration`.
-- `permissionMode`: `feedback` and `regeneration` → `acceptEdits`; otherwise the given value, else the project's
+  id>`; `regeneration` → `Regeneration`; `bundle` → `Bundle <bundle id>`.
+- `permissionMode`: `feedback` and `regeneration`, and `bundle` sessions and the `task` sessions of a bundle that are
+  sessions of 3.5 → `acceptEdits`; otherwise the given value, else the project's
   `claude.permissionMode`, else the setting `defaultPermissionMode`.
 - `model`: the given value, else the project's `claude.model`, else the setting `defaultModel` when not empty, else
   none.
@@ -929,7 +954,7 @@ Creation:
   created. After the session file is created, `uploads.finish` is called.
 - The session file is created with `status: stopped`; `session.changed` is emitted.
 - First message: `project` → `message` (empty when nil) and the stored attachments, when either is given; `task`,
-  `feedback`, `regeneration` → the generated first message of [prompts.md](prompts.md#first-messages), without
+  `feedback`, `regeneration`, `bundle` → the generated first message of [prompts.md](prompts.md#first-messages), without
   attachments. When there is one, it is delivered as by `sessions.send` (steps 3 to 5 of 5.4) with `deviceID` = the
   request's: the process starts.
 - Result: the `SessionInfo` (status `starting` when a process started, else `stopped`).
@@ -946,18 +971,19 @@ Used whenever a message must be delivered and the session has no process, and fo
 3. Plugin folder: `SkillsService.buildPluginFolder(sessionID:enabled:)` with the project's `skills`
    ([skills.md](skills.md#6-session-plugin-folder)). It empties `SessionPlugins/<session id>/` first.
 4. Prompt: `Prompts.systemPrompt(_:)` ([prompts.md](prompts.md)) from `claudeProject`, `claudeTask` (task and feedback
-   sessions), `localDevice`, `devices`, the settings `forge.branch`, `forge.enabled` and `forge.sourceProjectID`, the
-   session's kind and mode, read now. The session is a session of 3.5 when its kind is `feedback` or `regeneration`,
-   or when `forge.enabled` is true and its project, or an ancestor reached through `claudeProject(_:)` of each
-   `parent`, is `forge.sourceProjectID`, or one of these ancestors cannot be read (`claudeProject(_:)` throws, which
-   ends the walk); `PromptContext.publicRepository` is then true.
-   `instructions` (task sessions): at the first start the `message` of `sessions.start`; at later starts the text after
-   the first blank line of the session's first `user` event, nil when there is none. `regeneration`: the
-   `RegenerationContext` given at the first start; nil later. The prompt is written as UTF-8 with `AtomicFile.write` to
-   `system-prompt.md` in the folder that holds the plugin folder of step 3 (`SessionPlugins/<session id>/`).
+   sessions), `claudeBundle` (bundle sessions and the task sessions of a bundle), `bundleWorkFolder` (the task sessions
+   of a bundle), the setting `bundles.maxParallel`, `localDevice`, `devices`, the settings `forge.branch`,
+   `forge.enabled` and `forge.sourceProjectID`, the session's kind, mode and bundle, read now. The session is a session
+   of 3.5 when its kind is `feedback` or `regeneration`, or when `forge.enabled` is true and its project, or an ancestor
+   reached through `claudeProject(_:)` of each `parent`, is `forge.sourceProjectID`, or one of these ancestors cannot be
+   read (`claudeProject(_:)` throws, which ends the walk); `PromptContext.publicRepository` is then true. `instructions`
+   (task sessions): at the first start the `message` of `sessions.start`; at later starts the text after the first blank
+   line of the session's first `user` event, nil when there is none. `regeneration`: the `RegenerationContext` given at
+   the first start; nil later. The prompt is written as UTF-8 with `AtomicFile.write` to `system-prompt.md` in the
+   folder that holds the plugin folder of step 3 (`SessionPlugins/<session id>/`).
 5. `resume` = the CLI transcript of the session exists (section 2).
-6. `ClaudeProcess.launch` with the arguments of 3.1 and the environment of section 3 (3.5 for the sessions of 3.5,
-   as found in step 4); a spawn error gives the message `Could not start Claude: <strerror>`.
+6. `ClaudeProcess.launch` with the arguments of 3.1, the working directory and the environment of section 3 (3.5 for the
+   sessions of 3.5, as found in step 4); a spawn error gives the message `Could not start Claude: <strerror>`.
 7. `PermissionBroker.reset(sessionID:)`. Status `starting`, `error` and `statusLine` nil, `session.changed`. The
    message (if any) is written right after the initialize request.
 8. One task handles `messages` in order on the actor; when the stream ends it awaits `waitForExit()` and handles the
@@ -1062,7 +1088,8 @@ wait for it and then start a new process.
   Activity = a line written to stdin or read from stdout. No event is appended.
 - `sessions.update {patch}`, checks in this order: the session exists (`notFound`); the project is writable
   (`locked`); `title` trimmed, not empty and on one line (`badRequest`); a `permissionMode` of a `feedback` or
-  `regeneration` session fails with `badRequest` `The permission mode of Forge sessions cannot be changed.` (3.5).
+  `regeneration` session, or of a session of 3.5 whose permission mode 5.2 fixed, fails with `badRequest` `The
+  permission mode of Forge sessions cannot be changed.` (3.5).
   `model` `""` removes the model. The session file is updated. A title change applies at the next process start
   (`--name`). A change of `permissionMode` or `model` applies at the next process start: in status `idle` the process is
   restarted at once (terminated, then started without a message: `starting` → `idle`); in `starting`, `running` or

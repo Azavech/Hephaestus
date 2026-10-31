@@ -14,23 +14,27 @@ files:
 - HephaestusKit/Sources/HephUI/Tasks/TaskClaudeView.swift
 - HephaestusKit/Sources/HephUI/Tasks/NewTaskSessionSheet.swift
 - HephaestusKit/Sources/HephUI/Tasks/TaskStatusStyle.swift
+- HephaestusKit/Sources/HephUI/Tasks/BundleRow.swift
+- HephaestusKit/Sources/HephUI/Tasks/BundleDetailView.swift
+- HephaestusKit/Sources/HephUI/Tasks/NewBundleSheet.swift
+- HephaestusKit/Sources/HephUI/Tasks/AddBundleTasksSheet.swift
 
 ---
 
-The Tasks section (⌘2) lists the tasks of the selected project and shows one task: its fields, description, comments
-and Claude sessions. Task data: [../data/task-yml.md](../data/task-yml.md) and `TaskItem` in
-[../protocol/types.md](../protocol/types.md#taskitem).
+The Tasks section (⌘2) lists the tasks and the bundles of the selected project and shows one task, with its fields,
+description, comments and Claude sessions, or one bundle ([Bundles](#bundles)). Task data:
+[../data/task-yml.md](../data/task-yml.md) and `TaskItem` in [../protocol/types.md](../protocol/types.md#taskitem).
 
 Requests use the request functions of the project's `MainConnection` (`store.connection`,
 [../client/workspace.md](../client/workspace.md#request-api)), run through `banners.perform` of the window's
 `WindowBanners` (`@Environment(WindowBanners.self)`, [shell.md](shell.md#81-windowbanners)), which shows a failure as an
 error banner. Sheets call the functions directly and show a failure's message in red above their buttons. The screen
-observes the `ProjectStore` (`tasks`, `sessions`), which the Workspace keeps current from `task.changed`,
-`task.removed`, `session.changed` and `session.removed`. The window's selection is the `Selection` of its
-`WindowContext` ([shell.md](shell.md#52-windowcontext)). While the project's Main is not connected, every control that
-sends a request is disabled, and so is every control that opens a sheet or a confirmation dialog whose button sends
-one. While `store.connection` is nil, a request fails with `ProtocolError(.unavailable, "<Main name> is offline.")`,
-<Main name> being the name of the Main's record in `workspace.mains`, else "Main".
+observes the `ProjectStore` (`tasks`, `bundles`, `sessions`), which the Workspace keeps current from `task.changed`,
+`task.removed`, `bundle.changed`, `bundle.removed`, `session.changed` and `session.removed`. The window's selection is
+the `Selection` of its `WindowContext` ([shell.md](shell.md#52-windowcontext)). While the project's Main is not
+connected, every control that sends a request is disabled, and so is every control that opens a sheet or a confirmation
+dialog whose button sends one. While `store.connection` is nil, a request fails with `ProtocolError(.unavailable, "<Main
+name> is offline.")`, <Main name> being the name of the Main's record in `workspace.mains`, else "Main".
 
 Task names are trimmed of whitespace and line breaks, must not be empty, and hold no line break; they have no maximum
 length ([../data/task-yml.md](../data/task-yml.md#validation-and-normalization)).
@@ -46,9 +50,12 @@ multitasking.
 | regular, iPadOS | `HStack(spacing: 0)`: task list (320 pt), `Divider`, task detail             |
 | compact         | `NavigationStack` rooted at the task list; the detail is pushed (below)      |
 
-While the Tasks section is shown, `selection.item` is the selected task id
-([../client/workspace.md](../client/workspace.md#selection)). Choosing a row sets it. An id set from elsewhere (search,
-a link) selects that task.
+While the Tasks section is shown, `selection.item` is the selected task id or bundle id
+([../client/workspace.md](../client/workspace.md#selection)); the two never look alike
+([../services/bundles.md](../services/bundles.md#bundle-id)). Choosing a row sets it. An id set from elsewhere
+(search, a link) selects that task or bundle.
+
+Several tasks can be selected at once (Multi-selection); `selection.item` is then nil.
 
 In compact width the detail is pushed with `navigationDestination(item:)` on a binding over `selection.item`; Back sets
 `selection.item` to nil. An item set from elsewhere, or already set when the section appears, pushes its detail at
@@ -59,6 +66,23 @@ once; New Task success pushes the new task.
 Above the list: a search field (`magnifyingglass`, placeholder "Filter"), a filter menu button
 (`line.3.horizontal.decrease.circle`, filled when a setting differs from its default) and a New Task button (`plus`).
 In compact width the New Task button is in the navigation bar.
+
+### Multi-selection
+
+`TaskListState` holds `selectedIDs` (`Set<String>`), the selection of the list:
+
+- Regular width: `List(selection:)` on `selectedIDs`; ⌘-click and ⇧-click add rows, as in any list.
+- Compact width: a "Select" button in the navigation bar turns on `EditMode.active`, in which task rows show selection
+  circles; "Done" turns it off and empties the selection. A bottom bar then shows "New Bundle" and the "Add to Bundle"
+  menu (below), enabled when a task is selected.
+- Only tasks can be selected together: when a change adds a bundle id, `selectedIDs` becomes that bundle id alone;
+  broken tasks are never added to a selection of several rows.
+- One id selected: `selection.item` = that id. Several: `selection.item` = nil and the detail area shows
+  "<n> tasks selected", a "New Bundle…" button and the "Add to Bundle" menu. None: `selection.item` = nil. When
+  `selection.item` is set from elsewhere, `selectedIDs` becomes that id alone.
+- "Add to Bundle" is a `Menu` listing the bundles in `draft` or `done` status (name and id); choosing one calls
+  `updateBundle` with `BundlePatch(taskIDs:)`: its tasks, then the selected tasks that are not in it, by task number.
+  Without such a bundle the menu holds the disabled item "No bundle to add to".
 
 ### Filter and sort
 
@@ -80,7 +104,10 @@ section of the same project is shown, and reset when the window shows another se
 
 ### Sections
 
-Sections in `TaskStatus.allCases` order (To Do, In Progress, Review, Done), then Broken. A broken task is only in the
+A Bundles section first, then sections in `TaskStatus.allCases` order (To Do, In Progress, Review, Done), then
+Broken. The Bundles section lists `store.bundles` by number, filtered by the text only (every word in the bundle's id
+or name); its header is `square.stack.3d.up`, "Bundles" and the count; its row is [Bundle row](#bundle-row). A task in a
+bundle is also listed in its status section. A broken task is only in the
 Broken section. A section with no task after filtering is hidden. Header: `TaskStatusBadge` and the count; the Broken
 header is `exclamationmark.triangle`, "Broken" and the count.
 
@@ -92,8 +119,9 @@ header is `exclamationmark.triangle`, "Broken" and the count.
   is `waitingPermission`, else `sparkles` (accent color) when one is `starting` or `running`; then `bubble.left` and
   the comment count when the task has comments.
 - Context menu: Status ▸ the four statuses (current checked), calling `updateTask(projectID:taskID:patch:)` with
-  `TaskPatch(status:)`; Copy ID; Delete… ([Delete a task](#delete-a-task)). A broken task has only Copy ID and
-  Delete….
+  `TaskPatch(status:)`; New Bundle from Selection… (the selected tasks, or this task when it is not selected); Add to
+  Bundle ▸ (as in Multi-selection, for the same tasks); Copy ID; Delete… ([Delete a task](#delete-a-task)). A broken
+  task has only Copy ID and Delete….
 
 ### Empty states
 
@@ -102,7 +130,7 @@ header is `exclamationmark.triangle`, "Broken" and the count.
 | the project has no task             | "No tasks yet" and a "New Task" button                              |
 | the filter hides every task         | "No matching tasks" and a "Clear Filter" button (restores defaults) |
 | regular width, no task selected     | the detail area shows "Select a task"                               |
-| the selected id is not in the tasks | the detail area shows "<ID> was deleted."                           |
+| the selected id is not in the store | the detail area shows "<ID> was deleted."                           |
 
 ## New task (⌘N)
 
@@ -125,6 +153,65 @@ header is `exclamationmark.triangle`, "Broken" and the count.
   ([shell.md](shell.md)) calls `FocusedValues.newTaskAction`, which `TasksView` publishes with `.focusedSceneValue`
   while it is shown. In other sections, and while the Main is not connected, the value is nil and the menu item is
   disabled.
+
+## Bundles
+
+A bundle groups tasks that Claude works on in parallel ([../services/bundles.md](../services/bundles.md)). The
+requests are `createBundle`, `updateBundle`, `deleteBundle`, `startBundle` and `stopBundle` of `store.connection`
+([../client/workspace.md](../client/workspace.md#functions)), through `banners.perform` outside the sheets.
+
+### Bundle row
+
+- Line 1: the id (monospaced, caption, secondary); trailing, `sparkles` (accent color) when the coordinator or a task
+  session of the bundle is `starting` or `running`, `hand.raised.fill` (orange) when one is `waitingPermission`, then
+  the `BundleStatusBadge`.
+- Line 2: the name (body, up to 2 lines).
+- Line 3 (caption, secondary): "<d> of <n> done", `d` the tasks of the bundle whose status is `done`.
+- Context menu: Work on Bundle (`draft`) or Stop (`running`, `review`); Copy ID; Delete… (`draft`, `done`).
+
+### New bundle sheet
+
+`NewBundleSheet` creates a bundle from the given tasks.
+
+- Title "New Bundle"; a Name field (required, trimmed, one line: "Use a single line." in red as in the New Task
+  sheet), then the tasks, in task number order: id (monospaced) and name, each with a remove button (`minus.circle`)
+  while more than one remains.
+- Buttons: Cancel (Escape) and Create (⌘↩, default action), with the twin ⌘↩ button of the New Task sheet; Create is
+  enabled when the name is valid and no request is in flight.
+- Create calls `createBundle(projectID:name:taskIDs:)`. Success: the sheet dismisses itself, `selectedIDs` is emptied
+  and `selection.item` is the new bundle. Failure: the message shows in red; the sheet stays open.
+
+### Bundle detail
+
+`BundleDetailView` shows the bundle `selection.item` names.
+
+- Header: the id (monospaced, selectable); the name, a plain text field that commits like the task name (`.title2`
+  semibold, `BundlePatch(name:)`); the `BundleStatusBadge`; "Created <date>" · "Updated <relative time>" as for a
+  task; the actions menu `ellipsis.circle` with Add Tasks… (`draft`, `done`), Copy ID and Delete Bundle… (`draft`,
+  `done`).
+- Buttons under the header: "Work on Bundle" (`play.fill`, `.borderedProminent`) in `draft`, calling `startBundle`;
+  "Stop" (`stop.fill`) in `running` and `review`, calling `stopBundle`; "Open Coordinator" when `coordinatorSessionID`
+  is set, which calls `context.navigate(mainDeviceID: store.mainDeviceID, projectID: store.projectID, section:
+  .claude, item: <coordinatorSessionID uuidString>)`.
+- A caption (secondary) by status: `running` "Claude works on the tasks in parallel and reports in the coordinator's
+  session."; `review` "The coordinator waits for your agreement in its session."; `done` "The work of this bundle was
+  brought in."; none in `draft`.
+- Tasks, in the bundle's order. Each row: the id (monospaced), the name (a deleted task: "Deleted task", secondary),
+  its `TaskStatusBadge`, and, when its `sessionID` names a session of the store, its `SessionStatusIndicator` and an
+  "Open Session" button that navigates to section `.claude` with that session. Choosing a row navigates to section
+  `.tasks` with the task id. In `draft` and `done`, rows can be reordered (`onMove`) and have the context menu item
+  "Remove from Bundle", disabled for the last task; both call `updateBundle` with `BundlePatch(taskIDs:)`.
+- Delete Bundle…: a confirmation "Delete <ID>?" with the message "Its worktrees are removed, and the branches whose
+  work was brought in are deleted. Its tasks and sessions are kept." and the buttons Delete (destructive) and Cancel;
+  Delete calls `deleteBundle`; after success `selection.item` is cleared.
+
+### Add tasks sheet
+
+`AddBundleTasksSheet`: title "Add Tasks to <ID>", a search field (the task filter's text rule), then the project's
+tasks that are not broken and not in the bundle, by task number, each a row with a checkmark when chosen. Buttons:
+Cancel (Escape) and Add (⌘↩, default action, twin ⌘↩ button), enabled when a task is chosen. Add calls `updateBundle`
+with `BundlePatch(taskIDs:)`: the bundle's tasks, then the chosen ones by task number. Success dismisses the sheet;
+failure shows the message in red.
 
 ## Task detail
 
@@ -286,15 +373,23 @@ gives the symbol and the tint, used everywhere a status is drawn (the Tasks scre
 | `done`       | `checkmark.circle.fill`  | green  |
 
 `TaskStatusBadge` draws a capsule: symbol and title in the tint color, caption font, the tint at 15 % opacity as
-background.
+background. `BundleStatusBadge`, in `BundleRow.swift`, draws the same capsule for a `BundleStatus`
+([../protocol/types.md](../protocol/types.md#bundlestatus)):
+
+| `BundleStatus` | Symbol                  | Tint   |
+|----------------|-------------------------|--------|
+| `draft`        | `square.dashed`         | gray   |
+| `running`      | `sparkles`              | blue   |
+| `review`       | `eye.circle`            | orange |
+| `done`         | `checkmark.circle.fill` | green  |
 
 ## Keyboard shortcuts
 
-| Shortcut | Where                                                                                            | Action                    |
-|----------|--------------------------------------------------------------------------------------------------|---------------------------|
-| ⌘N       | Tasks section shown                                                                              | open the New Task sheet   |
-| ⌘↩       | the comment composer, the focused description or comment editor, New Task and New Session sheets | send, save, create, start |
-| Escape   | the focused description or comment editor, sheets                                                | cancel                    |
+| Shortcut | Where                                                                                      | Action                    |
+|----------|--------------------------------------------------------------------------------------------|---------------------------|
+| ⌘N       | Tasks section shown                                                                        | open the New Task sheet   |
+| ⌘↩       | the comment composer, the focused description or comment editor, the sheets of this screen | send, save, create, start |
+| Escape   | the focused description or comment editor, sheets                                          | cancel                    |
 
 - The description editor and a comment editor handle ⌘↩ (Save) and Escape (Cancel) only while their `TextEditor` has
   keyboard focus (`@FocusState`). The `TextEditor` carries `.onKeyPress(.return, phases: .down)`, which saves and
@@ -302,7 +397,7 @@ background.
   `.onKeyPress(.escape)`, which cancels and returns `.handled`. Their Save and Cancel buttons have no
   `.keyboardShortcut`.
 - The composer's ⌘↩ is handled by `ComposerTextView` ([sessions.md](sessions.md#message-composer)).
-- Only the sheets (New Task, New Session) put keyboard shortcuts on their buttons.
+- Only the sheets (New Task, New Session, New Bundle, Add Tasks) put keyboard shortcuts on their buttons.
 
 ## Swift API
 
@@ -318,6 +413,11 @@ public struct TasksView: View {
 /// Capsule with the status symbol and `displayName`.
 public struct TaskStatusBadge: View {
     public init(status: TaskStatus)
+}
+
+/// The same capsule for a bundle status.
+public struct BundleStatusBadge: View {
+    public init(status: BundleStatus)
 }
 
 public enum TaskStatusStyle {
@@ -340,7 +440,9 @@ extension FocusedValues {
 ## Depends on
 
 - [../client/workspace.md](../client/workspace.md): `MainConnection` request functions, `ProjectStore` (`mainDeviceID`,
-  `projectID`, `tasks`, `sessions`, `connection`), `Selection` (`item`).
+  `projectID`, `tasks`, `bundles`, `sessions`, `connection`), `Selection` (`item`).
+- [../services/bundles.md](../services/bundles.md): what a bundle does; `BundleItem`, `BundleStatus` and `BundlePatch`
+  in [../protocol/types.md](../protocol/types.md).
 - [../protocol/types.md](../protocol/types.md): `TaskItem` (with `parseError`), `TaskComment`, `TaskAttachment`,
   `TaskStatus`, `TaskPatch`, `UploadRef`, `SessionInfo`, `SessionMode`, `SessionKind`.
 - [../protocol/methods.md](../protocol/methods.md): `tasks.*`, `attachments.read`, `uploads.*`, `tabs.open`,
