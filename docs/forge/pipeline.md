@@ -398,7 +398,8 @@ sessionID}`), sent by the feedback sheet ([feedback.md](feedback.md#sending)):
 4. The feedback session is started with `host.sessions.start(SessionStart(…))` ([../claude/cli.md](../claude/cli.md)):
    `projectID` = the source project, `kind` `.feedback`, `taskID` = the new task, `permissionMode` `.acceptEdits`,
    `deviceID` = this Main's id, no title, mode, message, attachments or model. The session is titled `Feedback <task
-   id>`, its permission rules and environment are those of feedback sessions
+   id>`, starts in `acceptEdits`, which the user can change like its Allow All Tools, its permission rules and
+   environment are those of feedback sessions
    ([../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)), its model is the project's default,
    and it starts with the generated feedback message of [../claude/prompts.md](../claude/prompts.md) (the task's
    description and the absolute path of `screenshot.png`).
@@ -484,9 +485,10 @@ from `building`.
    | `items`        | one `RegenerationItem {taskID, docsCommit}` per item of the cycle                                                                                                                                                                  |
    | `failedRun`    | with `fixRun`: `FailedCIRun {number, url, conclusion, jobs}`, `jobs` = the failed jobs (at most 3; none when the jobs request fails), each `{name, url, log}`, `log` = the last 300 lines of its log or `Log unavailable: <error>` |
 
-   The session's permission mode is `acceptEdits`, its permission rules and environment are those of regeneration
-   sessions ([../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)), its model is the project's
-   default, and its prompts make Claude follow [generation.md](generation.md#2-procedure).
+   The session starts in the permission mode `acceptEdits`, its permission rules and environment are those of
+   regeneration sessions ([../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)), its model is the
+   project's default, and its prompts make Claude follow [generation.md](generation.md#2-procedure). As in every
+   session, the user can change its permission mode and allow all its tools.
 6. `attempts` += 1, `sessionID` = the new session, state `regenerating`. A start failure → `failed` with
    `The regeneration session could not start: <error>`.
 

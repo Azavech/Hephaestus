@@ -16,17 +16,17 @@ GitHub.
 
 ## Layers
 
-| Layer              | What                                                                                                                                                                                                      | Defined in                                                                                                     |
-|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|
-| Rule               | what personal data is, the placeholders, where personal data lives instead                                                                                                                                | [general.md](general.md#public-repository-no-personal-data)                                                    |
-| Check script       | `scripts/check-public.sh`, the only implementation of the check, run by the layers below                                                                                                                  | [Check script](#check-script)                                                                                  |
-| Git hooks          | every `git commit`, its message and every push of a clone whose `core.hooksPath` is `.githooks`, in a checkout that holds that folder                                                                     | [Git hooks](#git-hooks)                                                                                        |
-| Forge push gate    | Forge sessions never push: the Forge checks their commits, then pushes them                                                                                                                               | [Forge push gate](#forge-push-gate), [forge/pipeline.md](forge/pipeline.md)                                    |
-| Claude permissions | the sessions working in the repository are denied `git push` and git settings; code a session runs, and a `project` or `task` session in `bypassPermissions`, can still get past this ([Limits](#limits)) | [Claude permissions](#claude-permissions), [claude/cli.md](claude/cli.md#35-sessions-in-the-public-repository) |
-| Commit identity    | commits carry the user's own git identity, checked for private terms, and no signature                                                                                                                    | [Commit identity](#commit-identity)                                                                            |
-| Private terms      | the user's own words (names, accounts, machines), refused in everything the check reads                                                                                                                   | [Private terms](#private-terms)                                                                                |
-| CI                 | the `public-check` jobs run first, for every push and pull request that GitHub starts a run for; nothing is built or released without them                                                                | [CI](#ci), [forge/ci.md](forge/ci.md)                                                                          |
-| Signing            | no team ID in the project file                                                                                                                                                                            | [Signing](#signing), [architecture.md](architecture.md#configsigningxcconfig)                                  |
+| Layer              | What                                                                                                                                                                                                            | Defined in                                                                                                     |
+|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|
+| Rule               | what personal data is, the placeholders, where personal data lives instead                                                                                                                                      | [general.md](general.md#public-repository-no-personal-data)                                                    |
+| Check script       | `scripts/check-public.sh`, the only implementation of the check, run by the layers below                                                                                                                        | [Check script](#check-script)                                                                                  |
+| Git hooks          | every `git commit`, its message and every push of a clone whose `core.hooksPath` is `.githooks`, in a checkout that holds that folder                                                                           | [Git hooks](#git-hooks)                                                                                        |
+| Forge push gate    | Forge sessions never push: the Forge checks their commits, then pushes them                                                                                                                                     | [Forge push gate](#forge-push-gate), [forge/pipeline.md](forge/pipeline.md)                                    |
+| Claude permissions | the sessions working in the repository are denied `git push` and git settings; code a session runs, and a session in `bypassPermissions` or with all tools allowed, can still get past this ([Limits](#limits)) | [Claude permissions](#claude-permissions), [claude/cli.md](claude/cli.md#35-sessions-in-the-public-repository) |
+| Commit identity    | commits carry the user's own git identity, checked for private terms, and no signature                                                                                                                          | [Commit identity](#commit-identity)                                                                            |
+| Private terms      | the user's own words (names, accounts, machines), refused in everything the check reads                                                                                                                         | [Private terms](#private-terms)                                                                                |
+| CI                 | the `public-check` jobs run first, for every push and pull request that GitHub starts a run for; nothing is built or released without them                                                                      | [CI](#ci), [forge/ci.md](forge/ci.md)                                                                          |
+| Signing            | no team ID in the project file                                                                                                                                                                                  | [Signing](#signing), [architecture.md](architecture.md#configsigningxcconfig)                                  |
 
 The layers do not depend on each other. `--no-verify` skips the hooks, not the Forge push gate or CI. A hand push that
 skipped the hooks is caught by CI once it is on GitHub, and by the Forge when it reaches the branch the Forge follows
@@ -896,9 +896,12 @@ allow rules. As tried with Claude CLI 2.1.309:
 - Anything else shows the user a permission card: a fetch or pull from another repository or of another ref,
   `git restore` and `git reset` in another form, `scripts/check-public.sh` with other arguments in a feedback session
   (its `--commits` passes them to `git rev-list`, whose `--output` empties a file), `git mv`, a command with an
-  environment assignment before it, `git -C <folder> …`, `bash -c "…"`. These cards offer no "Always Allow", and the
-  permission mode of feedback and regeneration sessions cannot be changed. A `project` or `task` session keeps its own
-  mode; in `bypassPermissions` it shows no card.
+  environment assignment before it, `git -C <folder> …`, `bash -c "…"`. These cards offer no "Always Allow".
+  Feedback, regeneration and bundle sessions start in `acceptEdits`, a `project` or `task` session in its own mode;
+  the user can change the mode of any of them, and allow all its tools, from its options menu or its cards
+  ([ui/sessions.md](ui/sessions.md#permission-cards)). In `bypassPermissions`, or with all tools allowed, a session
+  shows no card: the CLI or the Main approves what the denied rules miss
+  ([claude/cli.md](claude/cli.md#44-allow-all-tools)).
 - No Hephaestus tool lets a session define a command: run configurations are changed only by the user, in the app
   ([claude/mcp.md](claude/mcp.md#65-update_project)). Feedback and regeneration sessions get no tool that reads the
   mesh's devices, projects or runs.
@@ -906,8 +909,8 @@ allow rules. As tried with Claude CLI 2.1.309:
 These rules do not hold code that a session runs. Regeneration sessions run code they write (tests, builds, the scripts
 of `scripts/`), and that code can drop the environment's variables (`GIT_CONFIG_COUNT=0 git push …` pushes), push from
 the `--upload-pack` command of a fetch (git clears the variables for it), or call the GitHub API with the `gh` login,
-which `gh` reads from its keyring. Nor do they hold a `project` or `task` session of the source project in the mode
-`bypassPermissions`, which shows no card, a command the user approves that overrides the environment's git settings
+which `gh` reads from its keyring. Nor do they hold a session in the mode `bypassPermissions` or with all tools
+allowed, which shows no card, a command the user approves that overrides the environment's git settings
 (`git -C <folder> -c url.<url>.pushInsteadOf=<url> push …` pushes: git uses the longest matching `pushInsteadOf`), or
 a run configuration that a `project` or `task` session starts (`start_run`): its command runs in the login environment
 and can run a file the session changed. The Forge push gate checks only what goes through it; the rest is reported once
@@ -1164,11 +1167,12 @@ The check finds known forms and the private terms. It does not find:
   what the later Release step runs (the runner's files, `$GITHUB_PATH`, `$GITHUB_ENV`) and so use that step's token,
   which can write the repository's contents. What that token pushes starts no workflow run; on `main` the Forge's
   check of its branch reports it;
-- a push made by code that a session runs, by a `project` or `task` session of the source project in the mode
-  `bypassPermissions` or through a run configuration it starts, or by a command the user approves that overrides the
-  sessions' git settings ([Claude permissions](#claude-permissions)): it passes through no gate. Once it is on GitHub,
-  the Forge and CI report its personal data; a weaker check it brings judges the later pushes in CI, and in the Forge
-  push gate once the Forge's check finds no personal data in it;
+- a push made by code that a session runs, by a session (feedback, regeneration and bundle sessions included) in the
+  mode `bypassPermissions` or with all tools allowed, by a `project` or `task` session of the source project through a
+  run configuration it starts, or by a command the user approves that overrides the sessions' git settings
+  ([Claude permissions](#claude-permissions)): it passes through no gate. Once it is on GitHub, the Forge and CI
+  report its personal data; a weaker check it brings judges the later pushes in CI, and in the Forge push gate once
+  the Forge's check finds no personal data in it;
 - the work of a session of another project, to which [Claude permissions](#claude-permissions) does not apply even when
   it works in the repository through its path, such as a task session that a session of the repository starts for a
   task of another project (`start_task_session`).

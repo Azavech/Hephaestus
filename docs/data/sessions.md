@@ -31,19 +31,20 @@ events and keeps the live statuses. This doc defines what is stored and how `Ses
 `<id>.yml` follows the YAML coding, unknown-key and read-modify-write rules of
 [project-yml.md](project-yml.md#yaml-coding-all-yaml-files). Keys, in this order:
 
-| Key              | YAML type | Required                  | Written  | Meaning                                                       |
-|------------------|-----------|---------------------------|----------|---------------------------------------------------------------|
-| `id`             | string    | yes                       | always   | Session id (a UUID); the id of the file name.                 |
-| `kind`           | string    | yes                       | always   | `project`, `task`, `feedback`, `regeneration` or `bundle`.    |
-| `taskID`         | string    | for `task` and `feedback` | when set | Id of the task the session belongs to.                        |
-| `mode`           | string    | for `task`                | when set | `implement`, `debug`, `review`, `plan` or `custom`.           |
-| `bundleID`       | string    | for `bundle`              | when set | Id of the bundle the session coordinates or works for.        |
-| `title`          | string    | yes                       | always   | Title shown in the UI and passed to the CLI with `--name`.    |
-| `created`        | timestamp | yes                       | always   | Creation time.                                                |
-| `updated`        | timestamp | yes                       | always   | Time of the last write (When it is written).                  |
-| `permissionMode` | string    | yes                       | always   | Permission mode of the next process start.                    |
-| `model`          | string    | no                        | when set | Model passed with `--model`. Absent: no `--model`.            |
-| `status`         | string    | yes                       | always   | `stopped`, or `failed` when the last process failed (Status). |
+| Key              | YAML type | Required                  | Written   | Meaning                                                         |
+|------------------|-----------|---------------------------|-----------|-----------------------------------------------------------------|
+| `id`             | string    | yes                       | always    | Session id (a UUID); the id of the file name.                   |
+| `kind`           | string    | yes                       | always    | `project`, `task`, `feedback`, `regeneration` or `bundle`.      |
+| `taskID`         | string    | for `task` and `feedback` | when set  | Id of the task the session belongs to.                          |
+| `mode`           | string    | for `task`                | when set  | `implement`, `debug`, `review`, `plan` or `custom`.             |
+| `bundleID`       | string    | for `bundle`              | when set  | Id of the bundle the session coordinates or works for.          |
+| `title`          | string    | yes                       | always    | Title shown in the UI and passed to the CLI with `--name`.      |
+| `created`        | timestamp | yes                       | always    | Creation time.                                                  |
+| `updated`        | timestamp | yes                       | always    | Time of the last write (When it is written).                    |
+| `permissionMode` | string    | yes                       | always    | Permission mode of the next process start.                      |
+| `allowsAllTools` | boolean   | no                        | when true | The Main allows every permission request itself. Absent: false. |
+| `model`          | string    | no                        | when set  | Model passed with `--model`. Absent: no `--model`.              |
+| `status`         | string    | yes                       | always    | `stopped`, or `failed` when the last process failed (Status).   |
 
 The values are those of `SessionKind`, `SessionMode`, `PermissionMode` and `SessionStatus`
 ([protocol/types.md](../protocol/types.md)). How a new session gets its title, permission mode and model is defined in
@@ -82,7 +83,7 @@ read, `SessionFile.decode` reads any value other than `failed` as `stopped`.
 
 - when the session is created;
 - when a `user` or a `result` event is appended;
-- on each `sessions.update` (title, permission mode, model);
+- on each `sessions.update` (title, permission mode, model, Allow All Tools);
 - when a process ends (status `stopped` or `failed`), and when a process cannot be started (status `failed`,
   [claude/cli.md](../claude/cli.md) 5.3).
 
@@ -99,9 +100,10 @@ Each write sets `updated` to `YAMLCoding.now()`.
 
 ### Mapping to SessionInfo
 
-`SessionInfo` ([protocol/types.md](../protocol/types.md)) carries the eleven keys of the file under the same names. Its
-`status` is the live status while a process exists, else the file's (Status). `statusLine`, `error` and
-`pendingPermissions` are kept in memory by `SessionService` and are not stored.
+`SessionInfo` ([protocol/types.md](../protocol/types.md)) carries the twelve keys of the file under the same names
+(`allowsAllTools` false when the key is absent). Its `status` is the live status while a process exists, else the
+file's (Status). `statusLine`, `error` and `pendingPermissions` are kept in memory by `SessionService` and are not
+stored.
 
 ## Event log
 
@@ -155,7 +157,7 @@ Every event has `id`, `at` and `type`, plus the fields of its type. Fields not l
 | `description` | string                    | `permission`, optional                                           | The CLI's description of the call.                                             |
 | `suggestions` | string                    | `permission`                                                     | The CLI's permission suggestions, as compact JSON text; `[]` when it has none. |
 | `blockedPath` | string                    | `permission`, optional                                           | The path that caused the request.                                              |
-| `decision`    | string                    | `permissionDecision`                                             | `allow`, `allowAlways` or `deny` (`PermissionDecision`).                       |
+| `decision`    | string                    | `permissionDecision`                                             | `allow`, `allowAlways`, `allowAll` or `deny` (`PermissionDecision`).           |
 | `durationMS`  | integer                   | `result`                                                         | Duration of the turn in milliseconds.                                          |
 | `costUSD`     | number                    | `result`                                                         | Cost of the turn in US dollars.                                                |
 | `stopReason`  | string                    | `result`, optional                                               | The CLI's stop reason; absent when it gives none (an interrupted turn).        |
@@ -169,7 +171,8 @@ Every event has `id`, `at` and `type`, plus the fields of its type. Fields not l
   client replaces the streamed text of the block with the final event ([ui/sessions.md](../ui/sessions.md)).
 - `deviceID` of a `user` event is the device whose request produced the message; for a generated first message, the
   device that started the session, which is the Main itself when the MCP tools or the Forge start it. `deviceID` of a
-  decision recorded when a pending request is cancelled is the Main's own device id ([claude/cli.md](../claude/cli.md)).
+  decision recorded when a pending request is cancelled, or allowed because the session allows all tools (`allowAll`),
+  is the Main's own device id ([claude/cli.md](../claude/cli.md)).
 - When a permission request can still be answered, and when the UI shows it as pending, is defined in
   [claude/cli.md](../claude/cli.md) and [ui/sessions.md](../ui/sessions.md).
 
@@ -299,13 +302,18 @@ public struct SessionFile: Codable, Sendable, Equatable {
     public var created: Date
     public var updated: Date
     public var permissionMode: PermissionMode
+    public var allowsAllTools: Bool
     public var model: String?
     public var status: SessionStatus
 
     /// The values as given, except `created` and `updated`, which pass through YAMLCoding.wholeSeconds(_:).
     public init(id: UUID, kind: SessionKind, taskID: String?, mode: SessionMode?, bundleID: String?, title: String,
-                created: Date, updated: Date, permissionMode: PermissionMode, model: String?, status: SessionStatus)
-    /// .mapping of the eleven keys, each .value.
+                created: Date, updated: Date, permissionMode: PermissionMode, allowsAllTools: Bool = false,
+                model: String?, status: SessionStatus)
+    /// Custom coding for allowsAllTools only: an absent key decodes as false, false is not encoded.
+    public init(from decoder: any Decoder) throws
+    public func encode(to encoder: any Encoder) throws
+    /// .mapping of the twelve keys, each .value.
     public static let shape: YAMLShape
     /// id.uuidString.lowercased(): the name of the files and folder, and the CLI session id.
     public static func fileStem(_ id: UUID) -> String
@@ -367,7 +375,7 @@ model: opus
 status: stopped
 ```
 
-A project chat whose last process failed:
+A project chat that allows all tools and whose last process failed:
 
 ```yaml
 id: 9C1D2E3F-4A5B-4C6D-8E7F-0A1B2C3D4E5F
@@ -376,5 +384,6 @@ title: Plan the Runs screen
 created: 2026-10-29T22:20:00Z
 updated: 2026-10-29T22:31:07Z
 permissionMode: plan
+allowsAllTools: true
 status: failed
 ```

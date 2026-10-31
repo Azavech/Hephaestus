@@ -148,13 +148,14 @@ presents stay attached to the row or the tab: it is applied with `.sessionContex
 `View`, or `.modifier(SessionContextMenu(store:session:))`. A row or a tab has no `SessionModel`, so its items call the
 request functions of `store.connection` directly, through `banners.perform`:
 
-| Item                                                                 | Shown                                          | Request                                                                                    |
-|----------------------------------------------------------------------|------------------------------------------------|--------------------------------------------------------------------------------------------|
-| Rename…                                                              | always                                         | the rename sheet, then `updateSession(projectID:sessionID:patch:)`, `SessionPatch(title:)` |
-| Stop Process                                                         | live CLI process                               | `stopSession(projectID:sessionID:)`                                                        |
-| Delete Session…                                                      | always                                         | the delete confirmation, then `deleteSession(projectID:sessionID:)`                        |
-| Permission Mode ▸ the five modes, current checked                    | kinds other than `feedback` and `regeneration` | `updateSession` with `SessionPatch(permissionMode:)`                                       |
-| Model ▸ Default, `opus`, `sonnet`, `haiku` (current checked), Other… | always                                         | `updateSession` with `SessionPatch(model:)`; Default sends `""`                            |
+| Item                                                                 | Shown            | Request                                                                                    |
+|----------------------------------------------------------------------|------------------|--------------------------------------------------------------------------------------------|
+| Rename…                                                              | always           | the rename sheet, then `updateSession(projectID:sessionID:patch:)`, `SessionPatch(title:)` |
+| Stop Process                                                         | live CLI process | `stopSession(projectID:sessionID:)`                                                        |
+| Delete Session…                                                      | always           | the delete confirmation, then `deleteSession(projectID:sessionID:)`                        |
+| Permission Mode ▸ the five modes, current checked                    | always           | `updateSession` with `SessionPatch(permissionMode:)`                                       |
+| Allow All Tools (checked when `allowsAllTools` is true)              | always           | `updateSession` with `SessionPatch(allowsAllTools:)`, the opposite of the current value    |
+| Model ▸ Default, `opus`, `sonnet`, `haiku` (current checked), Other… | always           | `updateSession` with `SessionPatch(model:)`; Default sends `""`                            |
 
 The rename sheet, the Other… model sheet and the delete confirmation are those of the [options menu](#options-menu).
 While the project's Main is not connected, every item is disabled: each sends a request or opens a sheet or a
@@ -177,18 +178,20 @@ its own `SessionModel` when it appears, calls `appear()` in `onAppear` and `disa
   feedback "Feedback · <task id>"; regeneration "Regeneration"; bundle "Bundle · <bundle id>". With `showsTaskLink` and
   a task id, the task id is a link that calls `context.navigate(mainDeviceID: store.mainDeviceID, projectID:
   store.projectID, section: .tasks, item: <task id>)`.
-- Capsules: the permission mode title; the model, or "Default model" when nil.
+- Capsules: the permission mode title; the model, or "Default model" when nil; "All Tools Allowed" when
+  `allowsAllTools` is true.
 - Options: `SessionOptionsMenu` (button `ellipsis.circle`).
 
 ### Options menu
 
-| Item                                                                 | Enabled                                        | Action                               |
-|----------------------------------------------------------------------|------------------------------------------------|--------------------------------------|
-| Permission Mode ▸ the five modes, current checked                    | kinds other than `feedback` and `regeneration` | `update(permissionMode:)`            |
-| Model ▸ Default, `opus`, `sonnet`, `haiku` (current checked), Other… | always                                         | `update(model:)`; Default sends `""` |
-| Rename…                                                              | always                                         | rename sheet, then `update(title:)`  |
-| Stop Process                                                         | live CLI process                               | `stop()`                             |
-| Delete Session…                                                      | always                                         | confirmation, then `delete()`        |
+| Item                                                                 | Enabled          | Action                                                       |
+|----------------------------------------------------------------------|------------------|--------------------------------------------------------------|
+| Permission Mode ▸ the five modes, current checked                    | always           | `update(permissionMode:)`                                    |
+| Allow All Tools (checked when `allowsAllTools` is true)              | always           | `update(allowsAllTools:)`, the opposite of the current value |
+| Model ▸ Default, `opus`, `sonnet`, `haiku` (current checked), Other… | always           | `update(model:)`; Default sends `""`                         |
+| Rename…                                                              | always           | rename sheet, then `update(title:)`                          |
+| Stop Process                                                         | live CLI process | `stop()`                                                     |
+| Delete Session…                                                      | always           | confirmation, then `delete()`                                |
 
 - While the project's Main is not connected, every item is disabled, as in the
   [session context menu](#session-context-menu).
@@ -369,33 +372,37 @@ otherwise). Rows, top to bottom:
 4. Path: "Path: <blockedPath>" (secondary, monospaced), when set.
 5. Input: an "Input" disclosure, collapsed, with the input pretty-printed (sorted keys) in monospaced font.
 6. Pending only, the buttons: "Allow Once" (`.borderedProminent`); "Always Allow" (`.bordered`, only when the
-   suggestions summary is not empty); "Deny" (a `Menu` whose primary action is Deny, with the item "Deny with
-   Message…"). Then, when the suggestions summary is not empty, the caption "Always Allow adds: <suggestions summary>".
+   suggestions summary is not empty); "Allow All" (`.bordered`); "Deny" (a `Menu` whose primary action is Deny, with
+   the item "Deny with Message…"). Then, when the suggestions summary is not empty, the caption "Always Allow adds:
+   <suggestions summary>".
 7. Resolved only, the outcome: `checkmark.circle.fill` (green) "Allowed once" or "Always allowed", or
-   `xmark.circle.fill` (red) "Denied", followed by " from <device name> · <time>". Expired only: "No longer pending"
-   (secondary).
+   `xmark.circle.fill` (red) "Denied", followed by " from <device name> · <time>"; for decision `allowAll`,
+   `checkmark.circle.fill` (green) "Allowed automatically" alone. Expired only: "No longer pending" (secondary).
 
 Behavior:
 
 - Allow Once sends decision `allow`, Always Allow `allowAlways`, Deny `deny` with a nil message. Deny with Message…
   shows a "Message to Claude" text field with Deny and Cancel buttons inside the card; that Deny sends `deny` with the
   trimmed message (nil when empty).
-- The request is `model.respond(requestID:decision:message:)`. While it runs, the buttons are disabled and a
-  `ProgressView` shows. The card turns resolved when the decision arrives (`permissionDecision` event or
-  `permission.resolved`), from whichever device answered first. Errors `conflict` and `notFound` (the request is no
-  longer pending, or the session is gone) show the card as expired until a decision arrives; every error shows the
-  error banner.
+- Allow All calls `model.update(allowsAllTools: true)`: the Main answers this card and every other pending request of
+  the session with `allowAll`, and answers the later ones itself
+  ([../claude/cli.md](../claude/cli.md#44-allow-all-tools)). The cards turn resolved when their decisions arrive.
+- The request is `model.respond(requestID:decision:message:)`, or `model.update(allowsAllTools:)` for Allow All. While
+  it runs, the buttons are disabled and a `ProgressView` shows. The card turns resolved when the decision arrives
+  (`permissionDecision` event or `permission.resolved`), from whichever device answered first. Errors `conflict` and
+  `notFound` (the request is no longer pending, or the session is gone) show the card as expired until a decision
+  arrives; every error shows the error banner.
 - Device name: the name of `deviceID` in the mesh records, "another device" when unknown. A request the Main cancelled
   (end of the turn or of the process) is recorded as `deny` from the Main's own device id
   ([../claude/cli.md](../claude/cli.md)). Time: the decision event's `at`, else the reception time of
   `permission.resolved`; shortened time style.
-- Suggestions summary: `suggestions` is JSON text holding an array of objects. The objects whose `type` is `addRules`
-  or `addDirectories` are the suggestions that Always Allow applies ([../claude/cli.md](../claude/cli.md)); other
-  objects are ignored. The sessions that work in the public repository send none, so their cards have no Always Allow
-  ([../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)). The summary has one part per element of
-  the list of each such object (table), in the order of the objects and of their elements; a `rules` element that is
-  not an object with a string `toolName`, and a `directories` element that is not a string, give no part. Parts are
-  joined with " · ". The summary is empty when `suggestions` is nil, not an array, or gives no part:
+- Suggestions summary: `suggestions` is JSON text holding an array of objects. The objects whose `type` is `addRules` or
+  `addDirectories` are the suggestions that Always Allow applies ([../claude/cli.md](../claude/cli.md)); other objects
+  are ignored. The sessions that work in the public repository send none, so their cards have no Always Allow, only
+  Allow All ([../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)). The summary has one part per
+  element of the list of each such object (table), in the order of the objects and of their elements; a `rules` element
+  that is not an object with a string `toolName`, and a `directories` element that is not a string, give no part. Parts
+  are joined with " · ". The summary is empty when `suggestions` is nil, not an array, or gives no part:
 
 | `type` of the object | Elements                | Part of an element                                                          |
 |----------------------|-------------------------|-----------------------------------------------------------------------------|
@@ -602,14 +609,14 @@ Rebuilding the builder applies `loadedEvents` in order to a new `TranscriptBuild
 
 Requests:
 
-| Method                                 | Request function                                                             |
-|----------------------------------------|------------------------------------------------------------------------------|
-| `send(text:attachments:)`              | `sendMessage(projectID:sessionID:text:attachments:)`                         |
-| `interrupt()`                          | `interruptSession(projectID:sessionID:)`                                     |
-| `stop()`                               | `stopSession(projectID:sessionID:)`                                          |
-| `respond(requestID:decision:message:)` | `respondToPermission(projectID:sessionID:requestID:decision:message:)`       |
-| `update(title:permissionMode:model:)`  | `updateSession(projectID:sessionID:patch:)`, `SessionPatch` of the arguments |
-| `delete()`                             | `deleteSession(projectID:sessionID:)`                                        |
+| Method                                               | Request function                                                             |
+|------------------------------------------------------|------------------------------------------------------------------------------|
+| `send(text:attachments:)`                            | `sendMessage(projectID:sessionID:text:attachments:)`                         |
+| `interrupt()`                                        | `interruptSession(projectID:sessionID:)`                                     |
+| `stop()`                                             | `stopSession(projectID:sessionID:)`                                          |
+| `respond(requestID:decision:message:)`               | `respondToPermission(projectID:sessionID:requestID:decision:message:)`       |
+| `update(title:permissionMode:allowsAllTools:model:)` | `updateSession(projectID:sessionID:patch:)`, `SessionPatch` of the arguments |
+| `delete()`                                           | `deleteSession(projectID:sessionID:)`                                        |
 
 `update(model: "")` clears the session's model.
 
@@ -748,7 +755,8 @@ public final class SessionModel {
     public func interrupt() async throws
     public func stop() async throws
     public func respond(requestID: String, decision: PermissionDecision, message: String?) async throws
-    public func update(title: String? = nil, permissionMode: PermissionMode? = nil, model: String? = nil) async throws
+    public func update(title: String? = nil, permissionMode: PermissionMode? = nil, allowsAllTools: Bool? = nil,
+                       model: String? = nil) async throws
     public func delete() async throws
 }
 

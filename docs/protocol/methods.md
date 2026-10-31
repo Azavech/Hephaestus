@@ -1053,13 +1053,14 @@ Answers a permission request. The first answer wins.
 | `projectID` | `String`             | Project                                                                                          |
 | `sessionID` | `UUID`               | Session                                                                                          |
 | `requestID` | `String`             | `PermissionRequest.requestID`                                                                    |
-| `decision`  | `PermissionDecision` | Answer                                                                                           |
+| `decision`  | `PermissionDecision` | Answer: `allow`, `allowAlways` or `deny`                                                         |
 | `message`   | `String?`            | Deny reason; default `Denied from <caller's device name>`; ignored for `allow` and `allowAlways` |
 
 - Result: `EmptyPayload`.
 - Errors: `notFound` (session; or "No permission request <id>." when the session's current process, or its last one
   when it has ended, never sent that request id); `conflict` "This request is not pending." (the request was already
-  answered or cancelled).
+  answered, by a device or by Allow All Tools, or cancelled); `badRequest` "Use sessions.update to allow all tools."
+  (decision `allowAll`).
 - Effects: answers the CLI ([claude/cli.md](../claude/cli.md)); appends a `permissionDecision` event with the caller's
   `deviceID`; removes the request from the session's `pendingPermissions`.
 - Events: `permission.resolved`, `session.event` (`permissionDecision`), `session.changed` (`pendingPermissions`, and
@@ -1072,11 +1073,13 @@ Answers a permission request. The first answer wins.
 
 - Result: `SessionInfo` after the change.
 - Effects: saves the session file. A new `permissionMode` or `model` applies at the next process start; an idle
-  process is restarted at once ([claude/cli.md](../claude/cli.md)).
-- Errors: `notFound` (session); `badRequest` (a title that is empty or holds a line break; a `permissionMode` for a
-  `feedback` or `regeneration` session: "The permission mode of Forge sessions cannot be changed.",
-  [claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)).
-- Events: `session.changed`.
+  process is restarted at once ([claude/cli.md](../claude/cli.md)). Every session kind accepts every field, Forge
+  sessions included. `allowsAllTools` applies at once, without a restart; when it becomes true, every pending
+  permission request of the session is answered with `allow` and recorded as `allowAll` with the Main's own device id
+  ([claude/cli.md](../claude/cli.md#44-allow-all-tools)).
+- Errors: `notFound` (session); `badRequest` (a title that is empty or holds a line break).
+- Events: `session.changed`; for each request answered by `allowsAllTools`, `permission.resolved` and `session.event`
+  (`permissionDecision`), and `projects.changed` (`pendingPermissionCount`).
 
 ### sessions.delete
 

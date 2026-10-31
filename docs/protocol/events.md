@@ -309,9 +309,11 @@ public enum ServerEvent: Sendable, Hashable {
 | `decision`  | `PermissionDecision` | The answer                       |
 | `deviceID`  | `UUID`               | The device whose answer was used |
 
-- Emitted when the first answer to a request is accepted, and when a pending request is cancelled (by the CLI, by the
-  end of the turn or of the process): a cancellation has `decision` `deny` and the Main's own id as `deviceID`
-  ([claude/cli.md](../claude/cli.md)). The request leaves the session's `pendingPermissions` (`session.changed`) and
+- Emitted when the first answer to a request is accepted, when a pending request is cancelled (by the CLI, by the
+  end of the turn or of the process), and when the Main answers a request because the session allows all tools: a
+  cancellation has `decision` `deny`, an automatic answer `allowAll`, both with the Main's own id as `deviceID`
+  ([claude/cli.md](../claude/cli.md)). An automatic answer to a request that has just arrived follows no
+  `permission.requested`. The request leaves the session's `pendingPermissions` (`session.changed`) and
   the project's `pendingPermissionCount` (`projects.changed`).
 - Client: removes the permission card and shows the decision with the device's name.
 

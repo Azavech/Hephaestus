@@ -74,8 +74,8 @@ Layers that do not depend on each other keep personal data out ([public-reposito
   the commits that reach its branch another way ([public-repository.md](public-repository.md#forge-push-gate),
   [forge/pipeline.md](forge/pipeline.md));
 - Claude's permissions in the sessions that work in the repository: `git push` and git settings are denied, no hook
-  runs and no permission is remembered; code a session runs, and a `project` or `task` session in
-  `bypassPermissions`, can still get past them
+  runs and no permission is remembered; code a session runs, and a session in `bypassPermissions` or with all tools
+  allowed, can still get past them
   ([public-repository.md](public-repository.md#claude-permissions), [claude/cli.md](claude/cli.md));
 - the commit identity: commits carry the user's own git identity, checked for private terms, and no signature
   ([public-repository.md](public-repository.md#commit-identity));

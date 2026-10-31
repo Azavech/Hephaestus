@@ -392,6 +392,7 @@ A Claude session ([data/sessions.md](../data/sessions.md)). Identifiable.
 | `created`            | `Date`                | Creation date                                                                                            |
 | `updated`            | `Date`                | Last change of a stored field                                                                            |
 | `permissionMode`     | `PermissionMode`      | Permission mode                                                                                          |
+| `allowsAllTools`     | `Bool`                | Allow All Tools: the Main answers every permission request itself ([claude/cli.md](../claude/cli.md))    |
 | `model`              | `String?`             | Model alias; `nil`: the CLI's default                                                                    |
 | `status`             | `SessionStatus`       | Status                                                                                                   |
 | `statusLine`         | `String?`             | Live status line during a turn ([claude/cli.md](../claude/cli.md))                                       |
@@ -410,6 +411,7 @@ Changes for `sessions.update`. A `nil` field leaves the value unchanged.
 |------------------|-------------------|--------------------------------------------|
 | `title`          | `String?`         | New title (trimmed, not empty, one line)   |
 | `permissionMode` | `PermissionMode?` | New permission mode                        |
+| `allowsAllTools` | `Bool?`           | Turns Allow All Tools on or off            |
 | `model`          | `String?`         | New model alias; an empty string clears it |
 
 ### SessionEventType
@@ -466,11 +468,12 @@ A permission request of the CLI waiting for an answer. Identifiable by `requestI
 
 ### PermissionDecision
 
-| Raw value     | Meaning                                    |
-|---------------|--------------------------------------------|
-| `allow`       | Allow this use                             |
-| `allowAlways` | Allow, and apply the request's suggestions |
-| `deny`        | Deny                                       |
+| Raw value     | Meaning                                                                          |
+|---------------|----------------------------------------------------------------------------------|
+| `allow`       | Allow this use                                                                   |
+| `allowAlways` | Allow, and apply the request's suggestions                                       |
+| `allowAll`    | Allowed by the Main because the session allows all tools; never sent by a client |
+| `deny`        | Deny                                                                             |
 
 ### SessionDeltaKind
 

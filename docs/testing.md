@@ -467,6 +467,7 @@ gives:
 |-----------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `testAllowMatchesRecording` | The request parsed from `tool-permission.jsonl`; `PermissionBroker.answer(to:decision: .allow, message: nil, deviceName: "Mac")` → the JSON object of the last line of `tool-permission.stdin.jsonl`                   |
 | `testAllowAlways`           | Decision `allowAlways` → the allow answer plus `updatedPermissions` equal to the request's suggestions whose `type` is `addRules` or `addDirectories`, in their order (the fixture's `setMode` suggestion is left out) |
+| `testAllowAll`              | Decision `allowAll` → the same answer as `allow`                                                                                                                                                                       |
 | `testDeny`                  | Decision `deny`, no message → `{"behavior":"deny","message":"Denied from Mac"}` in the answer; with a message → that message                                                                                           |
 | `testStdinLines`            | `ClaudeProcess.StdinMessage` `.initialize`, `.user(text:)` and `.interrupt(requestID: "interrupt-1")` → the JSON objects of lines 1, 2 and 3 of `interrupt-multiturn.stdin.jsonl`                                      |
 
