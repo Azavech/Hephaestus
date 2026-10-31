@@ -238,9 +238,7 @@ Forge passes it as `HEPHAESTUS_PRIVATE_TERMS` to every check it runs ([MCP tools
 
 Wire types, declared in `HephCore/Protocol/Types/ForgeTypes.swift` ([../protocol/types.md](../protocol/types.md)) with
 exactly these fields. JSON coding follows [../protocol/envelope.md](../protocol/envelope.md) (field names = Swift
-names, ISO 8601 dates with milliseconds, `UUID` uppercase, nil members omitted), except `ForgeItem.ticketID`, coded
-`taskID`, and `ForgeCycle.itemTicketIDs`, coded `itemTaskIDs` through their `CodingKeys`: the names they had before
-tasks were renamed tickets, so that an existing `forge.json` decodes as it is. All are `Codable`, `Sendable`,
+names, ISO 8601 dates with milliseconds, `UUID` uppercase, nil members omitted). All are `Codable`, `Sendable`,
 `Hashable`. `ForgeConfig`, `ForgeRelease`, `FeedbackContext` and `FeedbackSelection` are as in types.md.
 
 ### ForgeState
@@ -350,7 +348,7 @@ types above is written):
 {
   "version": 1,
   "cycle": {"id": "5D0E…", "trigger": "tool", "state": "building", "started": "2026-10-29T21:20:00.000Z", "…": "…"},
-  "items": [{"taskID": "HEPH-F14", "projectID": "HEPH", "title": "Feedback: Sidebar breaks on iPad", "state": "building", "…": "…"}],
+  "items": [{"ticketID": "HEPH-F14", "projectID": "HEPH", "title": "Feedback: Sidebar breaks on iPad", "state": "building", "…": "…"}],
   "latestRelease": {"tag": "build-41", "build": 41, "url": "https://github.com/Azavech/Hephaestus/releases/tag/build-41", "publishedAt": "2026-10-28T10:02:11.000Z"},
   "trustedHead": "9c1e…"
 }
@@ -362,6 +360,11 @@ types above is written):
   ([MCP tools](#mcp-tools) step 6).
 - Loaded when the Forge is first enabled in the app's process. A file that does not decode, or has another `version`,
   is renamed to `forge.json.bad` (replacing an older one) and the Forge starts with no cycle and no items.
+- A file written before tasks were renamed tickets names two members `taskID` (in each item) and `itemTaskIDs` (in the
+  cycle). When the file is loaded, before it is decoded, its JSON object (`JSONSerialization`) goes through
+  `ForgeService.renameTaskMembers(_:)`, which renames each `taskID` of `items` to `ticketID` and the `itemTaskIDs` of
+  `cycle` to `itemTicketIDs`, except where the new name is already present (the old member is then removed). When it
+  renamed or removed a member, the decoded state is written back to `forge.json` at once, with the new names.
 - Written after every change of the cycle, the items or `latestRelease`.
 - At most 100 items are kept: when a new item would exceed it, the oldest `done` items are dropped.
 - `head` and `lastError` are not stored; the first check after loading recomputes them.
@@ -987,6 +990,10 @@ extension ForgeService {
     /// `environment`: the environment of its git commands, LoginEnvironment.shared.environment() in the configuration
     /// checks; the tests pass the environment of a GitSandbox (testing.md). The Forge need not be enabled.
     func registerSourceProject(_ config: ForgeConfig, environment: [String: String]) async throws
+    /// The renaming of the members of a forge.json written before tasks were renamed tickets (ForgeStore.swift,
+    /// forge.json): `taskID` → `ticketID` in each item of `items`, `itemTaskIDs` → `itemTicketIDs` in `cycle`. Returns
+    /// true when it changed `object`.
+    static func renameTaskMembers(_ object: inout [String: Any]) -> Bool
 }
 
 /// Runs the git commands of Git operations in a repository root with an environment.

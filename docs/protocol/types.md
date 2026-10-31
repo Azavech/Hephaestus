@@ -702,12 +702,11 @@ One pass of regeneration, CI and release. Identifiable.
 | `pushedAt`      | `Date?`         | When `regenCommit` was recorded or polling for it restarted                                           |
 | `run`           | `ForgeRun?`     | The CI run of `regenCommit`                                                                           |
 | `release`       | `ForgeRelease?` | The release of `run`                                                                                  |
-| `itemTicketIDs` | `[String]`      | Ticket ids of the items in the cycle; JSON name `itemTaskIDs`                                         |
+| `itemTicketIDs` | `[String]`      | Ticket ids of the items in the cycle                                                                  |
 
 ### ForgeItem
 
-The pipeline state of one feedback ticket. Identifiable by `ticketID` (`var id: String { ticketID }`). JSON name of
-`ticketID`: `taskID`.
+The pipeline state of one feedback ticket. Identifiable by `ticketID` (`var id: String { ticketID }`).
 
 | Field               | Type         | Meaning                                                            |
 |---------------------|--------------|--------------------------------------------------------------------|
@@ -745,9 +744,9 @@ When not enabled: `config`, `head`, `cycle`, `latestRelease` and `lastError` are
 
 The files on disk are read and written through their own file types, defined by the docs in the last column; they map
 to these wire types. The files keep the names they had before tasks were renamed tickets: the folder
-`.hephaestus/tasks/`, the key `taskCounter` of project.yml, the key `taskID` and the kind `task` of session files, and
-the JSON names `taskID` and `itemTaskIDs` of `forge.json`, which `ForgeItem` and `ForgeCycle` use on the wire too
-([forge/pipeline.md](../forge/pipeline.md#types)).
+`.hephaestus/tasks/`, the key `taskCounter` of project.yml, and the key `taskID` and the kind `task` of session files.
+`forge.json` uses the new names; the Forge renames the old ones when it loads the file
+([forge/pipeline.md](../forge/pipeline.md#forgejson)).
 
 | File                              | Wire type                                                           | Spec                                          |
 |-----------------------------------|---------------------------------------------------------------------|-----------------------------------------------|
