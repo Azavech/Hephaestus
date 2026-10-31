@@ -460,7 +460,10 @@ Claude", `mainDeviceID: store.mainDeviceID` and `projectID: store.projectID`.
 - The count is the number of listed requests plus the sum of the `n(P)`.
 
 It is hidden when the count is 0; otherwise it is `hand.raised.fill` (orange) with the count as a badge at its top
-trailing corner: white `.caption2` bold digits on a red capsule at least 16 × 16 pt. Clicking it opens a popover (at
+trailing corner: white `.caption2` bold digits on a red capsule at least 16 × 16 pt. The badge lies entirely inside
+the indicator's toolbar item, so the toolbar never clips it, on macOS, iPadOS and iOS (regular and compact width): the
+symbol gets `.padding(.top, 6)` and `.padding(.trailing, 6)`, and the badge is an `.overlay(alignment: .topTrailing)`
+of that padded frame, with no `.offset`. Clicking it opens a popover (at
 least 360 pt wide, ideal 420 pt, at most 520 pt high; a sheet in compact width) titled "Waiting for Permission": one
 row per listed request, oldest first, then one row per project with `n(P)` > 0, in path bar order of the Mains
 ([shell.md](shell.md#7-path-bar)) and tree order.
