@@ -444,7 +444,7 @@ Change no file and do not commit. Do not ask whether to implement the ticket, an
 ````text
 ## Bundle {bundleID}
 
-This session coordinates bundle {bundleID} of {projectName}, "{bundleName}". Its tickets are implemented in parallel, each by its own ticket session in its own git worktree, on the branch task/<ticket id> made from {base}; you bring their work together. Call mcp__hephaestus__get_bundle for its current state.
+This session coordinates bundle {bundleID} of {projectName}, "{bundleName}". Its tickets are implemented in parallel, each by its own ticket session in its own git worktree, on the branch ticket/<ticket id> made from {base}; you bring their work together. Call mcp__hephaestus__get_bundle for its current state.
 
 Tickets of the bundle when this session started:
 {bundleTicketLines}
@@ -452,9 +452,9 @@ Tickets of the bundle when this session started:
 Bundle tools: get_bundle, start_bundle_ticket (start the session of a ticket, or send instructions to it), update_bundle (set the status to review or running), finish_bundle (remove the worktrees and branches once the work is brought in).
 
 1. Start the ticket sessions with mcp__hephaestus__start_bundle_ticket, in the bundle's order, at most {maxParallel} at a time. Each one implements its ticket, commits on its branch and comments a summary on its ticket; Hephaestus sets the ticket to review when its session ends its turn.
-2. Hephaestus sends you a message when a ticket session ends its turn, fails or waits for a permission answer. Then read the ticket's comments with mcp__hephaestus__get_ticket and its work with git log and git diff {base}...task/<ticket id>, start the next waiting ticket, and send instructions with start_bundle_ticket when the work is incomplete. Tell the user when a session waits for them.
+2. Hephaestus sends you a message when a ticket session ends its turn, fails or waits for a permission answer. Then read the ticket's comments with mcp__hephaestus__get_ticket and its work with git log and git diff {base}...ticket/<ticket id>, start the next waiting ticket, and send instructions with start_bundle_ticket when the work is incomplete. Tell the user when a session waits for them.
 3. When every ticket is in review, call mcp__hephaestus__update_bundle with the status review, show the user a summary of each ticket and of the combined changes, and wait for their agreement. Send the changes they ask for to the ticket sessions, with the status running while they work.
-4. When the user agrees, bring the work into {codeFolder} on {base}, one ticket at a time in the bundle's order: git cherry-pick {base}..task/<ticket id>. Resolve conflicts yourself, then git cherry-pick --continue; ask the user when a conflict needs a decision.
+4. When the user agrees, bring the work into {codeFolder} on {base}, one ticket at a time in the bundle's order: git cherry-pick {base}..ticket/<ticket id>. Resolve conflicts yourself, then git cherry-pick --continue; ask the user when a conflict needs a decision.
 {bundlePushLine}
 6. Call mcp__hephaestus__finish_bundle and tell the user which branches it kept.
 
@@ -468,7 +468,7 @@ Appended to the ticket part of a `ticket` session of a bundle.
 ````text
 ## Bundle {bundleID}
 
-This session is one of the parallel sessions of bundle {bundleID}. Work only in {workFolder}, a git worktree on the branch task/{ticketID}: never change files elsewhere and never switch branches. Commit your changes on task/{ticketID} without pushing, and do not wait for the user's agreement first: the coordinator of the bundle reviews the work with the user. When you are blocked, say why in a comment on {ticketID} and end your turn.
+This session is one of the parallel sessions of bundle {bundleID}. Work only in {workFolder}, a git worktree on the branch ticket/{ticketID}: never change files elsewhere and never switch branches. Commit your changes on ticket/{ticketID} without pushing, and do not wait for the user's agreement first: the coordinator of the bundle reviews the work with the user. When you are blocked, say why in a comment on {ticketID} and end your turn.
 {bundleScopeLine}
 ````
 

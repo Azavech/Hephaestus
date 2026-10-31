@@ -785,7 +785,7 @@ Result: `BundleDetails` ([../services/bundles.md](../services/bundles.md#swift-a
 ```json
 {
   "name": "start_bundle_ticket",
-  "description": "Start the ticket session of a ticket of your bundle: it implements the ticket in its own git worktree, on the branch task/<ticket id>, commits there and comments a summary; the ticket goes to review when its session ends its turn. When the ticket already has a session, send that session instructions instead.",
+  "description": "Start the ticket session of a ticket of your bundle: it implements the ticket in its own git worktree, on the branch ticket/<ticket id>, commits there and comments a summary; the ticket goes to review when its session ends its turn. When the ticket already has a session, send that session instructions instead.",
   "inputSchema": {
     "type": "object",
     "properties": {

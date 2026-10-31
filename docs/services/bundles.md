@@ -122,25 +122,31 @@ git that is not found gives `strerror(ENOENT)`, one that cannot be started the `
   they are equal). The code folder must be in a repository whose `HEAD` is a branch with a commit
   (`git symbolic-ref --short HEAD` and `git rev-parse --verify HEAD` succeed), else `badRequest` `Bundles need a git
   repository on a branch with a commit: <code folder path> is not in one.`
-- **Branch.** The branch of a ticket is `task/<ticket id>`, for example `task/HEPH-12`. It exists when
-  `git rev-parse --verify --quiet refs/heads/task/<id>`, run in `<top>`, exits with status 0, and does not when it
-  exits with status 1; another status is a failure (`BundleGit.branchExists`). The prefix `task/` keeps the name it
-  had before tasks were renamed tickets, so the branches of existing bundles stay in use.
+- **Branch.** The branch of a ticket is `ticket/<ticket id>`, for example `ticket/HEPH-12`. It exists when
+  `git rev-parse --verify --quiet refs/heads/ticket/<id>`, run in `<top>`, exits with status 0, and does not when it
+  exits with status 1; another status is a failure (`BundleGit.branchExists`).
+- **Old branches.** Bundles started before tasks were renamed tickets have branches named `task/<ticket id>`. At the
+  start of `bundles.start`, `bundles.delete` and the tools `get_bundle`, `start_bundle_ticket` and `finish`, while
+  `host.info` reports `gitAvailable` and before their other git commands, `BundleService` runs
+  `BundleGit.renameOldBranch(ticketID:)` for each ticket of the bundle, in order: when `task/<id>` exists and
+  `ticket/<id>` does not, `git branch -m task/<id> ticket/<id>` in `<top>`. The worktree folder is named after the
+  ticket id alone, so it stays where it is. When both branches exist, nothing is renamed. A failure of the rename is
+  logged with `Log.host` (`error`) and the method or tool goes on.
 - **Worktree folder.** `<Application Support>/Hephaestus/Worktrees/<projectID>/<ticket id>/`
   ([../data/app-storage.md](../data/app-storage.md#folder)). The **work folder** of the ticket is
   `<worktree folder>/<rel>`: the code folder's place in the worktree.
 - **Creating.** When the worktree folder does not exist: `git worktree prune`, then, when the branch exists,
-  `git worktree add <folder> task/<id>`, else `git worktree add -b task/<id> <folder> <base>`. The parent folders are
+  `git worktree add <folder> ticket/<id>`, else `git worktree add -b ticket/<id> <folder> <base>`. The parent folders are
   created first. Every command runs in `<top>`.
 - **Removing.** `git worktree remove --force <folder>`; when it fails, its error is logged; when the folder is still
   there, it is deleted; then `git worktree prune`.
-- **Brought in.** A branch's work is on `<base>` when `git cherry <base> task/<id>` prints no line starting with `+`:
+- **Brought in.** A branch's work is on `<base>` when `git cherry <base> ticket/<id>` prints no line starting with `+`:
   every commit of the branch has an equal change on `<base>`. When `<base>` does not exist (`git rev-parse --verify
   --quiet refs/heads/<base>` exits with status 1), the work is not on it.
 - **Removing the work** (`bundles.delete`, `finish`). For each ticket of the bundle, in order, except a ticket that is
   in another bundle of the project whose status is not `done` (its worktree and branch are that bundle's now): its
   worktree is removed when its folder exists; then, when the bundle has a `base` and the ticket's branch exists, the
-  branch is deleted (`git branch -D task/<id>`) when its work is on `base`, else kept. Without a `base` no branch is
+  branch is deleted (`git branch -D ticket/<id>`) when its work is on `base`, else kept. Without a `base` no branch is
   looked at; a branch that does not exist is neither deleted nor kept.
 
 ## BundleService
@@ -349,12 +355,15 @@ struct BundleGit: Sendable {
     func isBroughtIn(branch: String, base: String) async throws -> Bool
     func deleteBranch(_ branch: String) async throws
     func branchExists(_ branch: String) async throws -> Bool
+    /// Old branches: renames task/<ticketID> to ticket/<ticketID> when the first exists and the second does not.
+    /// Returns true when it renamed the branch.
+    func renameOldBranch(ticketID: String) async throws -> Bool
 }
 ```
 
 `BundleDetails` is the result of `get_bundle`: `bundle` (`BundleItem`), `maxParallel` (`Int`), and `tickets`, one
 `BundleDetails.Entry` per ticket in order: `ticket` (`TicketItem`, absent for a deleted ticket), `session`
-(`SessionInfo`, absent without one), `branch` (`String`, `task/<id>`), `workFolder` (`String`, the path of the work
+(`SessionInfo`, absent without one), `branch` (`String`, `ticket/<id>`), `workFolder` (`String`, the path of the work
 folder; absent while the worktree does not exist). `BundleFinishResult`: `bundle`, `keptBranches` (`[String]`). Both are
 `Codable` and encoded as the tool results.
 
