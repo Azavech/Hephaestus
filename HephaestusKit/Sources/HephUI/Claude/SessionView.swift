@@ -3,21 +3,21 @@ import HephCore
 import SwiftUI
 
 /// One session: header, transcript, status line and composer, top to bottom (docs/ui/sessions.md, "Session view").
-/// The Claude section, the Claude segment of a task and every session shown through the selection use it.
+/// The Claude section, the Claude segment of a ticket and every session shown through the selection use it.
 public struct SessionView: View {
     private let store: ProjectStore
     private let sessionID: UUID
-    private let showsTaskLink: Bool
+    private let showsTicketLink: Bool
 
-    public init(store: ProjectStore, sessionID: UUID, showsTaskLink: Bool = true) {
+    public init(store: ProjectStore, sessionID: UUID, showsTicketLink: Bool = true) {
         self.store = store
         self.sessionID = sessionID
-        self.showsTaskLink = showsTaskLink
+        self.showsTicketLink = showsTicketLink
     }
 
     public var body: some View {
         // Each session gets its own model and draft: the view's state starts fresh when it shows another session.
-        SessionContentView(store: store, sessionID: sessionID, showsTaskLink: showsTaskLink)
+        SessionContentView(store: store, sessionID: sessionID, showsTicketLink: showsTicketLink)
             .id(sessionID)
     }
 }
@@ -26,7 +26,7 @@ public struct SessionView: View {
 private struct SessionContentView: View {
     let store: ProjectStore
     let sessionID: UUID
-    let showsTaskLink: Bool
+    let showsTicketLink: Bool
 
     @Environment(Workspace.self) private var workspace
     @Environment(WindowBanners.self) private var banners
@@ -61,16 +61,48 @@ private struct SessionContentView: View {
     }
 
     private func session(_ model: SessionModel) -> some View {
-        let isLoading = model.info == nil && store.phase != .loaded
-        return VStack(spacing: 0) {
-            SessionHeaderView(model: model, store: store, showsTaskLink: showsTaskLink)
+        VStack(spacing: 0) {
+            #if os(macOS)
+            // The header is pinned below the window's toolbar; only the transcript scrolls under both.
+            TranscriptView(model: model, store: store, scrollRequest: $scrollRequest) {
+                VStack(spacing: 0) {
+                    SessionHeaderView(model: model, store: store, showsTicketLink: showsTicketLink)
+                    Divider()
+                }
+                .background(.bar)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            #else
+            SessionHeaderView(model: model, store: store, showsTicketLink: showsTicketLink)
             Divider()
-            TranscriptView(model: model, store: store, scrollRequest: $scrollRequest)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            TranscriptView(model: model, store: store, scrollRequest: $scrollRequest) {
+                EmptyView()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            #endif
             Divider()
             SessionStatusLine(model: model, store: store) {
                 review(model)
             }
+            composer(model)
+        }
+        .onChange(of: model.info?.closed) { _, closed in
+            if closed != nil {
+                draft = ComposerDraft()
+            }
+        }
+    }
+
+    /// A closed session never starts Claude again: no composer, and the text "This conversation is over" in its place.
+    @ViewBuilder private func composer(_ model: SessionModel) -> some View {
+        if model.info?.closed != nil {
+            Text("This conversation is over")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+        } else {
+            let isLoading = model.info == nil && store.phase != .loaded
             MessageComposer(placeholder: "Message Claude", draft: $draft, mainDeviceID: store.mainDeviceID,
                             projectID: store.projectID, canSend: canSend(model),
                             onStop: isTurnInProgress(model) ? { interrupt(model) } : nil,

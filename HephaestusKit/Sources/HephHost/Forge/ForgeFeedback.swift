@@ -6,7 +6,7 @@ import HephCore
 extension ForgeService {
     // MARK: - Feedback intake
 
-    /// `forge.feedback`: creates the feedback task, attaches the screenshot, starts the feedback session and adds the
+    /// `forge.feedback`: creates the feedback ticket, attaches the screenshot, starts the feedback session and adds the
     /// item.
     func intake(screenshot: UploadRef?, comment: String, context: FeedbackContext,
                 from deviceID: UUID) async throws -> ForgeFeedbackResult {
@@ -23,18 +23,18 @@ extension ForgeService {
         }
         let snapshot = await host.mesh.snapshot()
 
-        // 2. The task.
+        // 2. The feedback ticket, in the project's feedback series.
         let firstLine = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? text
         let name = "Feedback: " + String(firstLine.prefix(60))
         let description = text + "\n\n---\n\n" + Self.contextBlock(context, devices: snapshot.devices)
-        let task = try await host.tasks.create(projectID: projectID, name: name, description: description,
-                                               status: .todo)
-        Log.host.notice("Feedback task \(task.id, privacy: .public) created")
+        let ticket = try await host.tickets.create(projectID: projectID, name: name, description: description,
+                                                   status: .todo, feedback: true)
+        Log.host.notice("Feedback ticket \(ticket.id, privacy: .public) created")
 
         // 3. The screenshot, in a comment.
         if let screenshot {
             let author = snapshot.devices.first(where: { $0.id == deviceID })?.name ?? context.deviceName
-            _ = try await host.tasks.addComment(projectID: projectID, taskID: task.id, body: "Screenshot",
+            _ = try await host.tickets.addComment(projectID: projectID, ticketID: ticket.id, body: "Screenshot",
                                                 attachments: [UploadRef(uploadID: screenshot.uploadID,
                                                                         fileName: "screenshot.png")],
                                                 author: author)
@@ -48,22 +48,22 @@ extension ForgeService {
             mainID = await host.mesh.localDevice().id
         }
         let session = try await host.sessions.start(SessionStart(projectID: projectID, kind: .feedback,
-                                                                 taskID: task.id, permissionMode: .acceptEdits,
+                                                                 ticketID: ticket.id, permissionMode: .acceptEdits,
                                                                  deviceID: mainID))
 
         // 5. The item.
         let now = Date()
         dropOldItemsForNewItem()
-        items.append(ForgeItem(taskID: task.id, projectID: projectID, title: task.name, state: .discussing,
+        items.append(ForgeItem(ticketID: ticket.id, projectID: projectID, title: ticket.name, state: .discussing,
                                feedbackSessionID: session.id, created: now, updated: now))
         saveStore()
         await broadcastIfChanged()
 
         // 6. The result.
-        return ForgeFeedbackResult(projectID: projectID, taskID: task.id, sessionID: session.id)
+        return ForgeFeedbackResult(projectID: projectID, ticketID: ticket.id, sessionID: session.id)
     }
 
-    /// The context block of the feedback task's description.
+    /// The context block of the feedback ticket's description.
     static func contextBlock(_ context: FeedbackContext, devices: [DeviceRecord]) -> String {
         var lines = [
             "Feedback from \(context.deviceName) (\(context.platform.rawValue)), Hephaestus \(context.appVersion) "
@@ -93,9 +93,9 @@ extension ForgeService {
 
     // MARK: - Items
 
-    /// `forge_push_docs` of the item's feedback session pushed `sha` (Items).
-    func recordDocsPush(_ sha: String, taskID: String) {
-        guard let index = items.firstIndex(where: { $0.taskID == taskID }) else { return }
+    /// `forge_push_docs` pushed `sha` for the item's ticket (Items).
+    func recordDocsPush(_ sha: String, ticketID: String) {
+        guard let index = items.firstIndex(where: { $0.ticketID == ticketID }) else { return }
         var item = items[index]
         switch item.state {
         case .discussing, .docsPushed, .done, .failed:
@@ -110,38 +110,38 @@ extension ForgeService {
         items[index] = item
     }
 
-    /// Its task changes name (`task.changed`): `title` = the new name; a task whose name equals the item's `title`
+    /// Its ticket changes name (`ticket.changed`): `title` = the new name; a ticket whose name equals the item's `title`
     /// changes nothing.
-    func renameItem(projectID: String, task: TaskItem) async {
+    func renameItem(projectID: String, ticket: TicketItem) async {
         guard storeLoaded,
-              let index = items.firstIndex(where: { $0.taskID == task.id && $0.projectID == projectID }),
-              items[index].title != task.name
+              let index = items.firstIndex(where: { $0.ticketID == ticket.id && $0.projectID == projectID }),
+              items[index].title != ticket.name
         else { return }
-        items[index].title = task.name
+        items[index].title = ticket.name
         items[index].updated = Date()
         saveStore()
         await broadcastIfChanged()
     }
 
-    /// Its task is deleted: removed from `items` and from its cycle's `itemTaskIDs`.
-    func removeItem(projectID: String, taskID: String) async {
+    /// Its ticket is deleted (`ticket.removed`): removed from `items` and from its cycle's `itemTicketIDs`.
+    func removeItem(projectID: String, ticketID: String) async {
         guard storeLoaded,
-              let index = items.firstIndex(where: { $0.taskID == taskID && $0.projectID == projectID })
+              let index = items.firstIndex(where: { $0.ticketID == ticketID && $0.projectID == projectID })
         else { return }
         items.remove(at: index)
-        if var cycle, cycle.itemTaskIDs.contains(taskID) {
-            cycle.itemTaskIDs.removeAll { $0 == taskID }
+        if var cycle, cycle.itemTicketIDs.contains(ticketID) {
+            cycle.itemTicketIDs.removeAll { $0 == ticketID }
             self.cycle = cycle
         }
         saveStore()
         await broadcastIfChanged()
     }
 
-    /// The items of the current cycle, in the order of its `itemTaskIDs`.
+    /// The items of the current cycle, in the order of its `itemTicketIDs`.
     func cycleItems() -> [ForgeItem] {
         guard let cycle else { return [] }
-        return cycle.itemTaskIDs.compactMap { taskID in
-            items.first { $0.taskID == taskID && $0.cycleID == cycle.id }
+        return cycle.itemTicketIDs.compactMap { ticketID in
+            items.first { $0.ticketID == ticketID && $0.cycleID == cycle.id }
         }
     }
 
@@ -161,14 +161,14 @@ extension ForgeService {
     // MARK: - Join rule
 
     /// An item in `docsPushed` or `failed` joins the active cycle when its `docsCommit` is an ancestor of the cycle's
-    /// reference commit (`regenCommit` when set, else `targetCommit`). `taskIDs` nil: every such item.
-    func joinRule(taskIDs: [String]? = nil) async {
+    /// reference commit (`regenCommit` when set, else `targetCommit`). `ticketIDs` nil: every such item.
+    func joinRule(ticketIDs: [String]? = nil) async {
         guard var cycle, Self.isActive(cycle.state) else { return }
         let reference = cycle.regenCommit ?? cycle.targetCommit
         guard !reference.isEmpty else { return }
         let candidates = items.filter { item in
             (item.state == .docsPushed || item.state == .failed) && item.cycleID != cycle.id
-                && item.docsCommit != nil && (taskIDs?.contains(item.taskID) ?? true)
+                && item.docsCommit != nil && (ticketIDs?.contains(item.ticketID) ?? true)
         }
         guard !candidates.isEmpty, let git = await sourceGit() else { return }
         var joined = false
@@ -183,16 +183,16 @@ extension ForgeService {
                 lastError = Self.message(of: error)
                 continue
             }
-            guard ancestor, let index = items.firstIndex(where: { $0.taskID == candidate.taskID }) else { continue }
+            guard ancestor, let index = items.firstIndex(where: { $0.ticketID == candidate.ticketID }) else { continue }
             items[index].cycleID = cycle.id
             items[index].state = cycle.state
             items[index].error = cycle.state == .failed ? cycle.error : nil
             items[index].updated = Date()
-            if !cycle.itemTaskIDs.contains(candidate.taskID) {
-                cycle.itemTaskIDs.append(candidate.taskID)
+            if !cycle.itemTicketIDs.contains(candidate.ticketID) {
+                cycle.itemTicketIDs.append(candidate.ticketID)
             }
             joined = true
-            Log.host.info("Forge item \(candidate.taskID, privacy: .public) joined the cycle")
+            Log.host.info("Forge item \(candidate.ticketID, privacy: .public) joined the cycle")
         }
         if joined {
             cycle.updated = Date()

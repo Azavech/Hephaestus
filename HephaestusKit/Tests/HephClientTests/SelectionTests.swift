@@ -15,7 +15,7 @@ final class SelectionTests: XCTestCase {
         let selection = workspace.makeSelection()
         selection.mainDeviceID = mainID
         selection.projectID = "API"
-        selection.section = .tasks
+        selection.section = .tickets
         selection.item = "API-1"
         return (workspace, fakeMain, selection)
     }
@@ -38,7 +38,7 @@ final class SelectionTests: XCTestCase {
         try await waitUntil { selection.mainDeviceID == nil }
         XCTAssertNil(selection.projectID)
         XCTAssertNil(selection.item)
-        XCTAssertEqual(selection.section, .tasks)
+        XCTAssertEqual(selection.section, .tickets)
         XCTAssertNil(workspace.connection(mainID))
     }
 
@@ -50,7 +50,7 @@ final class SelectionTests: XCTestCase {
         try await waitUntil { selection.projectID == "HEPH" }
         XCTAssertNil(selection.item)
         XCTAssertEqual(selection.mainDeviceID, mainID)
-        XCTAssertEqual(selection.section, .tasks)
+        XCTAssertEqual(selection.section, .tickets)
     }
 
     func testMigrationWaits() async throws {
@@ -64,7 +64,7 @@ final class SelectionTests: XCTestCase {
         XCTAssertEqual(workspace.migrations[migrationID]?.state, .committing)
         XCTAssertEqual(selection.mainDeviceID, mainID)
         XCTAssertEqual(selection.projectID, "API")
-        XCTAssertEqual(selection.section, .tasks)
+        XCTAssertEqual(selection.section, .tickets)
         XCTAssertEqual(selection.item, "API-1")
     }
 
@@ -81,7 +81,7 @@ final class SelectionTests: XCTestCase {
         fakeMain.emit(progress(migrationID, projectID: "HEPH", from: mainID, to: destination, state: .completed))
         try await waitUntil { selection.mainDeviceID == destination }
         XCTAssertEqual(selection.projectID, "API")
-        XCTAssertEqual(selection.section, .tasks)
+        XCTAssertEqual(selection.section, .tickets)
         XCTAssertEqual(selection.item, "API-1")
     }
 
@@ -113,9 +113,9 @@ final class SelectionTests: XCTestCase {
 
     func testFeedbackSelection() {
         let mainID = UUID()
-        let selection = Selection(mainDeviceID: mainID, projectID: "HEPH", section: .tasks, item: "HEPH-12")
+        let selection = Selection(mainDeviceID: mainID, projectID: "HEPH", section: .tickets, item: "HEPH-12")
         XCTAssertEqual(selection.feedbackSelection,
-                       FeedbackSelection(mainDeviceID: mainID, projectID: "HEPH", section: "tasks", item: "HEPH-12"))
+                       FeedbackSelection(mainDeviceID: mainID, projectID: "HEPH", section: "tickets", item: "HEPH-12"))
         XCTAssertEqual(Selection().feedbackSelection, FeedbackSelection())
     }
 

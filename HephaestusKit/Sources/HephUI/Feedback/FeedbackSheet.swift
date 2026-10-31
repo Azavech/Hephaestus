@@ -106,10 +106,12 @@ struct FeedbackSheet: View {
         }
     }
 
+    /// The comment: the editor 8 pt inside a box at least 120 pt high, with the placeholder at the position of the
+    /// text's first line while the comment is empty.
     private func commentEditor(_ draft: FeedbackDraft) -> some View {
         TextEditor(text: Bindable(draft).comment)
             .focused($isCommentFocused)
-            .frame(minHeight: 120)
+            .scrollContentBackground(.hidden)
             .overlay(alignment: .topLeading) {
                 if draft.comment.isEmpty {
                     Text("Describe the problem or the change you want.")
@@ -121,6 +123,10 @@ struct FeedbackSheet: View {
                         .allowsHitTesting(false)
                 }
             }
+            .padding(8)
+            .frame(minHeight: 120)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.separator, lineWidth: 1))
     }
 
     @ViewBuilder

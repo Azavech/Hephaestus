@@ -189,7 +189,7 @@ public actor MigrationService: HostMethodHandler {
         guard await host.mesh.connectedPeerMains().contains(where: { $0.id == targetDeviceID }) else {
             throw ProtocolError(.unavailable, "\(target.name) is not connected.")
         }
-        let liveWork = ProtocolError(.conflict, "Stop the Claude sessions and runs of \(name) first.")
+        let liveWork = ProtocolError(.conflict, "Stop the Claude sessions of \(name) first.")
         guard await !hasLiveWork(projectID) else { throw liveWork }
         guard await !hasActiveBundle(projectID) else {
             throw ProtocolError(.conflict, "Stop the bundles of \(name) first.")
@@ -226,14 +226,11 @@ public actor MigrationService: HostMethodHandler {
         starting.contains(projectID) || sources.values.contains { $0.projectID == projectID }
     }
 
-    /// A session with a CLI process or a running run in the project or one of its sub projects.
+    /// A session with a CLI process in the project or one of its sub projects.
     private func hasLiveWork(_ projectID: String) async -> Bool {
         let tree = [projectID] + (await host.registry.descendants(of: projectID))
         for id in tree {
             if await host.sessions.hasProcess(projectID: id) {
-                return true
-            }
-            if await host.runs.activeRunCount(projectID: id) > 0 {
                 return true
             }
         }

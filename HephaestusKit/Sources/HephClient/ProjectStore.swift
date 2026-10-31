@@ -2,7 +2,7 @@ import Foundation
 import HephCore
 import Observation
 
-/// The mirror of one opened project of one Main: the project, its tasks, bundles, sessions and runs
+/// The mirror of one opened project of one Main: the project, its tickets, bundles and sessions
 /// (docs/client/workspace.md, "ProjectStore"). The Workspace creates it with `projectStore(mainDeviceID:projectID:)`
 /// and keeps it current from the events of its Main.
 @MainActor @Observable
@@ -15,14 +15,12 @@ public final class ProjectStore {
     public let projectID: String
     public private(set) var phase: Phase = .idle
     public private(set) var project: Project?
-    /// By task number, ascending.
-    public private(set) var tasks: [TaskItem] = []
+    /// By ticket number, ascending.
+    public private(set) var tickets: [TicketItem] = []
     /// By bundle number, ascending.
     public private(set) var bundles: [BundleItem] = []
     /// By `created`, then id.
     public private(set) var sessions: [SessionInfo] = []
-    /// By `startedAt`, then id; trimmed to 20 (running runs stay).
-    public private(set) var runs: [RunInfo] = []
     public private(set) var isRemoved = false
 
     @ObservationIgnored weak var workspace: Workspace?
@@ -57,10 +55,9 @@ public final class ProjectStore {
             isLoading = false
             guard !isRemoved else { return }
             project = snapshot.project
-            tasks = Self.sortedTasks(snapshot.tasks)
+            tickets = Self.sortedTickets(snapshot.tickets)
             bundles = Self.sortedBundles(snapshot.bundles)
             sessions = Self.sortedSessions(snapshot.sessions)
-            runs = Self.trimmedRuns(Self.sortedRuns(snapshot.runs))
             let queued = queuedEvents
             queuedEvents = []
             for event in queued {
@@ -90,8 +87,8 @@ public final class ProjectStore {
         }
     }
 
-    public func task(_ id: String) -> TaskItem? {
-        tasks.first { $0.id == id }
+    public func ticket(_ id: String) -> TicketItem? {
+        tickets.first { $0.id == id }
     }
 
     public func bundle(_ id: String) -> BundleItem? {
@@ -102,14 +99,10 @@ public final class ProjectStore {
         sessions.first { $0.id == id }
     }
 
-    public func run(_ id: UUID) -> RunInfo? {
-        runs.first { $0.id == id }
-    }
-
     // MARK: - Workspace
 
-    /// Applies a store event (`project.changed`, `task.changed`, `task.removed`, `bundle.changed`, `bundle.removed`,
-    /// `session.changed`, `session.removed`, `run.changed`); queued while a load runs.
+    /// Applies a store event (`project.changed`, `ticket.changed`, `ticket.removed`, `bundle.changed`,
+    /// `bundle.removed`, `session.changed`, `session.removed`); queued while a load runs.
     func receive(_ event: ServerEvent) {
         if isLoading {
             queuedEvents.append(event)
@@ -124,27 +117,16 @@ public final class ProjectStore {
         Task { await reload() }
     }
 
-    /// The store is loaded and lacks this run: it reloads.
-    func reloadIfUnknown(runID: UUID) {
-        guard phase == .loaded, run(runID) == nil else { return }
-        Task { await reload() }
-    }
-
     /// A result of the request API for this project: inserted when the store does not contain that id yet; an
     /// existing element is never replaced (events bring updates).
-    func insertIfAbsent(_ task: TaskItem) {
-        guard self.task(task.id) == nil else { return }
-        tasks = Self.sortedTasks(tasks + [task])
+    func insertIfAbsent(_ ticket: TicketItem) {
+        guard self.ticket(ticket.id) == nil else { return }
+        tickets = Self.sortedTickets(tickets + [ticket])
     }
 
     func insertIfAbsent(_ session: SessionInfo) {
         guard self.session(session.id) == nil else { return }
         sessions = Self.sortedSessions(sessions + [session])
-    }
-
-    func insertIfAbsent(_ run: RunInfo) {
-        guard self.run(run.id) == nil else { return }
-        runs = Self.trimmedRuns(Self.sortedRuns(runs + [run]))
     }
 
     /// The project left its Main's tree, or its Main left the registry, or the Workspace was reset.
@@ -157,10 +139,9 @@ public final class ProjectStore {
     /// The sample data of `Workspace.preview()`, applied as a loaded snapshot.
     func applyPreview(_ snapshot: ProjectsSnapshotResult) {
         project = snapshot.project
-        tasks = Self.sortedTasks(snapshot.tasks)
+        tickets = Self.sortedTickets(snapshot.tickets)
         bundles = Self.sortedBundles(snapshot.bundles)
         sessions = Self.sortedSessions(snapshot.sessions)
-        runs = Self.trimmedRuns(Self.sortedRuns(snapshot.runs))
         phase = .loaded
     }
 
@@ -170,10 +151,10 @@ public final class ProjectStore {
         switch event {
         case .projectChanged(let payload):
             project = payload.project
-        case .taskChanged(let payload):
-            tasks = Self.upsert(payload.task, into: tasks, sorted: Self.sortedTasks)
-        case .taskRemoved(let payload):
-            tasks.removeAll { $0.id == payload.taskID }
+        case .ticketChanged(let payload):
+            tickets = Self.upsert(payload.ticket, into: tickets, sorted: Self.sortedTickets)
+        case .ticketRemoved(let payload):
+            tickets.removeAll { $0.id == payload.ticketID }
         case .bundleChanged(let payload):
             bundles = Self.upsert(payload.bundle, into: bundles, sorted: Self.sortedBundles)
         case .bundleRemoved(let payload):
@@ -182,8 +163,6 @@ public final class ProjectStore {
             sessions = Self.upsert(payload.session, into: sessions, sorted: Self.sortedSessions)
         case .sessionRemoved(let payload):
             sessions.removeAll { $0.id == payload.sessionID }
-        case .runChanged(let payload):
-            runs = Self.trimmedRuns(Self.upsert(payload.run, into: runs, sorted: Self.sortedRuns))
         default:
             break
         }
@@ -204,9 +183,9 @@ public final class ProjectStore {
     }
 
     /// By the number after the last `-` of the id; ids without a number last, by id.
-    static func sortedTasks(_ tasks: [TaskItem]) -> [TaskItem] {
-        tasks.sorted { lhs, rhs in
-            switch (taskNumber(lhs.id), taskNumber(rhs.id)) {
+    static func sortedTickets(_ tickets: [TicketItem]) -> [TicketItem] {
+        tickets.sorted { lhs, rhs in
+            switch (ticketNumber(lhs.id), ticketNumber(rhs.id)) {
             case let (left?, right?) where left != right:
                 return left < right
             case (.some, nil):
@@ -245,30 +224,8 @@ public final class ProjectStore {
         }
     }
 
-    /// By `startedAt`, then id.
-    static func sortedRuns(_ runs: [RunInfo]) -> [RunInfo] {
-        runs.sorted { lhs, rhs in
-            if lhs.startedAt != rhs.startedAt {
-                return lhs.startedAt < rhs.startedAt
-            }
-            return lhs.id.uuidString < rhs.id.uuidString
-        }
-    }
-
-    /// The runs trim of a sorted list: while more than 20 runs are kept, the oldest run whose state is not `running`
-    /// is dropped; a `running` run is never dropped, so more than 20 can stay.
-    static func trimmedRuns(_ runs: [RunInfo]) -> [RunInfo] {
-        var runs = runs
-        while runs.count > maximumRuns, let index = runs.firstIndex(where: { $0.state != .running }) {
-            runs.remove(at: index)
-        }
-        return runs
-    }
-
-    private static let maximumRuns = 20
-
-    /// The number after the last `-` of a task id; nil when there is none.
-    private static func taskNumber(_ id: String) -> Int? {
+    /// The number after the last `-` of a ticket id; nil when there is none.
+    private static func ticketNumber(_ id: String) -> Int? {
         guard let dash = id.lastIndex(of: "-") else { return nil }
         return number(id[id.index(after: dash)...])
     }

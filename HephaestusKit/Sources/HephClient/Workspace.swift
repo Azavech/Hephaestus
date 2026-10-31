@@ -34,7 +34,6 @@ public final class Workspace {
     /// state changes.
     public private(set) var topologyRevision = 0
     @ObservationIgnored public private(set) var sessionCenter: SessionCenter!
-    @ObservationIgnored public private(set) var runOutputCenter: RunOutputCenter!
     @ObservationIgnored public private(set) var forge: ForgeModel!
     /// True for `Workspace.preview()`.
     public let isPreview: Bool
@@ -63,7 +62,7 @@ public final class Workspace {
     /// The registry saves, each one after the previous one, off the main actor.
     @ObservationIgnored private var registryWrite: Task<Void, Never>?
 
-    /// Stores its arguments, then creates `sessionCenter`, `runOutputCenter` and `forge`. No I/O, no connection.
+    /// Stores its arguments, then creates `sessionCenter` and `forge`. No I/O, no connection.
     public convenience init(device: DeviceInfo, environment: WorkspaceEnvironment) {
         self.init(device: device, environment: environment, isPreview: false)
     }
@@ -73,7 +72,6 @@ public final class Workspace {
         self.environment = environment
         self.isPreview = isPreview
         sessionCenter = SessionCenter(workspace: self)
-        runOutputCenter = RunOutputCenter(workspace: self)
         forge = ForgeModel(workspace: self)
     }
 
@@ -97,11 +95,12 @@ public final class Workspace {
 
     // MARK: - Lifecycle
 
-    /// Loads the credentials and the cached registry, starts browsing, creates the connections and starts connecting
-    /// them. Does nothing when started.
+    /// Migrates the attachment cache, loads the credentials and the cached registry, starts browsing, creates the
+    /// connections and starts connecting them. Does nothing when started.
     public func start() {
         guard !isStarted, !isPreview else { return }
         isStarted = true
+        environment.attachmentCache.migrateFromTasks()
         loadMesh()
         startBrowsing()
         reconcileConnections()
@@ -527,7 +526,6 @@ public final class Workspace {
     /// Reconnect sequence step 4: the centers and the Forge model learn the connection, then `connected` is emitted.
     func connectionDidConnect(_ connection: MainConnection) {
         sessionCenter.mainDidConnect(connection.id)
-        runOutputCenter.mainDidConnect(connection.id)
         forge.mainDidConnect(connection.id)
         emit(.connected(mainDeviceID: connection.id))
     }
@@ -672,9 +670,9 @@ public final class Workspace {
                     }
                 }
             }
-        case .taskChanged(let payload):
+        case .ticketChanged(let payload):
             existingStore(mainDeviceID: mainDeviceID, projectID: payload.projectID)?.receive(event)
-        case .taskRemoved(let payload):
+        case .ticketRemoved(let payload):
             existingStore(mainDeviceID: mainDeviceID, projectID: payload.projectID)?.receive(event)
         case .bundleChanged(let payload):
             existingStore(mainDeviceID: mainDeviceID, projectID: payload.projectID)?.receive(event)
@@ -710,13 +708,6 @@ public final class Workspace {
             sessionCenter.handlePermissionResolved(mainDeviceID: mainDeviceID, projectID: payload.projectID,
                                                    sessionID: payload.sessionID, requestID: payload.requestID,
                                                    decision: payload.decision, deviceID: payload.deviceID)
-        case .runChanged(let payload):
-            existingStore(mainDeviceID: mainDeviceID, projectID: payload.projectID)?.receive(event)
-        case .runOutput(let payload):
-            existingStore(mainDeviceID: mainDeviceID, projectID: payload.projectID)?
-                .reloadIfUnknown(runID: payload.runID)
-            runOutputCenter.handleRunOutput(mainDeviceID: mainDeviceID, projectID: payload.projectID,
-                                            runID: payload.runID, text: payload.text, seq: payload.seq)
         case .skillsChanged(let payload):
             connections[mainDeviceID]?.setSkills(payload.skills)
         case .migrationProgress(let payload):

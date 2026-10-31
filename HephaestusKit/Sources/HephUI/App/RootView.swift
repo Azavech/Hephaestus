@@ -125,7 +125,9 @@ public struct RootView: View {
         let selection = context.selection
         selection.mainDeviceID = UUID(uuidString: storedMainDeviceID)
         selection.projectID = storedProjectID.isEmpty ? nil : storedProjectID
-        selection.section = SidebarSection(rawValue: storedSection)
+        // `tasks` is the raw value of the Tickets section before tasks were renamed tickets; a section this version
+        // does not have (`runs` of earlier versions) restores as nil.
+        selection.section = storedSection == "tasks" ? .tickets : SidebarSection(rawValue: storedSection)
         selection.item = storedItem.isEmpty ? nil : storedItem
         checksRestoredProject = selection.projectID != nil
         self.context = context

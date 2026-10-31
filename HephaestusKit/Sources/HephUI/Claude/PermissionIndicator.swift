@@ -47,13 +47,16 @@ public struct PermissionIndicator: View {
     }
 }
 
-/// `hand.raised.fill` in orange with the count as a badge.
+/// `hand.raised.fill` in orange with the count as a badge at its top trailing corner. The badge lies entirely inside
+/// the toolbar item, so the toolbar never clips it: it overlays the symbol's padded frame, with no offset.
 private struct PermissionIndicatorBadge: View {
     let count: Int
 
     var body: some View {
         Image(systemName: "hand.raised.fill")
             .foregroundStyle(.orange)
+            .padding(.top, 6)
+            .padding(.trailing, 6)
             .overlay(alignment: .topTrailing) {
                 Text("\(count)")
                     .font(.caption2.bold().monospacedDigit())
@@ -61,10 +64,8 @@ private struct PermissionIndicatorBadge: View {
                     .padding(.horizontal, 4)
                     .frame(minWidth: 16, minHeight: 16)
                     .background(Capsule().fill(Color.red))
-                    .offset(x: 10, y: -8)
                     .fixedSize()
             }
-            .padding(.trailing, 6)
     }
 }
 

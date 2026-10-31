@@ -65,7 +65,7 @@ struct SearchResultRow: View {
         switch result.kind {
         case .projects, .skills, .devices:
             return main
-        case .tasks, .comments, .webTabs, .sessions:
+        case .tickets, .comments, .webTabs, .sessions:
             return "\(main) ▸ \(projectName)"
         case .docs, .code:
             var parts = [main, projectName]

@@ -31,7 +31,7 @@ enum MarkdownBlock {
     case quote([MarkdownBlock])
     case list(MarkdownList)
     /// A code block, highlighted, or an HTML block.
-    case code(AttributedString)
+    case code(MarkdownCodeBlock)
     case thematicBreak
     case table(MarkdownTable)
 
@@ -39,12 +39,29 @@ enum MarkdownBlock {
         if case .heading = self { return true }
         return false
     }
+
+    /// A table, an image or a thematic break: a run of its own when the selection reaches across blocks.
+    var isOwnRun: Bool {
+        switch self {
+        case .table, .image, .thematicBreak: return true
+        default: return false
+        }
+    }
 }
 
 struct MarkdownHeading {
     var level: Int
     var text: AttributedString
     var slug: String
+}
+
+struct MarkdownCodeBlock {
+    /// The code highlighted for the block view.
+    var text: AttributedString
+    /// The code without its final line break.
+    var code: String
+    /// Nil for an HTML block, which is not highlighted.
+    var language: EditorLanguage?
 }
 
 struct MarkdownImageReference {
@@ -130,9 +147,11 @@ struct MarkdownDocumentBuilder {
         case let codeBlock as CodeBlock:
             let language = EditorLanguage(fenceInfo: codeBlock.language ?? "")
             let code = Self.removingFinalLineBreak(codeBlock.code)
-            blocks.append(.code(SyntaxHighlighter.attributedString(code, language: language)))
+            let text = SyntaxHighlighter.attributedString(code, language: language)
+            blocks.append(.code(MarkdownCodeBlock(text: text, code: code, language: language)))
         case let html as HTMLBlock:
-            blocks.append(.code(AttributedString(Self.removingFinalLineBreak(html.rawHTML))))
+            let code = Self.removingFinalLineBreak(html.rawHTML)
+            blocks.append(.code(MarkdownCodeBlock(text: AttributedString(code), code: code, language: nil)))
         case is ThematicBreak:
             blocks.append(.thematicBreak)
         case let table as Markdown.Table:

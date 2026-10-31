@@ -1,8 +1,8 @@
 # Hephaestus
 
 Hephaestus coordinates the work on all your projects from any of your devices. Projects live on Macs set as Mains;
-every Mac, iPad and iPhone connects to every Main and sees and controls everything on it in real time: tasks, code,
-docs, web tabs, Claude sessions and runs.
+every Mac, iPad and iPhone connects to every Main and sees and controls everything on it in real time: tickets, code,
+docs, web tabs and Claude sessions.
 
 The app is generated from its specification in [docs/](docs/README.md). The docs are the source of truth: the code
 follows them.

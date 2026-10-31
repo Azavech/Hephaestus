@@ -17,7 +17,7 @@ public enum ForgeStage: String, Codable, Sendable, Hashable, CaseIterable {
 
 /// What started a Forge cycle.
 public enum ForgeTrigger: String, Codable, Sendable, Hashable, CaseIterable {
-    /// `forge_push_docs` pushed the commits of a feedback session.
+    /// `forge_push_docs` pushed the commits of a ticket or bundle session.
     case tool
     /// `forge.regenerate`.
     case manual
@@ -166,7 +166,7 @@ public struct ForgeCycle: Codable, Sendable, Hashable, Identifiable {
     public var pushedAt: Date?
     public var run: ForgeRun?
     public var release: ForgeRelease?
-    public var itemTaskIDs: [String]
+    public var itemTicketIDs: [String]
 
     public init(
         id: UUID,
@@ -183,7 +183,7 @@ public struct ForgeCycle: Codable, Sendable, Hashable, Identifiable {
         pushedAt: Date? = nil,
         run: ForgeRun? = nil,
         release: ForgeRelease? = nil,
-        itemTaskIDs: [String]
+        itemTicketIDs: [String]
     ) {
         self.id = id
         self.trigger = trigger
@@ -199,13 +199,13 @@ public struct ForgeCycle: Codable, Sendable, Hashable, Identifiable {
         self.pushedAt = pushedAt
         self.run = run
         self.release = release
-        self.itemTaskIDs = itemTaskIDs
+        self.itemTicketIDs = itemTicketIDs
     }
 }
 
-/// The pipeline state of one feedback task.
+/// The pipeline state of one feedback ticket.
 public struct ForgeItem: Codable, Sendable, Hashable, Identifiable {
-    public var taskID: String
+    public var ticketID: String
     public var projectID: String
     public var title: String
     public var state: ForgeStage
@@ -216,10 +216,10 @@ public struct ForgeItem: Codable, Sendable, Hashable, Identifiable {
     public var created: Date
     public var updated: Date
 
-    public var id: String { taskID }
+    public var id: String { ticketID }
 
     public init(
-        taskID: String,
+        ticketID: String,
         projectID: String,
         title: String,
         state: ForgeStage,
@@ -230,7 +230,7 @@ public struct ForgeItem: Codable, Sendable, Hashable, Identifiable {
         created: Date,
         updated: Date
     ) {
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.projectID = projectID
         self.title = title
         self.state = state

@@ -5,48 +5,48 @@ import XCTest
 final class EnvelopeTests: XCTestCase {
     // The four example frames of docs/protocol/envelope.md.
     private let requestFrame =
-        #"{"id":7,"kind":"request","method":"tasks.create","params":{"name":"Fix the sidebar","projectID":"HEPH"}}"#
+        #"{"id":7,"kind":"request","method":"tickets.create","params":{"name":"Fix the sidebar","projectID":"HEPH"}}"#
     private let responseFrame =
         #"{"id":7,"kind":"response","result":{"comments":[],"created":"2026-10-29T21:04:00.123Z","description":"","id":"HEPH-13","name":"Fix the sidebar","status":"todo","updated":"2026-10-29T21:04:00.123Z"}}"#
     private let errorFrame =
         #"{"error":{"code":"notFound","message":"Project HEPH is not hosted on this Main."},"id":7,"kind":"response"}"#
     private let eventFrame =
-        #"{"event":"task.removed","kind":"event","params":{"projectID":"HEPH","taskID":"HEPH-13"}}"#
+        #"{"event":"ticket.removed","kind":"event","params":{"projectID":"HEPH","ticketID":"HEPH-13"}}"#
 
     func testExampleFrames() throws {
         let created = try XCTUnwrap(WireCoding.parseDate("2026-10-29T21:04:00.123Z"))
-        let task = TaskItem(id: "HEPH-13", name: "Fix the sidebar", description: "", status: .todo, created: created,
+        let ticket = TicketItem(id: "HEPH-13", name: "Fix the sidebar", description: "", status: .todo, created: created,
                             updated: created, comments: [])
 
-        let request = try WireCoding.encodeRequest(id: 7, method: RPCMethod.tasksCreate.rawValue,
-                                                   params: TasksCreateParams(projectID: "HEPH", name: "Fix the sidebar"))
+        let request = try WireCoding.encodeRequest(id: 7, method: RPCMethod.ticketsCreate.rawValue,
+                                                   params: TicketsCreateParams(projectID: "HEPH", name: "Fix the sidebar"))
         try assertSameJSON(request, requestFrame)
-        let response = WireCoding.encodeResponse(id: 7, resultJSON: try WireCoding.encodeJSON(task))
+        let response = WireCoding.encodeResponse(id: 7, resultJSON: try WireCoding.encodeJSON(ticket))
         try assertSameJSON(response, responseFrame)
         let error = try WireCoding.encodeError(id: 7, error: ProtocolError(.notFound, "Project HEPH is not hosted on this Main."))
         try assertSameJSON(error, errorFrame)
-        let event = try WireCoding.encodeEvent(name: EventName.taskRemoved.rawValue,
-                                               params: TaskRemovedPayload(projectID: "HEPH", taskID: "HEPH-13"))
+        let event = try WireCoding.encodeEvent(name: EventName.ticketRemoved.rawValue,
+                                               params: TicketRemovedPayload(projectID: "HEPH", ticketID: "HEPH-13"))
         try assertSameJSON(event, eventFrame)
-        let serverEvent = ServerEvent.taskRemoved(TaskRemovedPayload(projectID: "HEPH", taskID: "HEPH-13"))
+        let serverEvent = ServerEvent.ticketRemoved(TicketRemovedPayload(projectID: "HEPH", ticketID: "HEPH-13"))
         try assertSameJSON(try serverEvent.encodeFrame(), eventFrame)
 
         let parsedRequest = try WireCoding.parseFrame(Data(requestFrame.utf8))
         XCTAssertEqual(parsedRequest.kind, .request)
         XCTAssertEqual(parsedRequest.id, 7)
-        XCTAssertEqual(parsedRequest.method, "tasks.create")
+        XCTAssertEqual(parsedRequest.method, "tickets.create")
         XCTAssertNil(parsedRequest.event)
         XCTAssertNil(parsedRequest.error)
-        let params = try InboundRequest(id: 7, method: "tasks.create", params: parsedRequest.body)
-            .decodeParams(TasksCreateParams.self)
-        XCTAssertEqual(params, TasksCreateParams(projectID: "HEPH", name: "Fix the sidebar"))
+        let params = try InboundRequest(id: 7, method: "tickets.create", params: parsedRequest.body)
+            .decodeParams(TicketsCreateParams.self)
+        XCTAssertEqual(params, TicketsCreateParams(projectID: "HEPH", name: "Fix the sidebar"))
 
         let parsedResponse = try WireCoding.parseFrame(Data(responseFrame.utf8))
         XCTAssertEqual(parsedResponse.kind, .response)
         XCTAssertEqual(parsedResponse.id, 7)
         XCTAssertNil(parsedResponse.method)
         XCTAssertNil(parsedResponse.error)
-        XCTAssertEqual(try WireCoding.decodeJSON(TaskItem.self, from: parsedResponse.body), task)
+        XCTAssertEqual(try WireCoding.decodeJSON(TicketItem.self, from: parsedResponse.body), ticket)
 
         let parsedError = try WireCoding.parseFrame(Data(errorFrame.utf8))
         XCTAssertEqual(parsedError.kind, .response)
@@ -57,8 +57,8 @@ final class EnvelopeTests: XCTestCase {
         let parsedEvent = try WireCoding.parseFrame(Data(eventFrame.utf8))
         XCTAssertEqual(parsedEvent.kind, .event)
         XCTAssertNil(parsedEvent.id)
-        XCTAssertEqual(parsedEvent.event, "task.removed")
-        let decoded = try ServerEvent.decode(InboundEvent(name: "task.removed", params: parsedEvent.body))
+        XCTAssertEqual(parsedEvent.event, "ticket.removed")
+        let decoded = try ServerEvent.decode(InboundEvent(name: "ticket.removed", params: parsedEvent.body))
         XCTAssertEqual(decoded, serverEvent)
         XCTAssertNil(try ServerEvent.decode(InboundEvent(name: "unknown.event", params: Data("{}".utf8))))
     }
@@ -88,10 +88,10 @@ final class EnvelopeTests: XCTestCase {
         let lowercase = Data(#"{"deviceID":"7c3a0e1b-29d4-4e6a-9b1f-3c2d5e8a4f10"}"#.utf8)
         XCTAssertEqual(try WireCoding.decodeJSON(MeshRevokeDeviceParams.self, from: lowercase), revoke)
 
-        let patch = TaskPatch(name: "Renamed")
+        let patch = TicketPatch(name: "Renamed")
         try assertSameJSON(try WireCoding.encodeJSON(patch), #"{"name":"Renamed"}"#)
         let withNull = Data(#"{"description":null,"name":"Renamed"}"#.utf8)
-        XCTAssertEqual(try WireCoding.decodeJSON(TaskPatch.self, from: withNull), patch)
+        XCTAssertEqual(try WireCoding.decodeJSON(TicketPatch.self, from: withNull), patch)
         try assertSameJSON(try WireCoding.encodeJSON(EmptyPayload()), "{}")
     }
 
@@ -132,8 +132,6 @@ final class EnvelopeTests: XCTestCase {
         let id = try XCTUnwrap(UUID(uuidString: "7C3A0E1B-29D4-4E6A-9B1F-3C2D5E8A4F10"))
         XCTAssertEqual(Topic.session(id).rawValue, "session:7C3A0E1B-29D4-4E6A-9B1F-3C2D5E8A4F10")
         XCTAssertEqual(Topic(rawValue: "session:7c3a0e1b-29d4-4e6a-9b1f-3c2d5e8a4f10"), .session(id))
-        XCTAssertEqual(Topic.run(id).rawValue, "run:7C3A0E1B-29D4-4E6A-9B1F-3C2D5E8A4F10")
-        XCTAssertEqual(Topic(rawValue: "run:7c3a0e1b-29d4-4e6a-9b1f-3c2d5e8a4f10"), .run(id))
         XCTAssertNil(Topic(rawValue: "foo:1"))
         XCTAssertNil(Topic(rawValue: "session:x"))
     }

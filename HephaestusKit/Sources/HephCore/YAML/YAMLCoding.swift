@@ -18,9 +18,10 @@ public enum YAMLCoding {
         return encoder
     }
 
-    /// Encodes `value`; when `previousText` is a YAML mapping, merges its unknown keys with `shape`. Throws
-    /// `DataError.io` when the value cannot be encoded.
-    public static func encode<T: Encodable>(_ value: T, shape: YAMLShape, preserving previousText: String?) throws -> String {
+    /// Encodes `value`; when `previousText` is a YAML mapping, removes its top-level `retiredKeys`, then merges its
+    /// unknown keys with `shape`. Throws `DataError.io` when the value cannot be encoded.
+    public static func encode<T: Encodable>(_ value: T, shape: YAMLShape, preserving previousText: String?,
+                                            retiredKeys: Set<String> = []) throws -> String {
         let text: String
         do {
             text = try makeEncoder().encode(value)
@@ -28,8 +29,16 @@ public enum YAMLCoding {
             throw DataError.io("cannot encode the file: \(problem(of: error))")
         }
         guard let previousText,
-              let old = try? Yams.compose(yaml: previousText), old.mapping != nil
+              var old = try? Yams.compose(yaml: previousText), var oldMapping = old.mapping
         else { return text }
+        if !retiredKeys.isEmpty {
+            let kept = oldMapping.filter { pair in
+                guard let name = pair.key.scalar?.string else { return true }
+                return !retiredKeys.contains(name)
+            }
+            oldMapping = Node.Mapping(kept.map { ($0.key, $0.value) }, oldMapping.tag, oldMapping.style)
+            old = .mapping(oldMapping)
+        }
         do {
             guard let new = try Yams.compose(yaml: text) else { return text }
             return try Yams.serialize(node: merge(new: new, old: old, shape: shape), indent: 2, width: -1,

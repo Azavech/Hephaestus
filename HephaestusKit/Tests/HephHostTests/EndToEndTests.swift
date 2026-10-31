@@ -64,51 +64,51 @@ final class EndToEndTests: XCTestCase {
         let store = workspace.projectStore(mainDeviceID: hostID, projectID: "HEPH")
         try await waitUntil { store.phase == .loaded }
 
-        // 2. createTask → HEPH-1, status todo; task.changed; the store of HEPH has HEPH-1.
+        // 2. createTicket → HEPH-1, status todo; ticket.changed; the store of HEPH has HEPH-1.
         mark = recorder.count
-        let created = try await connection.createTask(projectID: "HEPH", name: "Sidebar breaks on iPad")
+        let created = try await connection.createTicket(projectID: "HEPH", name: "Sidebar breaks on iPad")
         XCTAssertEqual(created.id, "HEPH-1")
         XCTAssertEqual(created.status, .todo)
         try await waitUntil {
             recorder.events(since: mark).contains { event in
-                guard case .taskChanged(let payload) = event else { return false }
-                return payload.projectID == "HEPH" && payload.task.id == "HEPH-1"
+                guard case .ticketChanged(let payload) = event else { return false }
+                return payload.projectID == "HEPH" && payload.ticket.id == "HEPH-1"
             }
         }
-        try await waitUntil { store.task("HEPH-1") != nil }
+        try await waitUntil { store.ticket("HEPH-1") != nil }
 
-        // 3. updateTask with status review → status review; task.changed with status review.
+        // 3. updateTicket with status review → status review; ticket.changed with status review.
         mark = recorder.count
-        let updated = try await connection.updateTask(projectID: "HEPH", taskID: "HEPH-1",
-                                                      patch: TaskPatch(status: .review))
+        let updated = try await connection.updateTicket(projectID: "HEPH", ticketID: "HEPH-1",
+                                                        patch: TicketPatch(status: .review))
         XCTAssertEqual(updated.status, .review)
         try await waitUntil {
             recorder.events(since: mark).contains { event in
-                guard case .taskChanged(let payload) = event else { return false }
-                return payload.task.id == "HEPH-1" && payload.task.status == .review
+                guard case .ticketChanged(let payload) = event else { return false }
+                return payload.ticket.id == "HEPH-1" && payload.ticket.status == .review
             }
         }
 
         // 4. upload of 1 KiB, then addComment "Screenshot" with its UploadRef → one comment with shot.png;
-        //    task.changed.
+        //    ticket.changed.
         let screenshot = Data((0..<1024).map { UInt8(truncatingIfNeeded: $0) })
         let reference = try await connection.upload(fileName: "shot.png", projectID: "HEPH",
                                                     source: .data(screenshot), progress: { _ in })
         mark = recorder.count
-        let commented = try await connection.addComment(projectID: "HEPH", taskID: "HEPH-1", body: "Screenshot",
+        let commented = try await connection.addComment(projectID: "HEPH", ticketID: "HEPH-1", body: "Screenshot",
                                                         attachments: [reference])
         XCTAssertEqual(commented.comments.count, 1)
         XCTAssertEqual(commented.comments.first?.body, "Screenshot")
         XCTAssertEqual(commented.comments.first?.attachments.map(\.file), ["shot.png"])
         try await waitUntil {
             recorder.events(since: mark).contains { event in
-                guard case .taskChanged(let payload) = event else { return false }
-                return payload.task.id == "HEPH-1" && payload.task.comments.count == 1
+                guard case .ticketChanged(let payload) = event else { return false }
+                return payload.ticket.id == "HEPH-1" && payload.ticket.comments.count == 1
             }
         }
 
         // 5. downloadAttachment → a file of the attachment cache holding the 1 KiB.
-        let downloaded = try await connection.downloadAttachment(projectID: "HEPH", taskID: "HEPH-1",
+        let downloaded = try await connection.downloadAttachment(projectID: "HEPH", ticketID: "HEPH-1",
                                                                  fileName: "shot.png", size: 1024, progress: { _ in })
         XCTAssertTrue(downloaded.standardizedFileURL.path.hasPrefix(cacheRoot.standardizedFileURL.path + "/"))
         XCTAssertEqual(try Data(contentsOf: downloaded), screenshot)
@@ -153,9 +153,9 @@ final class EndToEndTests: XCTestCase {
             try await connection.closeTab(projectID: "HEPH", tabID: tab.id)
         }
 
-        // 11. search "sidebar" → a result of kind tasks for HEPH-1.
+        // 11. search "sidebar" → a result of kind tickets for HEPH-1.
         let results = try await connection.search(query: "sidebar")
-        XCTAssertTrue(results.contains { $0.kind == .tasks && $0.projectID == "HEPH" && $0.itemID == "HEPH-1" },
+        XCTAssertTrue(results.contains { $0.kind == .tickets && $0.projectID == "HEPH" && $0.itemID == "HEPH-1" },
                       "\(results)")
     }
 

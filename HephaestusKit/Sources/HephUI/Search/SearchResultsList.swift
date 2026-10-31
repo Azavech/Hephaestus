@@ -121,7 +121,7 @@ struct SearchResultsList: View {
     static func title(of kind: SearchScope) -> String {
         switch kind {
         case .projects: return "Projects"
-        case .tasks: return "Tasks"
+        case .tickets: return "Tickets"
         case .comments: return "Comments"
         case .docs: return "Docs"
         case .code: return "Code"
@@ -135,7 +135,7 @@ struct SearchResultsList: View {
     static func symbol(of kind: SearchScope) -> String {
         switch kind {
         case .projects: return "folder"
-        case .tasks: return "checklist"
+        case .tickets: return "checklist"
         case .comments: return "text.bubble"
         case .docs: return "book.closed"
         case .code: return "chevron.left.forwardslash.chevron.right"
@@ -180,7 +180,7 @@ struct SearchResultsList: View {
             Group {
                 switch reason {
                 case .prompt:
-                    Text("Search projects, tasks, comments, docs, code, skills, web tabs, sessions and devices.")
+                    Text("Search projects, tickets, comments, docs, code, skills, web tabs, sessions and devices.")
                 case .noMainOnline:
                     Text("No Main is online.")
                 case .searching:

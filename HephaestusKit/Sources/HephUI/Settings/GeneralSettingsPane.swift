@@ -88,7 +88,7 @@ struct GeneralSettingsPane: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Its projects stay on this Mac but other devices cannot open them until you turn this back on. "
-                + "Running Claude sessions and runs are stopped.")
+                + "Running Claude sessions are stopped.")
         }
     }
 

@@ -5,7 +5,7 @@ import Foundation
 /// A kind of searched item.
 public enum SearchScope: String, Codable, Sendable, Hashable, CaseIterable {
     case projects
-    case tasks
+    case tickets
     case comments
     case docs
     case code
@@ -21,7 +21,7 @@ public struct SearchResult: Codable, Sendable, Hashable {
     public var deviceID: UUID
     public var projectID: String?
     public var itemID: String
-    public var taskID: String?
+    public var ticketID: String?
     public var path: String?
     public var line: Int?
     public var title: String
@@ -34,7 +34,7 @@ public struct SearchResult: Codable, Sendable, Hashable {
         deviceID: UUID,
         projectID: String? = nil,
         itemID: String,
-        taskID: String? = nil,
+        ticketID: String? = nil,
         path: String? = nil,
         line: Int? = nil,
         title: String,
@@ -46,7 +46,7 @@ public struct SearchResult: Codable, Sendable, Hashable {
         self.deviceID = deviceID
         self.projectID = projectID
         self.itemID = itemID
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.path = path
         self.line = line
         self.title = title

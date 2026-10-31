@@ -18,7 +18,9 @@ public protocol MCPHost: Sendable {
     /// ProtocolError whose message is the error text.
     func forgePushDocs(sessionID: UUID) async throws -> String
     func forgePushRegen(sessionID: UUID) async throws -> String
-    /// The BundleService function of a bundle tool (6.25–6.28): its result as JSON text, or a thrown ProtocolError
+    /// SessionService.close (cli.md 5.11): closes the session of the token. Failures throw ProtocolError.
+    func closeSession(projectID: String, sessionID: UUID) async throws
+    /// The BundleService function of a bundle tool (6.21–6.24): its result as JSON text, or a thrown ProtocolError
     /// whose message is the error text.
     func bundleTool(_ name: String, projectID: String, bundleID: String, arguments: Data) async throws -> String
 }

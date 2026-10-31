@@ -2,7 +2,7 @@ import Foundation
 import Yams
 
 /// A bundle id, `<projectID>-B<n>` (docs/services/bundles.md, "Bundle id"): pattern `^[A-Z]{2,8}-B[1-9][0-9]*$`, for
-/// example `HEPH-B3`, with `n` from 1 to `Int.max`. It never matches the task id pattern. Ids are compared as
+/// example `HEPH-B3`, with `n` from 1 to `Int.max`. It never matches the ticket id pattern. Ids are compared as
 /// `(projectID, number)`.
 public struct BundleID: Hashable, Comparable, Sendable, Codable, CustomStringConvertible {
     public let projectID: String
@@ -71,16 +71,35 @@ public struct BundleID: Hashable, Comparable, Sendable, Codable, CustomStringCon
 
 /// A bundle file, `<project root>/.hephaestus/bundles/<bundle id>.yml` (docs/services/bundles.md, "Bundle file").
 public struct BundleFile: Codable, Sendable, Equatable {
-    /// An item of `tasks`.
+    /// An item of `tickets`.
     public struct Item: Codable, Sendable, Equatable {
-        /// Task id, of the bundle's project.
-        public var task: String
-        /// The task session the bundle started for it, the last.
+        /// Ticket id, of the bundle's project. Read from the old key task when ticket is absent (Renamed keys of
+        /// project-yml.md).
+        public var ticket: String
+        /// The ticket session the bundle started for it, the last.
         public var session: UUID?
 
-        public init(task: String, session: UUID?) {
-            self.task = task
+        public init(ticket: String, session: UUID?) {
+            self.ticket = ticket
             self.session = session
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let retired = try decoder.container(keyedBy: RetiredKeys.self)
+            if let ticket = try container.decodeIfPresent(String.self, forKey: .ticket) {
+                self.ticket = ticket
+            } else if let task = try retired.decodeIfPresent(String.self, forKey: .task) {
+                ticket = task
+            } else {
+                ticket = try container.decode(String.self, forKey: .ticket)
+            }
+            session = try container.decodeIfPresent(UUID.self, forKey: .session)
+        }
+
+        /// The key of earlier versions read on decoding.
+        private enum RetiredKeys: String, CodingKey {
+            case task
         }
     }
 
@@ -93,18 +112,22 @@ public struct BundleFile: Codable, Sendable, Equatable {
     public var base: String?
     /// The coordinator session; set by the first `bundles.start`.
     public var coordinator: UUID?
-    /// The tasks, in the bundle's order.
-    public var tasks: [Item]
+    /// The tickets, in the bundle's order. Read from the old key tasks when tickets is absent (Renamed keys of
+    /// project-yml.md).
+    public var tickets: [Item]
 
     public static let shape: YAMLShape = .mapping([
         "id": .value, "name": .value, "status": .value, "created": .value, "updated": .value, "base": .value,
         "coordinator": .value,
-        "tasks": .list(identity: "task", item: .mapping(["task": .value, "session": .value])),
+        "tickets": .list(identity: "ticket", item: .mapping(["ticket": .value, "session": .value])),
     ])
+
+    /// ["tasks"]: dropped by `encode(preserving:)`.
+    public static let retiredKeys: Set<String> = ["tasks"]
 
     /// The values as given.
     public init(id: String, name: String, status: BundleStatus, created: Date, updated: Date, base: String?,
-                coordinator: UUID?, tasks: [Item]) {
+                coordinator: UUID?, tickets: [Item]) {
         self.id = id
         self.name = name
         self.status = status
@@ -112,12 +135,13 @@ public struct BundleFile: Codable, Sendable, Equatable {
         self.updated = updated
         self.base = base
         self.coordinator = coordinator
-        self.tasks = tasks
+        self.tickets = tickets
     }
 
     /// A key absent from the file takes its default.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let retired = try decoder.container(keyedBy: RetiredKeys.self)
         id = try container.decode(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         status = try container.decodeIfPresent(BundleStatus.self, forKey: .status) ?? .draft
@@ -125,7 +149,8 @@ public struct BundleFile: Codable, Sendable, Equatable {
         updated = try container.decode(Date.self, forKey: .updated)
         base = try container.decodeIfPresent(String.self, forKey: .base)
         coordinator = try container.decodeIfPresent(UUID.self, forKey: .coordinator)
-        tasks = try container.decodeIfPresent([Item].self, forKey: .tasks) ?? []
+        tickets = try container.decodeIfPresent([Item].self, forKey: .tickets)
+            ?? retired.decodeIfPresent([Item].self, forKey: .tasks) ?? []
     }
 
     /// <projectRoot>/.hephaestus/bundles
@@ -154,7 +179,7 @@ public struct BundleFile: Codable, Sendable, Equatable {
 
     public func encode(preserving previousText: String?) throws -> String {
         do {
-            return try YAMLCoding.encode(self, shape: Self.shape, preserving: previousText)
+            return try YAMLCoding.encode(self, shape: Self.shape, preserving: previousText, retiredKeys: Self.retiredKeys)
         } catch let error as DataError {
             throw DataError.io("\(id).yml: \(error.message)")
         }
@@ -273,9 +298,9 @@ public struct BundleFile: Codable, Sendable, Equatable {
         if let base = base?.trimmingCharacters(in: .whitespacesAndNewlines) {
             self.base = base.isEmpty ? nil : base
         }
-        for index in tasks.indices {
-            if let parsed = TaskID(tasks[index].task) {
-                tasks[index].task = parsed.description
+        for index in tickets.indices {
+            if let parsed = TicketID(tickets[index].ticket) {
+                tickets[index].ticket = parsed.description
             }
         }
     }
@@ -292,15 +317,20 @@ public struct BundleFile: Codable, Sendable, Equatable {
             throw DataError.invalid("base must be a branch name")
         }
         var seen = Set<String>()
-        for (index, item) in tasks.enumerated() {
-            let isOwnTask = TaskID(item.task).map { $0.projectID == fileID.projectID } ?? false
-            guard isOwnTask, seen.insert(item.task).inserted else {
-                throw DataError.invalid("tasks[\(index)].task must be a task of \(fileID.projectID) listed once")
+        for (index, item) in tickets.enumerated() {
+            let isOwnTicket = TicketID(item.ticket).map { $0.projectID == fileID.projectID } ?? false
+            guard isOwnTicket, seen.insert(item.ticket).inserted else {
+                throw DataError.invalid("tickets[\(index)].ticket must be a ticket of \(fileID.projectID) listed once")
             }
         }
     }
 
     // MARK: - Private
+
+    /// The key of earlier versions read on decoding (Renamed keys of project-yml.md).
+    private enum RetiredKeys: String, CodingKey {
+        case tasks
+    }
 
     /// Something exists at `url` (`lstat`: a dangling symbolic link exists).
     private static func exists(_ url: URL) -> Bool {

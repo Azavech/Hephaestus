@@ -6,7 +6,7 @@ import Yams
 public struct SessionFile: Codable, Sendable, Equatable {
     public var id: UUID
     public var kind: SessionKind
-    public var taskID: String?
+    public var ticketID: String?
     public var mode: SessionMode?
     public var bundleID: String?
     public var title: String
@@ -16,14 +16,16 @@ public struct SessionFile: Codable, Sendable, Equatable {
     public var allowsAllTools: Bool
     public var model: String?
     public var status: SessionStatus
+    public var closed: Date?
 
-    /// The values as given, except `created` and `updated`, which pass through YAMLCoding.wholeSeconds(_:).
-    public init(id: UUID, kind: SessionKind, taskID: String?, mode: SessionMode?, bundleID: String?, title: String,
+    /// The values as given, except `created`, `updated` and `closed`, which pass through
+    /// YAMLCoding.wholeSeconds(_:).
+    public init(id: UUID, kind: SessionKind, ticketID: String?, mode: SessionMode?, bundleID: String?, title: String,
                 created: Date, updated: Date, permissionMode: PermissionMode, allowsAllTools: Bool = false,
-                model: String?, status: SessionStatus) {
+                model: String?, status: SessionStatus, closed: Date? = nil) {
         self.id = id
         self.kind = kind
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.mode = mode
         self.bundleID = bundleID
         self.title = title
@@ -33,18 +35,36 @@ public struct SessionFile: Codable, Sendable, Equatable {
         self.allowsAllTools = allowsAllTools
         self.model = model
         self.status = status
+        self.closed = closed.map(YAMLCoding.wholeSeconds)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, kind, taskID, mode, bundleID, title, created, updated, permissionMode, allowsAllTools, model, status
+        case id, kind, ticketID, mode, bundleID, title, created, updated, permissionMode, allowsAllTools, model, status
+        case closed
     }
 
-    /// Custom coding for allowsAllTools only: an absent key decodes as false, false is not encoded.
+    /// Keys of earlier versions read on decoding (Renamed keys of project-yml.md).
+    private enum RetiredKeys: String, CodingKey {
+        case taskID
+    }
+
+    /// Custom coding: an absent ticketID is read from the old key taskID, and the kind task is read as .ticket
+    /// (Renamed keys of project-yml.md); an absent allowsAllTools decodes as false, false is not encoded.
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let retired = try decoder.container(keyedBy: RetiredKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
-        kind = try container.decode(SessionKind.self, forKey: .kind)
-        taskID = try container.decodeIfPresent(String.self, forKey: .taskID)
+        let kindValue = try container.decode(String.self, forKey: .kind)
+        if kindValue == "task" {
+            kind = .ticket
+        } else if let value = SessionKind(rawValue: kindValue) {
+            kind = value
+        } else {
+            throw DecodingError.dataCorruptedError(forKey: .kind, in: container,
+                                                   debugDescription: "Invalid kind \(kindValue).")
+        }
+        ticketID = try container.decodeIfPresent(String.self, forKey: .ticketID)
+            ?? retired.decodeIfPresent(String.self, forKey: .taskID)
         mode = try container.decodeIfPresent(SessionMode.self, forKey: .mode)
         bundleID = try container.decodeIfPresent(String.self, forKey: .bundleID)
         title = try container.decode(String.self, forKey: .title)
@@ -54,13 +74,14 @@ public struct SessionFile: Codable, Sendable, Equatable {
         allowsAllTools = try container.decodeIfPresent(Bool.self, forKey: .allowsAllTools) ?? false
         model = try container.decodeIfPresent(String.self, forKey: .model)
         status = try container.decode(SessionStatus.self, forKey: .status)
+        closed = try container.decodeIfPresent(Date.self, forKey: .closed)
     }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(kind, forKey: .kind)
-        try container.encodeIfPresent(taskID, forKey: .taskID)
+        try container.encodeIfPresent(ticketID, forKey: .ticketID)
         try container.encodeIfPresent(mode, forKey: .mode)
         try container.encodeIfPresent(bundleID, forKey: .bundleID)
         try container.encode(title, forKey: .title)
@@ -72,14 +93,18 @@ public struct SessionFile: Codable, Sendable, Equatable {
         }
         try container.encodeIfPresent(model, forKey: .model)
         try container.encode(status, forKey: .status)
+        try container.encodeIfPresent(closed, forKey: .closed)
     }
 
-    /// .mapping of the twelve keys, each .value.
+    /// .mapping of the thirteen keys, each .value.
     public static let shape: YAMLShape = .mapping([
-        "id": .value, "kind": .value, "taskID": .value, "mode": .value, "bundleID": .value, "title": .value,
+        "id": .value, "kind": .value, "ticketID": .value, "mode": .value, "bundleID": .value, "title": .value,
         "created": .value, "updated": .value, "permissionMode": .value, "allowsAllTools": .value, "model": .value,
-        "status": .value,
+        "status": .value, "closed": .value,
     ])
+
+    /// ["taskID"]: dropped by `encode(preserving:)`.
+    public static let retiredKeys: Set<String> = ["taskID"]
 
     /// id.uuidString.lowercased(): the name of the files and folder, and the CLI session id.
     public static func fileStem(_ id: UUID) -> String {
@@ -111,7 +136,7 @@ public struct SessionFile: Codable, Sendable, Equatable {
 
     public func encode(preserving previousText: String?) throws -> String {
         do {
-            return try YAMLCoding.encode(self, shape: Self.shape, preserving: previousText)
+            return try YAMLCoding.encode(self, shape: Self.shape, preserving: previousText, retiredKeys: Self.retiredKeys)
         } catch let error as DataError {
             throw DataError.io("\(Self.fileStem(id)).yml: \(error.message)")
         }
@@ -119,8 +144,8 @@ public struct SessionFile: Codable, Sendable, Equatable {
 
     /// Normalizes in place (docs/data/sessions.md, "Validation and normalization").
     public mutating func normalize() {
-        if let taskID, let parsed = TaskID(taskID) {
-            self.taskID = parsed.description
+        if let ticketID, let parsed = TicketID(ticketID) {
+            self.ticketID = parsed.description
         }
         if let bundleID, let parsed = BundleID(bundleID) {
             self.bundleID = parsed.description
@@ -137,23 +162,23 @@ public struct SessionFile: Codable, Sendable, Equatable {
         guard UUID(uuidString: stem) == id else {
             throw DataError.invalid("id \(id.uuidString) does not match the file name \(fileName)")
         }
-        let needsTask = kind == .task || kind == .feedback
-        let hasValidTask = taskID.map { TaskID($0) != nil } ?? false
-        guard needsTask ? hasValidTask : taskID == nil else {
-            throw DataError.invalid("taskID must be set for task and feedback sessions only")
+        let needsTicket = kind == .ticket || kind == .feedback
+        let hasValidTicket = ticketID.map { TicketID($0) != nil } ?? false
+        guard needsTicket ? hasValidTicket : ticketID == nil else {
+            throw DataError.invalid("ticketID must be set for ticket and feedback sessions only")
         }
-        guard (kind == .task) == (mode != nil) else {
-            throw DataError.invalid("mode must be set for task sessions only")
+        guard (kind == .ticket) == (mode != nil) else {
+            throw DataError.invalid("mode must be set for ticket sessions only")
         }
         let hasValidBundle = bundleID.map { BundleID($0) != nil } ?? false
         let bundleAllowed: Bool
         switch kind {
         case .bundle: bundleAllowed = hasValidBundle
-        case .task: bundleAllowed = bundleID == nil || hasValidBundle
+        case .ticket: bundleAllowed = bundleID == nil || hasValidBundle
         case .project, .feedback, .regeneration: bundleAllowed = bundleID == nil
         }
         guard bundleAllowed else {
-            throw DataError.invalid("bundleID must be set for bundle sessions and allowed for task sessions only")
+            throw DataError.invalid("bundleID must be set for bundle sessions and allowed for ticket sessions only")
         }
         guard ProjectFile.isOneLineName(title) else {
             throw DataError.invalid("the title must not be empty and must be on one line")

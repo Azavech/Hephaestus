@@ -11,7 +11,7 @@ public struct ChildProcessConfiguration: Sendable {
     public var workingDirectory: String
     public var environment: [String: String]
     public var standardInput: StandardInput    // .pipe: written with write(_:); .null: /dev/null
-    public var mergeStandardError: Bool        // true: fd 2 is the stdout pipe (runs)
+    public var mergeStandardError: Bool        // true: fd 2 is the stdout pipe
 
     public init(executable: String, arguments: [String], workingDirectory: String,
                 environment: [String: String], standardInput: StandardInput = .null,

@@ -3,7 +3,7 @@ import HephCore
 import SwiftUI
 
 /// The sheet of Move to… (docs/ui/overview.md, "Move sheet"): moves a top-level project, sub projects included, to
-/// another online Main. Active sessions and runs of the project are stopped first ("Stop and Move").
+/// another online Main. Active sessions of the project are stopped first ("Stop and Move").
 struct MoveProjectSheet: View {
     let store: ProjectStore
     /// Receives the migration id when `migrateProject` succeeded, before the sheet dismisses itself.
@@ -151,13 +151,9 @@ struct MoveProjectSheet: View {
         }
     }
 
-    private var activeRuns: [RunInfo] {
-        store.runs.filter { $0.state == .running }
-    }
-
-    /// "Claude: <session title>" and "Run: <run name>".
+    /// "Claude: <session title>".
     private var activeProcessLines: [String] {
-        activeSessions.map { "Claude: \($0.title)" } + activeRuns.map { "Run: \($0.name)" }
+        activeSessions.map { "Claude: \($0.title)" }
     }
 
     // MARK: - Move
@@ -167,7 +163,7 @@ struct MoveProjectSheet: View {
             && !(store.project?.migrating ?? false)
     }
 
-    /// 1. Stops the listed sessions and runs, in parallel. 2. `migrateProject(projectID:to:)`, repeated every second, at
+    /// 1. Stops the listed sessions, in parallel. 2. `migrateProject(projectID:to:)`, repeated every second, at
     /// most 15 times, while it answers `conflict` after processes were stopped. 3. Hands the migration id over and
     /// dismisses; a failure shows in red. During step 1 and between the repeats of step 2, Cancel and closing the sheet
     /// stop the move.
@@ -175,14 +171,13 @@ struct MoveProjectSheet: View {
         guard canMove, let targetID = selectedTargetID else { return }
         let projectID = store.projectID
         let sessionIDs = activeSessions.map(\.id)
-        let runIDs = activeRuns.map(\.id)
         let mainDeviceID = store.mainDeviceID
         isMoving = true
         errorMessage = nil
         moveTask = Task {
             do {
                 let connection = try OverviewScreen.connection(mainDeviceID, workspace: workspace)
-                let stoppedProcesses = !sessionIDs.isEmpty || !runIDs.isEmpty
+                let stoppedProcesses = !sessionIDs.isEmpty
                 if stoppedProcesses {
                     await withTaskGroup(of: Void.self) { group in
                         for sessionID in sessionIDs {
@@ -192,18 +187,6 @@ struct MoveProjectSheet: View {
                                 } catch {
                                     Log.ui.error("""
                                         Could not stop the session \(sessionID, privacy: .public) before a move: \
-                                        \(Banner.message(of: error))
-                                        """)
-                                }
-                            }
-                        }
-                        for runID in runIDs {
-                            group.addTask { @MainActor in
-                                do {
-                                    try await connection.stopRun(projectID: projectID, runID: runID)
-                                } catch {
-                                    Log.ui.error("""
-                                        Could not stop the run \(runID, privacy: .public) before a move: \
                                         \(Banner.message(of: error))
                                         """)
                                 }

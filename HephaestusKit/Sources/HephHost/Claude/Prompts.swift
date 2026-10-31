@@ -41,14 +41,14 @@ public struct ClaudeProjectContext: Sendable, Equatable {
     }
 }
 
-/// A task, as SessionService needs it. Built by the host from TaskService.
-public struct ClaudeTaskContext: Sendable, Equatable {
+/// A ticket, as SessionService needs it. Built by the host from TicketService.
+public struct ClaudeTicketContext: Sendable, Equatable {
     public var id: String
     public var name: String
-    public var description: String              // TaskItem.description
-    public var yaml: String                     // the text of .hephaestus/tasks/<id>.yml
+    public var description: String              // TicketItem.description
+    public var yaml: String                     // the text of .hephaestus/tickets/<id>.yml
     public var attachments: [URL]               // every comment attachment, in comment then attachment order
-    public var parseError: String?              // TaskItem.parseError
+    public var parseError: String?              // TicketItem.parseError
 
     public init(id: String, name: String, description: String, yaml: String, attachments: [URL],
                 parseError: String?) {
@@ -61,43 +61,43 @@ public struct ClaudeTaskContext: Sendable, Equatable {
     }
 }
 
-/// A task of a bundle, as the bundle prompts list it.
-public struct ClaudeBundleTask: Sendable, Equatable {
+/// A ticket of a bundle, as the bundle prompts list it.
+public struct ClaudeBundleTicket: Sendable, Equatable {
     public var id: String
-    public var name: String                     // "" for a deleted task
-    public var status: TaskStatus?              // nil for a deleted task
+    public var name: String                     // "" for a deleted ticket
+    public var status: TicketStatus?            // nil for a deleted ticket
 
-    public init(id: String, name: String, status: TaskStatus?) {
+    public init(id: String, name: String, status: TicketStatus?) {
         self.id = id
         self.name = name
         self.status = status
     }
 }
 
-/// A bundle, as SessionService needs it. Built by the host from BundleService and TaskService.
+/// A bundle, as SessionService needs it. Built by the host from BundleService and TicketService.
 public struct ClaudeBundleContext: Sendable, Equatable {
     public var id: String
     public var name: String
     public var base: String                     // BundleItem.base
-    public var tasks: [ClaudeBundleTask]        // in the bundle's order
+    public var tickets: [ClaudeBundleTicket]    // in the bundle's order
     public var maxParallel: Int                 // the setting bundles.maxParallel
 
-    public init(id: String, name: String, base: String, tasks: [ClaudeBundleTask], maxParallel: Int) {
+    public init(id: String, name: String, base: String, tickets: [ClaudeBundleTicket], maxParallel: Int) {
         self.id = id
         self.name = name
         self.base = base
-        self.tasks = tasks
+        self.tickets = tickets
         self.maxParallel = maxParallel
     }
 }
 
 /// A feedback item of a regeneration cycle.
 public struct RegenerationItem: Sendable, Equatable {
-    public var taskID: String
+    public var ticketID: String
     public var docsCommit: String?
 
-    public init(taskID: String, docsCommit: String?) {
-        self.taskID = taskID
+    public init(ticketID: String, docsCommit: String?) {
+        self.ticketID = ticketID
         self.docsCommit = docsCommit
     }
 }
@@ -170,16 +170,16 @@ public struct PromptContext: Sendable, Equatable {
     public var mainName: String                 // used by the Common part only
     public var devices: [PromptDevice]          // non-revoked devices of the registry; the Common part only
     public var project: ClaudeProjectContext
-    public var task: ClaudeTaskContext?         // task and feedback sessions
-    public var mode: SessionMode?               // task sessions
-    public var instructions: String?            // task sessions (cli.md 5.3)
+    public var ticket: ClaudeTicketContext?     // ticket and feedback sessions
+    public var mode: SessionMode?               // ticket sessions
+    public var instructions: String?            // ticket sessions (cli.md 5.3)
     public var regeneration: RegenerationContext?
-    public var bundle: ClaudeBundleContext?     // bundle sessions and the task sessions of a bundle
-    public var workFolder: URL?                 // the task sessions of a bundle: their work folder
+    public var bundle: ClaudeBundleContext?     // bundle sessions and the ticket sessions of a bundle
+    public var workFolder: URL?                 // the ticket sessions of a bundle: their work folder
     public var branch: String                   // the setting forge.branch (DeviceSettings.forge.branch)
 
     public init(kind: SessionKind, publicRepository: Bool, mainName: String, devices: [PromptDevice],
-                project: ClaudeProjectContext, task: ClaudeTaskContext?, mode: SessionMode?, instructions: String?,
+                project: ClaudeProjectContext, ticket: ClaudeTicketContext?, mode: SessionMode?, instructions: String?,
                 regeneration: RegenerationContext?, bundle: ClaudeBundleContext?, workFolder: URL?,
                 branch: String) {
         self.kind = kind
@@ -187,7 +187,7 @@ public struct PromptContext: Sendable, Equatable {
         self.mainName = mainName
         self.devices = devices
         self.project = project
-        self.task = task
+        self.ticket = ticket
         self.mode = mode
         self.instructions = instructions
         self.regeneration = regeneration
@@ -197,9 +197,10 @@ public struct PromptContext: Sendable, Equatable {
     }
 }
 
-/// The texts the Main gives Claude (docs/claude/prompts.md): the system prompt appended to Claude Code's own and the
-/// generated first message of task, feedback and regeneration sessions, and of the sessions of a task bundle. The
-/// Forge common part, the feedback part and the regeneration part are in ForgePrompts.swift.
+/// The texts the Main gives Claude (docs/claude/prompts.md): the system prompt appended to Claude Code's own, the
+/// generated first message of ticket, feedback and regeneration sessions, and of the sessions of a ticket bundle, and
+/// the texts of the title call. The Forge common part, the feedback part and the regeneration part are in
+/// ForgePrompts.swift.
 public enum Prompts {
     /// Common part or Forge common part, a blank line, then the part of the session kind.
     public static func systemPrompt(_ context: PromptContext) -> String {
@@ -208,15 +209,15 @@ public enum Prompts {
         switch context.kind {
         case .project:
             return common + "\n\n" + render(Templates.projectPart, values)
-        case .task:
-            // The task part, a blank line, then the part of the session's mode; for a task session of a bundle, a
-            // blank line and the bundle task part.
-            var text = common + "\n\n" + render(Templates.taskPart, values)
+        case .ticket:
+            // The ticket part, a blank line, then the part of the session's mode; for a ticket session of a bundle, a
+            // blank line and the bundle ticket part.
+            var text = common + "\n\n" + render(Templates.ticketPart, values)
             if let mode = modeTemplate(context) {
                 text += "\n\n" + render(mode, values)
             }
             if context.bundle != nil {
-                text += "\n\n" + render(Templates.bundleTaskPart, values)
+                text += "\n\n" + render(Templates.bundleTicketPart, values)
             }
             return text
         case .feedback:
@@ -233,9 +234,9 @@ public enum Prompts {
         switch context.kind {
         case .project:
             return nil
-        case .task:
-            let task = context.task
-            var text = "Work on \(task?.id ?? ""): \(task?.name ?? "") (\(context.mode?.rawValue ?? ""))."
+        case .ticket:
+            let ticket = context.ticket
+            var text = "Work on \(ticket?.id ?? ""): \(ticket?.name ?? "") (\(context.mode?.rawValue ?? ""))."
             let instructions = trimmed(context.instructions)
             if !instructions.isEmpty {
                 text += "\n\n" + instructions
@@ -247,8 +248,8 @@ public enum Prompts {
             var kept: [String] = []
             for (index, paragraph) in paragraphs.enumerated() {
                 // The description paragraph and the attached files paragraph are left out when they are empty.
-                if index == 1, trimmed(context.task?.description).isEmpty { continue }
-                if index == 2, context.task?.attachments.isEmpty ?? true { continue }
+                if index == 1, trimmed(context.ticket?.description).isEmpty { continue }
+                if index == 2, context.ticket?.attachments.isEmpty ?? true { continue }
                 kept.append(render(paragraph, values))
             }
             return kept.joined(separator: "\n\n")
@@ -276,14 +277,23 @@ public enum Prompts {
         }
     }
 
+    /// The system prompt of the title call (Title call).
+    public static let titleSystemPrompt = Templates.titleSystemPrompt
+
+    /// The stdin text of the title call for a first message's text (Title call): the text trimmed of whitespace and
+    /// newlines and cut to its first 4,000 characters.
+    public static func titleRequest(_ text: String) -> String {
+        render(Templates.titleRequest, ["message": String(trimmed(text).prefix(4_000))])
+    }
+
     // MARK: - Placeholders
 
     /// The values of the placeholders shared by the parts and the feedback first message. ForgePrompts adds
-    /// `{forgeToolLines}`, `{pushLine}` and `{regenerationLines}`. In the task sessions of a bundle, `{codeFolder}`
+    /// `{forgeToolLines}`, `{pushLine}` and `{regenerationLines}`. In the ticket sessions of a bundle, `{codeFolder}`
     /// and `{docsFolder}` are the folders of its worktree.
     static func placeholders(_ context: PromptContext) -> [String: String] {
         let project = context.project
-        let taskYAML = withoutTrailingNewlines(context.task?.yaml ?? "")
+        let ticketYAML = withoutTrailingNewlines(context.ticket?.yaml ?? "")
         let (codeFolder, docsFolder) = folders(context)
         let bundle = context.bundle
         var values: [String: String] = [
@@ -297,19 +307,19 @@ public enum Prompts {
             "parentLines": project.parent.map { "- Parent project: \($0.name) (\($0.id)), \($0.root.path)" } ?? "",
             "subprojectLines": subprojectLines(project.subprojects),
             "toolLines": toolLines(context.kind),
-            "taskID": context.task?.id ?? "",
-            "taskName": context.task?.name ?? "",
-            "taskYAML": taskYAML,
-            "taskDescription": trimmed(context.task?.description),
-            "attachmentLines": attachmentLines(context.task?.attachments ?? []),
-            "fence": fence(for: taskYAML),
+            "ticketID": context.ticket?.id ?? "",
+            "ticketName": context.ticket?.name ?? "",
+            "ticketYAML": ticketYAML,
+            "ticketDescription": trimmed(context.ticket?.description),
+            "attachmentLines": attachmentLines(context.ticket?.attachments ?? []),
+            "fence": fence(for: ticketYAML),
             "mode": context.mode?.rawValue ?? "",
             "instructions": trimmed(context.instructions),
             "bundleID": bundle?.id ?? "",
             "bundleName": bundle?.name ?? "",
             "base": bundle?.base ?? "",
             "maxParallel": bundle.map { String($0.maxParallel) } ?? "",
-            "bundleTaskLines": bundleTaskLines(bundle?.tasks ?? []),
+            "bundleTicketLines": bundleTicketLines(bundle?.tickets ?? []),
             "workFolder": context.workFolder?.path ?? "",
             "branch": context.branch,
         ]
@@ -324,15 +334,26 @@ public enum Prompts {
             ? substitute("In this repository, change only the documentation in {docsFolder}, and do not build or "
                              + "test: the Forge regenerates the code from the documentation.", values)
             : ""
+        // Ticket sessions of 3.5 that are not of a bundle: an empty line, then the text.
+        values["forgeImplementLines"] = context.publicRepository && context.kind == .ticket && context.bundle == nil
+            ? "\n" + substitute("In this repository, change only the documentation in {docsFolder}, and do not build "
+                + "or test: the Forge regenerates the code from the documentation. Show the user your changes; when "
+                + "they agree, commit only that folder with the message \"docs: <summary> ({ticketID})\", <summary> "
+                + "being a one-line summary of the change that names nothing personal: git add -A -- {docsFolder}, "
+                + "then git commit -m \"<message>\" -- {docsFolder}. Then call mcp__hephaestus__forge_push_docs. It "
+                + "checks the commits that are not on GitHub yet for personal data and pushes them to {branch}; when "
+                + "it returns an error, do what the error says, then call it again. The Forge then regenerates the "
+                + "code, CI builds it and the app updates itself on the user's Macs.", values)
+            : ""
         return values
     }
 
-    /// The code and documentation folders of the prompts: in the task sessions of a bundle, `workFolder` and
+    /// The code and documentation folders of the prompts: in the ticket sessions of a bundle, `workFolder` and
     /// `workFolder` followed by the project's docs folder (its path relative to the code folder); otherwise the
     /// project's.
     private static func folders(_ context: PromptContext) -> (code: URL, docs: URL) {
         let project = context.project
-        guard context.kind == .task, context.bundle != nil, let workFolder = context.workFolder else {
+        guard context.kind == .ticket, context.bundle != nil, let workFolder = context.workFolder else {
             return (project.codeFolder, project.docsFolder)
         }
         let code = project.codeFolder.standardizedFileURL.pathComponents
@@ -342,30 +363,30 @@ public enum Prompts {
         return (workFolder, relative.reduce(workFolder) { $0.appendingPathComponent($1, isDirectory: true) })
     }
 
-    /// `{toolLines}`: the tool lines of the session's kind. Bundle sessions get the lines of project and task
-    /// sessions without `start_task_session`, and their own `list_runs` line.
+    /// `{toolLines}`: the tool lines of the session's kind, the rename line last. Bundle sessions get the lines of
+    /// project and ticket sessions without `start_ticket_session`.
     static func toolLines(_ kind: SessionKind) -> String {
         switch kind {
-        case .project, .task:
+        case .project, .ticket:
             return [
-                ToolLines.devices, ToolLines.projects, ToolLines.tasks, ToolLines.comments, ToolLines.taskSessions,
-                ToolLines.runs, ToolLines.webTabs, ToolLines.search, ToolLines.skills,
+                ToolLines.devices, ToolLines.projects, ToolLines.tickets, ToolLines.comments, ToolLines.ticketSessions,
+                ToolLines.webTabs, ToolLines.search, ToolLines.skills, ToolLines.close, ToolLines.rename,
             ].joined(separator: "\n")
         case .bundle:
             return [
-                ToolLines.devices, ToolLines.projects, ToolLines.tasks, ToolLines.comments, ToolLines.bundleRuns,
-                ToolLines.webTabs, ToolLines.search, ToolLines.skills,
+                ToolLines.devices, ToolLines.projects, ToolLines.tickets, ToolLines.comments, ToolLines.webTabs,
+                ToolLines.search, ToolLines.skills, ToolLines.close, ToolLines.rename,
             ].joined(separator: "\n")
         case .feedback, .regeneration:
             return ""
         }
     }
 
-    /// One line per task of the bundle: `- <id>: <name> (<status raw value>)`, or `- <id>: deleted`.
-    private static func bundleTaskLines(_ tasks: [ClaudeBundleTask]) -> String {
-        tasks.map { task in
-            guard let status = task.status else { return "- \(task.id): deleted" }
-            return "- \(task.id): \(task.name) (\(status.rawValue))"
+    /// One line per ticket of the bundle: `- <id>: <name> (<status raw value>)`, or `- <id>: deleted`.
+    private static func bundleTicketLines(_ tickets: [ClaudeBundleTicket]) -> String {
+        tickets.map { ticket in
+            guard let status = ticket.status else { return "- \(ticket.id): deleted" }
+            return "- \(ticket.id): \(ticket.name) (\(status.rawValue))"
         }.joined(separator: "\n")
     }
 
@@ -493,27 +514,28 @@ public enum Prompts {
 }
 
 /// The lines of `{toolLines}`, one per group of tools.
-private enum ToolLines {
+enum ToolLines {
     static let devices = "- list_devices: the devices of the mesh and whether they are online."
     static let projects = "- list_projects, get_project, create_project, update_project: the projects of every Main, "
         + "with their sub projects and settings."
-    static let tasks = "- list_tasks, get_task, create_task, update_task, delete_task: the tasks of a project."
-    static let comments = "- comment_task: add a comment to a task, with files."
-    static let taskSessions = "- start_task_session: start a Claude session that works on a task (implement, debug, "
-        + "review, plan, or custom instructions)."
-    static let runs = "- list_runs, start_run, stop_run, get_run_output: the run configurations of a project and their "
-        + "runs."
-    static let bundleRuns = "- list_runs, get_run_output: the run configurations of a project and the output of their "
-        + "runs."
+    static let tickets = "- list_tickets, get_ticket, create_ticket, update_ticket, delete_ticket: the tickets of a "
+        + "project."
+    static let comments = "- comment_ticket: add a comment to a ticket, with files."
+    static let ticketSessions = "- start_ticket_session: start a Claude session that works on a ticket (implement, "
+        + "debug, review, plan, or custom instructions)."
     static let webTabs = "- list_web_tabs, open_web_tab: the web tabs of a project."
-    static let search = "- search: search projects, tasks, comments, docs, code, skills, web tabs, sessions and "
+    static let search = "- search: search projects, tickets, comments, docs, code, skills, web tabs, sessions and "
         + "devices."
     static let skills = "- list_skills, get_skill, save_skill: the Hephaestus skills library."
+    static let close = "- close_session: close this session when the user says the conversation is done or asks you "
+        + "to close it; it then accepts no message."
+    /// The rename line, last of the tool lines of every kind.
+    static let rename = "- rename_session: rename this session when the user asks you to."
 }
 
 /// The templates of docs/claude/prompts.md held by this file, without their fences.
 private enum Templates {
-    /// Common part: `project`, `task` and `bundle` sessions.
+    /// Common part: `project`, `ticket` and `bundle` sessions.
     static let common = """
         # Hephaestus
 
@@ -536,12 +558,12 @@ private enum Templates {
 
         Hephaestus keeps the data of the project in {projectRoot}/.hephaestus/:
 
-        - project.yml: the project (identifier, name, description, code and docs folders, sub projects, web tabs, run configurations, enabled skills, Claude defaults).
-        - tasks/<task id>.yml: one file per task, for example tasks/{projectID}-12.yml.
-        - attachments/<task id>/: the files attached to the comments of a task.
+        - project.yml: the project (identifier, name, description, code and docs folders, sub projects, web tabs, enabled skills, Claude defaults).
+        - tickets/<ticket id>.yml: one file per ticket, for example tickets/{projectID}-12.yml.
+        - attachments/<ticket id>/: the files attached to the comments of a ticket.
         - sessions/: the Claude sessions of the project, this one included.
 
-        A task id is the project identifier, a hyphen and the task number. A task file looks like this:
+        A ticket id is the project identifier, a hyphen and the ticket number. Feedback tickets, which the Forge creates from the user's feedback about the Hephaestus app, are numbered in their own series, with an F before the number: {projectID}-F3. A ticket file looks like this:
 
         ```yaml
         id: {projectID}-12
@@ -564,7 +586,7 @@ private enum Templates {
                 size: 123456
         ```
 
-        status is one of todo, in_progress, review and done. A comment's author is the name of the device it was written on, or Claude for the comments added with the Hephaestus tools; edited is present once a comment was changed; attachments are stored in .hephaestus/attachments/<task id>/.
+        status is one of todo, in_progress, review and done. A comment's author is the name of the device it was written on, or Claude for the comments added with the Hephaestus tools; edited is present once a comment was changed; attachments are stored in .hephaestus/attachments/<ticket id>/.
 
         ## Hephaestus tools
 
@@ -574,30 +596,32 @@ private enum Templates {
 
         Rules:
 
-        - Use these tools to create and change projects, tasks, comments and web tabs, and to delete tasks. Never create, edit or delete files under .hephaestus/ yourself.
-        - Run configurations are created and changed by the user, in the app.
-        - To run a run configuration of a project, use start_run.
+        - Use these tools to create and change projects, tickets, comments and web tabs, and to delete tickets. Never create, edit or delete files under .hephaestus/ yourself.
         - Reach other projects, on this Mac or on another Main, through these tools and their identifier.
+
+        ## Questions
+
+        When you ask the user two or more questions in a message, label each with a capital letter, in order: A, B, C, and so on, so the user can answer "A: …, B: …". A single question has no letter. A new set of questions starts again at A. A follow-up question on the answer to a lettered question takes that question's letter followed by a number: follow-ups on C are C.1, C.2, and so on.
         """
 
     /// Project part: `kind` = `project`.
     static let projectPart = """
         ## This session
 
-        This is the Claude chat of {projectName}. Here the user plans and coordinates the project with you: creating and updating many tasks at once, commenting on them, starting task sessions, running the project, working in its code and documentation, and acting on other projects.
+        This is the Claude chat of {projectName}. Here the user plans and coordinates the project with you: creating and updating many tickets at once, commenting on them, starting ticket sessions, running the project, working in its code and documentation, and acting on other projects.
         """
 
-    /// Task part: `kind` = `task`, followed by a blank line and the part of the mode.
-    static let taskPart = """
-        ## Task {taskID}
+    /// Ticket part: `kind` = `ticket`, followed by a blank line and the part of the mode.
+    static let ticketPart = """
+        ## Ticket {ticketID}
 
-        This session works on task {taskID} of {projectName}. Its file as it was when the session started is below; call mcp__hephaestus__get_task to see its current state.
+        This session works on ticket {ticketID} of {projectName}. Its file as it was when the session started is below; call mcp__hephaestus__get_ticket to see its current state.
 
         {fence}yaml
-        {taskYAML}
+        {ticketYAML}
         {fence}
 
-        Files attached to the task:
+        Files attached to the ticket:
         {attachmentLines}
         """
 
@@ -605,34 +629,34 @@ private enum Templates {
     static let modeImplement = """
         ## Mode: implement
 
-        Implement {taskID}:
+        Implement {ticketID}:
 
-        1. Make the changes the task asks for.
+        1. Make the changes the ticket asks for.
         2. Keep the documentation in {docsFolder} in sync with your changes.
         3. Build the project and run its tests, and fix what fails.
-        4. Add a comment to {taskID} with mcp__hephaestus__comment_task that summarizes what you changed and how you checked it.
-        5. Set the status of {taskID} to review with mcp__hephaestus__update_task.
+        4. Add a comment to {ticketID} with mcp__hephaestus__comment_ticket that summarizes what you changed and how you checked it.
+        {forgeImplementLines}
         """
 
     /// Mode debug.
     static let modeDebug = """
         ## Mode: debug
 
-        Debug {taskID}: find the root cause of the problem it describes. Reproduce the problem or collect evidence from the code, logs and runs, then explain the root cause to the user with that evidence. Propose a fix, and apply it only after the user confirms.
+        Debug {ticketID}: find the root cause of the problem it describes. Reproduce the problem or collect evidence from the code and logs, then explain the root cause to the user with that evidence. Propose a fix, and apply it only after the user confirms.
         """
 
     /// Mode review.
     static let modeReview = """
         ## Mode: review
 
-        Review the work done for {taskID}: compare the changes made for it, in the files and in git, with the task and with the documentation in {docsFolder}. Add your findings to {taskID} as a comment with mcp__hephaestus__comment_task. Do not modify any file.
+        Review the work done for {ticketID}: compare the changes made for it, in the files and in git, with the ticket and with the documentation in {docsFolder}. Add your findings to {ticketID} as a comment with mcp__hephaestus__comment_ticket. Do not modify any file.
         """
 
     /// Mode plan.
     static let modePlan = """
         ## Mode: plan
 
-        Plan {taskID}: study the code and the documentation, then write an implementation plan and add it to {taskID} as a comment with mcp__hephaestus__comment_task. Do not modify the code or the documentation.
+        Plan {ticketID}: study the code and the documentation, then write an implementation plan and add it to {ticketID} as a comment with mcp__hephaestus__comment_ticket. Do not modify the code or the documentation.
         """
 
     /// Mode custom, with `instructions`.
@@ -655,36 +679,36 @@ private enum Templates {
     static let bundlePart = """
         ## Bundle {bundleID}
 
-        This session coordinates bundle {bundleID} of {projectName}, "{bundleName}". Its tasks are implemented in parallel, each by its own task session in its own git worktree, on the branch task/<task id> made from {base}; you bring their work together. Call mcp__hephaestus__get_bundle for its current state.
+        This session coordinates bundle {bundleID} of {projectName}, "{bundleName}". Its tickets are implemented in parallel, each by its own ticket session in its own git worktree, on the branch ticket/<ticket id> made from {base}; you bring their work together. Call mcp__hephaestus__get_bundle for its current state.
 
-        Tasks of the bundle when this session started:
-        {bundleTaskLines}
+        Tickets of the bundle when this session started:
+        {bundleTicketLines}
 
-        Bundle tools: get_bundle, start_bundle_task (start the session of a task, or send instructions to it), update_bundle (set the status to review or running), finish_bundle (remove the worktrees and branches once the work is brought in).
+        Bundle tools: get_bundle, start_bundle_ticket (start the session of a ticket, or send instructions to it), update_bundle (set the status to review or running), finish_bundle (remove the worktrees and branches once the work is brought in).
 
-        1. Start the task sessions with mcp__hephaestus__start_bundle_task, in the bundle's order, at most {maxParallel} at a time. Each one implements its task, commits on its branch, comments a summary on its task and sets it to review.
-        2. Hephaestus sends you a message when a task session ends its turn, fails or waits for a permission answer. Then read the task's comments with mcp__hephaestus__get_task and its work with git log and git diff {base}...task/<task id>, start the next waiting task, and send instructions with start_bundle_task when the work is incomplete. Tell the user when a session waits for them.
-        3. When every task is in review, call mcp__hephaestus__update_bundle with the status review, show the user a summary of each task and of the combined changes, and wait for their agreement. Send the changes they ask for to the task sessions, with the status running while they work.
-        4. When the user agrees, bring the work into {codeFolder} on {base}, one task at a time in the bundle's order: git cherry-pick {base}..task/<task id>. Resolve conflicts yourself, then git cherry-pick --continue; ask the user when a conflict needs a decision.
+        1. Start the ticket sessions with mcp__hephaestus__start_bundle_ticket, in the bundle's order, at most {maxParallel} at a time. Each one implements its ticket, commits on its branch and comments a summary on its ticket; Hephaestus sets the ticket to review when its session ends its turn.
+        2. Hephaestus sends you a message when a ticket session ends its turn, fails or waits for a permission answer. Then read the ticket's comments with mcp__hephaestus__get_ticket and its work with git log and git diff {base}...ticket/<ticket id>, start the next waiting ticket, and send instructions with start_bundle_ticket when the work is incomplete. Tell the user when a session waits for them.
+        3. When every ticket is in review, call mcp__hephaestus__update_bundle with the status review, show the user a summary of each ticket and of the combined changes, and wait for their agreement. Send the changes they ask for to the ticket sessions, with the status running while they work.
+        4. When the user agrees, bring the work into {codeFolder} on {base}, one ticket at a time in the bundle's order: git cherry-pick {base}..ticket/<ticket id>. Resolve conflicts yourself, then git cherry-pick --continue; ask the user when a conflict needs a decision.
         {bundlePushLine}
         6. Call mcp__hephaestus__finish_bundle and tell the user which branches it kept.
 
-        Never edit the files of a task yourself, except to resolve a conflict while bringing its work in.
+        Never edit the files of a ticket yourself, except to resolve a conflict while bringing its work in.
         """
 
-    /// Bundle task part: appended to the task part of a `task` session of a bundle.
-    static let bundleTaskPart = """
+    /// Bundle ticket part: appended to the ticket part of a `ticket` session of a bundle.
+    static let bundleTicketPart = """
         ## Bundle {bundleID}
 
-        This session is one of the parallel sessions of bundle {bundleID}. Work only in {workFolder}, a git worktree on the branch task/{taskID}: never change files elsewhere and never switch branches. Commit your changes on task/{taskID} without pushing, and do not wait for the user's agreement first: the coordinator of the bundle reviews the work with the user. When you are blocked, say why in a comment on {taskID} and end your turn.
+        This session is one of the parallel sessions of bundle {bundleID}. Work only in {workFolder}, a git worktree on the branch ticket/{ticketID}: never change files elsewhere and never switch branches. Commit your changes on ticket/{ticketID} without pushing, and do not wait for the user's agreement first: the coordinator of the bundle reviews the work with the user. When you are blocked, say why in a comment on {ticketID} and end your turn.
         {bundleScopeLine}
         """
 
     /// First message of a feedback session.
     static let feedbackFirstMessage = """
-        Work on {taskID}: {taskName} (feedback).
+        Work on {ticketID}: {ticketName} (feedback).
 
-        {taskDescription}
+        {ticketDescription}
 
         Attached files:
         {attachmentLines}
@@ -702,6 +726,20 @@ private enum Templates {
         {fence}text
         {jobLog}
         {fence}
+        """
+
+    /// The system prompt of the title call, passed with --system-prompt.
+    static let titleSystemPrompt = """
+        You write short titles for conversations.
+        """
+
+    /// The stdin text of the title call.
+    static let titleRequest = """
+        Write a title of at most 6 words for a conversation that starts with the message below. Reply with the title alone, in the language of the message, without quotes or a final period.
+
+        <message>
+        {message}
+        </message>
         """
 }
 #endif

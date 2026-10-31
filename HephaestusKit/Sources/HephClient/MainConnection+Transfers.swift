@@ -67,13 +67,13 @@ extension MainConnection {
         }
     }
 
-    /// A task attachment in the attachment cache, downloaded unless the cache has it with `size` bytes.
-    public func downloadAttachment(projectID: String, taskID: String, fileName: String, size: Int,
+    /// A ticket attachment in the attachment cache, downloaded unless the cache has it with `size` bytes.
+    public func downloadAttachment(projectID: String, ticketID: String, fileName: String, size: Int,
                                    progress: @escaping @MainActor (TransferProgress) -> Void) async throws -> URL {
-        let destination = try attachmentCache().taskAttachment(mainDeviceID: id, projectID: projectID,
-                                                               taskID: taskID, fileName: fileName)
+        let destination = try attachmentCache().ticketAttachment(mainDeviceID: id, projectID: projectID,
+                                                                 ticketID: ticketID, fileName: fileName)
         return try await download(to: destination, fileName: fileName, reuseSize: size, progress: progress) { offset in
-            let result = try await self.readAttachment(projectID: projectID, taskID: taskID, fileName: fileName,
+            let result = try await self.readAttachment(projectID: projectID, ticketID: ticketID, fileName: fileName,
                                                        offset: offset, length: nil)
             return (result.data, result.size)
         }

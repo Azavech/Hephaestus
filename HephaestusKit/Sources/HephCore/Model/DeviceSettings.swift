@@ -157,7 +157,7 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
             throw DataError.invalid("the idle timeout must be between 1 and 1440 minutes")
         }
         guard Self.isValidMaxParallel(bundles.maxParallel) else {
-            throw DataError.invalid("the parallel task sessions must be between 1 and 16")
+            throw DataError.invalid("the parallel ticket sessions must be between 1 and 16")
         }
         guard ProjectIdentifier.isValid(forge.sourceProjectID) else {
             throw DataError.invalid("the identifier must be 2 to 8 letters A to Z")

@@ -5,7 +5,7 @@ import Foundation
 enum ForgeSessionRules {
     enum AllowedSet { case feedback, bundle, regeneration }
 
-    /// --allowedTools: .feedback for feedback sessions and the task sessions of a bundle, .bundle for bundle
+    /// --allowedTools: .feedback for feedback sessions and the ticket sessions of a bundle, .bundle for bundle
     /// sessions, .regeneration for regeneration sessions; branch: the setting forge.branch.
     static func allowedTools(_ set: AllowedSet, branch: String) -> [String] {
         let feedback = [
@@ -32,7 +32,7 @@ enum ForgeSessionRules {
         case .feedback:
             return feedback
         case .bundle:
-            // The coordinator brings the task branches in.
+            // The coordinator brings the ticket branches in.
             return feedback + [
                 "Bash(git cherry-pick *)",
                 "Bash(git cherry *)",

@@ -26,6 +26,11 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        #if os(macOS)
+        // The toolbar keeps its material over the sidebar; the list scrolls under it (§9.2).
+        .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+        .toolbarBackground(.bar, for: .windowToolbar)
+        #endif
         #if os(iOS)
         .navigationTitle(context.isCompact ? projectName ?? "Hephaestus" : "")
         .navigationBarTitleDisplayMode(.inline)

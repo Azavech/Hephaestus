@@ -12,7 +12,8 @@ final class ProjectFileTests: XCTestCase {
         created: 2026-10-29T21:00:00Z
         code: .
         docs: docs
-        taskCounter: 12
+        ticketCounter: 12
+        feedbackCounter: 3
         subprojects:
         - services/api
         webTabs:
@@ -24,14 +25,6 @@ final class ProjectFileTests: XCTestCase {
           title: Actions
           url: https://github.com/Azavech/Hephaestus/actions
           locked: false
-        runs:
-        - name: Build
-          command: ./scripts/build.sh all
-        - name: Tests
-          command: ./scripts/test.sh
-        - name: API server
-          command: go run ./cmd/api
-          cwd: services/api
         skills: []
         claude:
           model: opus
@@ -46,10 +39,10 @@ final class ProjectFileTests: XCTestCase {
         created: 2026-10-30T09:12:45Z
         code: .
         docs: docs
-        taskCounter: 0
+        ticketCounter: 0
+        feedbackCounter: 0
         subprojects: []
         webTabs: []
-        runs: []
         skills: []
 
         """
@@ -62,7 +55,8 @@ final class ProjectFileTests: XCTestCase {
         XCTAssertEqual(file.created, try date("2026-10-29T21:00:00Z"))
         XCTAssertEqual(file.code, ".")
         XCTAssertEqual(file.docs, "docs")
-        XCTAssertEqual(file.taskCounter, 12)
+        XCTAssertEqual(file.ticketCounter, 12)
+        XCTAssertEqual(file.feedbackCounter, 3)
         XCTAssertEqual(file.subprojects, ["services/api"])
         XCTAssertEqual(file.webTabs, [
             ProjectFile.WebTabEntry(id: try uuid("7C3A0E1B-5D2F-4C8A-9E61-0B4D2F7A9C13"), title: "GitHub",
@@ -70,15 +64,9 @@ final class ProjectFileTests: XCTestCase {
             ProjectFile.WebTabEntry(id: try uuid("E4F1A2B3-C4D5-4E6F-8A9B-0C1D2E3F4A5B"), title: "Actions",
                                     url: "https://github.com/Azavech/Hephaestus/actions", locked: false),
         ])
-        XCTAssertEqual(file.runs, [
-            ProjectFile.RunEntry(name: "Build", command: "./scripts/build.sh all", cwd: nil),
-            ProjectFile.RunEntry(name: "Tests", command: "./scripts/test.sh", cwd: nil),
-            ProjectFile.RunEntry(name: "API server", command: "go run ./cmd/api", cwd: "services/api"),
-        ])
         XCTAssertEqual(file.skills, [])
         XCTAssertEqual(file.claude, ClaudeDefaults(model: "opus", permissionMode: .acceptEdits))
         XCTAssertEqual(file.webTabValues.map(\.title), ["GitHub", "Actions"])
-        XCTAssertEqual(file.runConfigs.last, RunConfig(name: "API server", command: "go run ./cmd/api", cwd: "services/api"))
         XCTAssertEqual(file.claudeDefaults, ClaudeDefaults(model: "opus", permissionMode: .acceptEdits))
     }
 
@@ -127,6 +115,38 @@ final class ProjectFileTests: XCTestCase {
         XCTAssertEqual(node["webTabs"]?.array().first?["title"]?.string, "GitHub")
     }
 
+    func testRetiredRunsDropped() throws {
+        let root = try makeTemporaryDirectory()
+        let url = ProjectFile.url(projectRoot: root)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let texts = [
+            """
+            id: HEPH
+            name: Hephaestus
+            created: 2026-10-29T21:00:00Z
+            runs:
+            - name: Build
+              command: ./scripts/build.sh all
+
+            """,
+            """
+            id: HEPH
+            name: Hephaestus
+            created: 2026-10-29T21:00:00Z
+            runs: 5
+
+            """,
+        ]
+        for text in texts {
+            XCTAssertNoThrow(try ProjectFile.decode(text), text)
+            try Data(text.utf8).write(to: url)
+            try ProjectFile.update(projectRoot: root) { $0.name = "Forge" }
+            let node = try XCTUnwrap(try Yams.compose(yaml: try String(contentsOf: url, encoding: .utf8)))
+            XCTAssertEqual(node["name"]?.string, "Forge", text)
+            XCTAssertNil(node["runs"], text)
+        }
+    }
+
     func testMinimalFile() throws {
         let file = try ProjectFile.decode("""
             id: HEPH
@@ -137,10 +157,10 @@ final class ProjectFileTests: XCTestCase {
         XCTAssertNil(file.description)
         XCTAssertEqual(file.code, ".")
         XCTAssertEqual(file.docs, "docs")
-        XCTAssertEqual(file.taskCounter, 0)
+        XCTAssertEqual(file.ticketCounter, 0)
+        XCTAssertEqual(file.feedbackCounter, 0)
         XCTAssertEqual(file.subprojects, [])
         XCTAssertEqual(file.webTabs, [])
-        XCTAssertEqual(file.runs, [])
         XCTAssertEqual(file.skills, [])
         XCTAssertNil(file.claude)
         XCTAssertEqual(file.claudeDefaults, ClaudeDefaults(model: nil, permissionMode: nil))
@@ -177,8 +197,8 @@ final class ProjectFileTests: XCTestCase {
              .invalid("project.yml: webTabs[0].id: invalid value")),
             ("id: HEPH\nname: Hephaestus\ncreated: 2026-10-29T21:00:00Z\nclaude:\n  permissionMode: always\n",
              .invalid("project.yml: claude.permissionMode: invalid value")),
-            ("id: HEPH\nname: Hephaestus\ncreated: 2026-10-29T21:00:00Z\nruns:\n- name: A\n  command: a\n- name: A\n  command: b\n",
-             .invalid("project.yml: runs[1].name must be unique, not empty and on one line")),
+            ("id: HEPH\nname: Hephaestus\ncreated: 2026-10-29T21:00:00Z\nfeedbackCounter: -1\n",
+             .invalid("project.yml: feedbackCounter must not be negative")),
             ("id: HEPH\nname: Hephaestus\ncreated: 2026-10-29T21:00:00Z\nsubprojects:\n- ../outside\n",
              .invalid("project.yml: subprojects[0] must be a relative path inside the project")),
         ]

@@ -50,7 +50,7 @@ struct ProjectIdentifierField: View {
         if let usage = usage(of: text) {
             return ("\(text) is already used by “\(usage.projectName)” on \(usage.mainName).", true)
         }
-        return ("Tasks will be numbered \(text)-1, \(text)-2, …", false)
+        return ("Tickets will be numbered \(text)-1, \(text)-2, …", false)
     }
 
     private func updateValidity() {

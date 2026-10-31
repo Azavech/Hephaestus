@@ -4,7 +4,8 @@ import SwiftUI
 
 /// The options menu of the session header, a button `ellipsis.circle` (docs/ui/sessions.md, "Options menu"). Its
 /// requests go through the session's `SessionModel` and the window's banners. While the project's Main is not
-/// connected (`isConnected` false), every item is disabled.
+/// connected (`isConnected` false), every item is disabled; in a closed session, which never starts Claude again,
+/// Permission Mode, Allow All Tools and Model are disabled.
 struct SessionOptionsMenu: View {
     let model: SessionModel
     let info: SessionInfo
@@ -38,6 +39,7 @@ struct SessionOptionsMenu: View {
                     },
                     onOtherModel: { isModelSheetPresented = true }
                 )
+                .disabled(info.closed != nil)
                 Button("Rename…") { isRenamePresented = true }
                 Button("Stop Process") {
                     perform { try await model.stop() }
@@ -170,7 +172,7 @@ extension View {
     }
 }
 
-/// The layout of the sheets of the sessions, runs and skills screens: the fields in a form, then the error message
+/// The layout of the sheets of the sessions and skills screens: the fields in a form, then the error message
 /// in red above the buttons, then Cancel (Escape) and the confirm button (default action, and ⌘↩).
 struct EditSheetLayout<Fields: View>: View {
     let confirmTitle: String

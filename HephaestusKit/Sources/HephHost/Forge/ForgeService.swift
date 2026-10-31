@@ -108,9 +108,9 @@ public actor ForgeService {
 
     /// Answers once the checks passed (the item must be failed and in the current cycle); then works in the
     /// background: a check of its own, as for `regenerate()`, then Retry.
-    public func retry(itemTaskID: String) async throws {
+    public func retry(itemTicketID: String) async throws {
         try await enabledOperation {
-            try await self.retryNow(itemTaskID: itemTaskID)
+            try await self.retryNow(itemTicketID: itemTicketID)
         }
     }
 
@@ -126,13 +126,13 @@ public actor ForgeService {
         }
     }
 
-    private func retryNow(itemTaskID: String) async throws {
+    private func retryNow(itemTicketID: String) async throws {
         _ = try await configurationChecks()
-        guard let item = items.first(where: { $0.taskID == itemTaskID }) else {
-            throw ProtocolError(.notFound, "No Forge item for \(itemTaskID).")
+        guard let item = items.first(where: { $0.ticketID == itemTicketID }) else {
+            throw ProtocolError(.notFound, "No Forge item for \(itemTicketID).")
         }
         guard item.state == .failed, let cycle, cycle.state == .failed, item.cycleID == cycle.id else {
-            throw ProtocolError(.conflict, "\(itemTaskID) has not failed.")
+            throw ProtocolError(.conflict, "\(itemTicketID) has not failed.")
         }
         enqueue {
             await self.checkOfItsOwn()
@@ -192,17 +192,17 @@ public actor ForgeService {
         }
     }
 
-    /// Called by HostService.emit for every task.changed: an item whose task changed name takes the new name.
-    public func taskChanged(projectID: String, task: TaskItem) async {
+    /// Called by HostService.emit for every ticket.changed: an item whose ticket changed name takes the new name.
+    public func ticketChanged(projectID: String, ticket: TicketItem) async {
         enqueue {
-            await self.renameItem(projectID: projectID, task: task)
+            await self.renameItem(projectID: projectID, ticket: ticket)
         }
     }
 
-    /// Called by HostService.emit for every task.removed.
-    public func taskRemoved(projectID: String, taskID: String) async {
+    /// Called by HostService.emit for every ticket.removed.
+    public func ticketRemoved(projectID: String, ticketID: String) async {
         enqueue {
-            await self.removeItem(projectID: projectID, taskID: taskID)
+            await self.removeItem(projectID: projectID, ticketID: ticketID)
         }
     }
 
@@ -308,15 +308,17 @@ public actor ForgeService {
     // MARK: - Push tools (steps 1 and 8)
 
     private func pushDocsNow(sessionID: UUID) async throws -> String {
-        // 1. Session (the feedback session of an item, or the coordinator of a bundle of the source project in
-        // `running` or `review`), configuration checks, private terms.
+        // 1. Session (a ticket session of the source project without a bundle, or the coordinator of a bundle of the
+        // source project in `running` or `review`), configuration checks, private terms.
         guard let config = configuration else { throw Self.notTheForge }
         let coordinates = await host.bundles.list(projectID: config.sourceProjectID).contains { bundle in
             bundle.coordinatorSessionID == sessionID && Self.isActive(bundle.status)
         }
-        guard coordinates || items.contains(where: { $0.feedbackSessionID == sessionID }) else {
-            throw ProtocolError(.conflict, "forge_push_docs is only available in Forge feedback sessions and in the "
-                                    + "bundle sessions of the source project.")
+        let ticketSession = await ticketSession(sessionID, projectID: config.sourceProjectID)
+        guard coordinates || ticketSession != nil else {
+            throw ProtocolError(.conflict, "forge_push_docs is only available in the ticket sessions and the bundle "
+                                    + "sessions of the source project; the coordinator of a bundle pushes the work of "
+                                    + "its ticket sessions.")
         }
         guard cycle?.state != .regenerating else {
             throw ProtocolError(.conflict, "A regeneration is working in this repository; call forge_push_docs again "
@@ -327,23 +329,24 @@ public actor ForgeService {
         // 2 to 7. The push gate.
         let pushed = try await pushThroughGate(.pushDocs, repository: repository, branch: config.branch)
         // 8. Record: the trusted head, the event of the session's items, the join rule, a check, then the tool trigger.
-        // A coordinator's items are those of the tasks of its bundle, and its result names the bundle.
+        // A ticket session's item is that of its ticket; a coordinator's items are those of the tickets of its bundle,
+        // and its result names the bundle.
         recordTrustedPush(pushed)
-        let (label, taskIDs) = await pushedItems(sessionID: sessionID, projectID: config.sourceProjectID)
-        for taskID in taskIDs {
-            recordDocsPush(pushed.commit, taskID: taskID)
+        let (label, ticketIDs) = await pushedItems(sessionID: sessionID, projectID: config.sourceProjectID)
+        for ticketID in ticketIDs {
+            recordDocsPush(pushed.commit, ticketID: ticketID)
         }
-        let docsPushed = taskIDs.filter { taskID in items.first { $0.taskID == taskID }?.state == .docsPushed }
+        let docsPushed = ticketIDs.filter { ticketID in items.first { $0.ticketID == ticketID }?.state == .docsPushed }
         if !docsPushed.isEmpty {
-            await joinRule(taskIDs: docsPushed)
+            await joinRule(ticketIDs: docsPushed)
         }
         saveStore()
         await broadcastIfChanged()
         await runCheck()
         await resumeCompletion()
         let inActiveCycle = cycle.map { cycle in
-            Self.isActive(cycle.state) && !taskIDs.isEmpty && taskIDs.allSatisfy { taskID in
-                items.first { $0.taskID == taskID }?.cycleID == cycle.id
+            Self.isActive(cycle.state) && !ticketIDs.isEmpty && ticketIDs.allSatisfy { ticketID in
+                items.first { $0.ticketID == ticketID }?.cycleID == cycle.id
             }
         } ?? false
         let cycleActive = cycle.map { Self.isActive($0.state) } ?? false
@@ -371,34 +374,50 @@ public actor ForgeService {
             + "waits until they are (Forge screen)."
     }
 
+    /// The session when it is a `ticket` session of the project without a `bundleID`.
+    private func ticketSession(_ sessionID: UUID, projectID: String) async -> SessionInfo? {
+        let sessions = (try? await host.sessions.sessions(projectID: projectID)) ?? []
+        return sessions.first { session in
+            session.id == sessionID && session.kind == .ticket && session.bundleID == nil && session.ticketID != nil
+        }
+    }
+
     /// The items of a `forge_push_docs`, and the id its result names. For the coordinator of a bundle of the source
-    /// project, the items of the tasks of its bundle, in its order, a task without an item getting a new one
-    /// (`docsPushed`, the task's name, the coordinator as `feedbackSessionID`), and the bundle id; for a feedback
-    /// session, its item and its task id.
-    private func pushedItems(sessionID: UUID, projectID: String) async -> (label: String, taskIDs: [String]) {
+    /// project, the items of the tickets of its bundle, in its order, and the bundle id; for a ticket session, the item
+    /// of its ticket and its ticket id. A ticket without an item gets a new one (`docsPushed`, the ticket's name, the
+    /// calling session as `feedbackSessionID`), unless the ticket no longer exists.
+    private func pushedItems(sessionID: UUID, projectID: String) async -> (label: String, ticketIDs: [String]) {
         let bundles = await host.bundles.list(projectID: projectID)
         let coordinated = bundles.filter { $0.coordinatorSessionID == sessionID }
-        let bundle = coordinated.first { Self.isActive($0.status) } ?? coordinated.first
-        guard let bundle else {
-            let taskID = items.first { $0.feedbackSessionID == sessionID }?.taskID ?? ""
-            return (taskID, taskID.isEmpty ? [] : [taskID])
-        }
-        var taskIDs: [String] = []
-        for task in bundle.tasks {
-            if !items.contains(where: { $0.taskID == task.taskID }) {
-                // A task deleted since it joined the bundle has no item.
-                guard let item = try? await host.tasks.task(projectID: projectID, taskID: task.taskID) else {
-                    continue
-                }
-                let now = Date()
-                dropOldItemsForNewItem()
-                items.append(ForgeItem(taskID: item.id, projectID: projectID, title: item.name, state: .docsPushed,
-                                       feedbackSessionID: sessionID, created: now, updated: now))
-                Log.host.info("Forge item \(item.id, privacy: .public) created for bundle \(bundle.id, privacy: .public)")
+        if let bundle = coordinated.first(where: { Self.isActive($0.status) }) ?? coordinated.first {
+            var ticketIDs: [String] = []
+            for ticket in bundle.tickets where await ensureItem(ticket.ticketID, projectID: projectID,
+                                                                 sessionID: sessionID) {
+                ticketIDs.append(ticket.ticketID)
             }
-            taskIDs.append(task.taskID)
+            return (bundle.id, ticketIDs)
         }
-        return (bundle.id, taskIDs)
+        guard let ticketID = await ticketSession(sessionID, projectID: projectID)?.ticketID else { return ("", []) }
+        let id = TicketID(ticketID)?.description ?? ticketID
+        let exists = await ensureItem(id, projectID: projectID, sessionID: sessionID)
+        return (id, exists ? [id] : [])
+    }
+
+    /// The ticket has an item, created when missing (`docsPushed`, the ticket's name, `sessionID` as
+    /// `feedbackSessionID`); false when it has none and no longer exists.
+    private func ensureItem(_ ticketID: String, projectID: String, sessionID: UUID) async -> Bool {
+        if items.contains(where: { $0.ticketID == ticketID }) {
+            return true
+        }
+        guard let ticket = try? await host.tickets.ticket(projectID: projectID, ticketID: ticketID) else {
+            return false
+        }
+        let now = Date()
+        dropOldItemsForNewItem()
+        items.append(ForgeItem(ticketID: ticket.id, projectID: projectID, title: ticket.name, state: .docsPushed,
+                               feedbackSessionID: sessionID, created: now, updated: now))
+        Log.host.info("Forge item \(ticket.id, privacy: .public) created")
+        return true
     }
 
     private func pushRegenNow(sessionID: UUID) async throws -> String {

@@ -4,13 +4,13 @@ import HephCore
 
 /// The result of the MCP tool `get_bundle` (docs/services/bundles.md, "Swift API").
 struct BundleDetails: Codable, Sendable {
-    /// One task of the bundle.
+    /// One ticket of the bundle.
     struct Entry: Codable, Sendable {
-        /// Absent for a deleted task.
-        var task: TaskItem?
+        /// Absent for a deleted ticket.
+        var ticket: TicketItem?
         /// Absent without one.
         var session: SessionInfo?
-        /// `task/<id>`
+        /// `ticket/<id>`
         var branch: String
         /// Absent while the worktree does not exist.
         var workFolder: String?
@@ -18,8 +18,8 @@ struct BundleDetails: Codable, Sendable {
 
     var bundle: BundleItem
     var maxParallel: Int
-    /// One per task, in order.
-    var tasks: [Entry]
+    /// One per ticket, in order.
+    var tickets: [Entry]
 }
 
 /// The result of the MCP tool `finish_bundle`.
@@ -37,13 +37,13 @@ actor BundleService: HostMethodHandler {
     private var cache: [String: [BundleID: BundleItem]] = [:]
     /// The code folder of every loaded project: removeWorktrees runs once the registry has dropped the project.
     private var codeFolders: [String: URL] = [:]
-    /// The last status seen of each task session of a bundle (Observing the task sessions).
+    /// The last status seen of each ticket session of a bundle (Observing the ticket sessions).
     private var sessionStatuses: [UUID: SessionStatus] = [:]
     /// The last message sent to each coordinator: its messages are sent one after the other, in order.
     private var coordinatorMessages: [UUID: Task<Void, Never>] = [:]
     /// The bundles one of whose methods or tools runs, and the calls waiting for each, in order: the methods and tools
     /// of a bundle run one after the other, so that each finds the status the one before left (two `bundles.start` of
-    /// a draft never start two coordinators, a `bundles.stop` stops the task session a `start_bundle_task` started).
+    /// a draft never start two coordinators, a `bundles.stop` stops the ticket session a `start_bundle_ticket` started).
     private var busyBundles: Set<BundleID> = []
     private var waitingCalls: [BundleID: [CheckedContinuation<Void, Never>]] = [:]
 
@@ -105,22 +105,22 @@ actor BundleService: HostMethodHandler {
         (cache[projectID] ?? [:]).values.contains { Self.isActive($0.status) }
     }
 
-    /// The working directory of a task session of a bundle: `<worktree folder>/<rel>`.
-    func workFolder(projectID: String, taskID: String) async throws -> URL {
-        let id = TaskID(taskID)?.description ?? taskID
+    /// The working directory of a ticket session of a bundle: `<worktree folder>/<rel>`.
+    func workFolder(projectID: String, ticketID: String) async throws -> URL {
+        let id = TicketID(ticketID)?.description ?? ticketID
         // SessionService adds "Could not start Claude: " to the message (claude/cli.md 5.3).
         let removed = ProtocolError(.notFound, "the worktree of \(id) was removed with its bundle.")
-        let worktree = worktreeFolder(projectID: projectID, taskID: id)
+        let worktree = worktreeFolder(projectID: projectID, ticketID: id)
         guard Self.exists(worktree) else { throw removed }
         let folder = Self.workFolder(worktree, relative: try await git(projectID: projectID).repository().relative)
         guard Self.exists(folder) else { throw removed }
         return folder
     }
 
-    /// Observing the task sessions: a status change of a task session of a bundle in `running` or `review` sends one
+    /// Observing the ticket sessions: a status change of a ticket session of a bundle in `running` or `review` sends one
     /// message to the bundle's coordinator.
     func sessionChanged(projectID: String, session: SessionInfo) async {
-        guard session.kind == .task, let bundleText = session.bundleID, let taskID = session.taskID else { return }
+        guard session.kind == .ticket, let bundleText = session.bundleID, let ticketID = session.ticketID else { return }
         let previous = sessionStatuses[session.id]
         sessionStatuses[session.id] = session.status
         guard previous != session.status,
@@ -131,14 +131,14 @@ actor BundleService: HostMethodHandler {
         let text: String
         switch session.status {
         case .waitingPermission:
-            text = "\(taskID) is waiting for a permission answer in its session."
+            text = "\(ticketID) is waiting for a permission answer in its session."
         case .idle, .stopped:
             guard previous == .running || previous == .waitingPermission,
-                  let task = try? await host.tasks.task(projectID: projectID, taskID: taskID)
+                  let ticket = try? await host.tickets.ticket(projectID: projectID, ticketID: ticketID)
             else { return }
-            text = "\(taskID) ended its turn. Task status: \(task.status.rawValue)."
+            text = "\(ticketID) ended its turn. Ticket status: \(ticket.status.rawValue)."
         case .failed:
-            text = "The session of \(taskID) failed: \(session.error ?? "")"
+            text = "The session of \(ticketID) failed: \(session.error ?? "")"
         case .starting, .running:
             return
         }
@@ -147,15 +147,15 @@ actor BundleService: HostMethodHandler {
 
     // MARK: - Methods
 
-    /// bundles.create: a new draft with the tasks in the given order, repeats removed (first kept).
-    func create(projectID: String, name: String, taskIDs: [String]) async throws -> BundleItem {
+    /// bundles.create: a new draft with the tickets in the given order, repeats removed (first kept).
+    func create(projectID: String, name: String, ticketIDs: [String]) async throws -> BundleItem {
         let validName = try Self.validatedName(name)
         let host = self.host
         return try await host.registry.write(projectID) { project in
-            guard !taskIDs.isEmpty else { throw Self.noTask }
+            guard !ticketIDs.isEmpty else { throw Self.noTicket }
             var ids: [String] = []
-            for taskID in taskIDs {
-                let id = try await self.checkedTask(taskID, projectID: projectID).id
+            for ticketID in ticketIDs {
+                let id = try await self.checkedTicket(ticketID, projectID: projectID).id
                 if !ids.contains(id) {
                     ids.append(id)
                 }
@@ -166,7 +166,7 @@ actor BundleService: HostMethodHandler {
                 let now = YAMLCoding.now()
                 let file = BundleFile(id: id.description, name: validName, status: .draft, created: now, updated: now,
                                       base: nil, coordinator: nil,
-                                      tasks: ids.map { BundleFile.Item(task: $0, session: nil) })
+                                      tickets: ids.map { BundleFile.Item(ticket: $0, session: nil) })
                 try BundleFile.create(file, projectRoot: project.root)
                 let item = Self.item(file)
                 await self.store(projectID: projectID, id: id, item: item)
@@ -177,8 +177,8 @@ actor BundleService: HostMethodHandler {
         }
     }
 
-    /// bundles.update: `name` in any status; `taskIDs` in `draft` and `done`, keeping the session of a task that stays
-    /// (a `done` bundle becomes `draft`).
+    /// bundles.update: `name` in any status; `ticketIDs` in `draft` only, keeping the session of a ticket that stays
+    /// (the tickets of a `done` bundle are frozen).
     func update(projectID: String, bundleID: String, patch: BundlePatch) async throws -> BundleItem {
         let name = try patch.name.map(Self.validatedName)
         let operation = await beginOperation(bundleID, projectID: projectID)
@@ -186,29 +186,33 @@ actor BundleService: HostMethodHandler {
         let host = self.host
         return try await host.registry.write(projectID) { project in
             let (id, bundle) = try await self.existing(bundleID, projectID: projectID)
-            var taskIDs: [String]?
-            if let requested = patch.taskIDs {
-                guard !Self.isActive(bundle.status) else { throw Self.stopFirst(id) }
-                guard !requested.isEmpty else { throw Self.noTask }
+            var ticketIDs: [String]?
+            if let requested = patch.ticketIDs {
+                switch bundle.status {
+                case .draft:
+                    break
+                case .running, .review:
+                    throw Self.stopFirst(id)
+                case .done:
+                    throw Self.isDone(id)
+                }
+                guard !requested.isEmpty else { throw Self.noTicket }
                 var ids: [String] = []
-                for taskID in requested {
-                    ids.append(try await self.checkedTask(taskID, projectID: projectID).id)
+                for ticketID in requested {
+                    ids.append(try await self.checkedTicket(ticketID, projectID: projectID).id)
                 }
                 try await self.checkNotInOtherBundle(ids, projectID: projectID, except: id)
-                taskIDs = ids
+                ticketIDs = ids
             }
             do {
                 let file = try BundleFile.update(projectRoot: project.root, id: id) { file in
                     if let name {
                         file.name = name
                     }
-                    if let taskIDs {
-                        let sessions = Dictionary(file.tasks.map { ($0.task, $0.session) },
+                    if let ticketIDs {
+                        let sessions = Dictionary(file.tickets.map { ($0.ticket, $0.session) },
                                                   uniquingKeysWith: { first, _ in first })
-                        file.tasks = taskIDs.map { BundleFile.Item(task: $0, session: sessions[$0] ?? nil) }
-                        if file.status == .done {
-                            file.status = .draft
-                        }
+                        file.tickets = ticketIDs.map { BundleFile.Item(ticket: $0, session: sessions[$0] ?? nil) }
                     }
                 }
                 let item = Self.item(file)
@@ -220,13 +224,14 @@ actor BundleService: HostMethodHandler {
         }
     }
 
-    /// bundles.delete: the worktrees of its tasks removed, the branches whose work is on `base` deleted, the file
+    /// bundles.delete: the worktrees of its tickets removed, the branches whose work is on `base` deleted, the file
     /// deleted.
     func delete(projectID: String, bundleID: String) async throws {
         let operation = await beginOperation(bundleID, projectID: projectID)
         defer { endOperation(operation) }
         try await host.registry.checkWritable(projectID)
         let (id, bundle) = try existing(bundleID, projectID: projectID)
+        await renameOldBranches(projectID: projectID, bundle: bundle)
         guard !Self.isActive(bundle.status) else { throw Self.stopFirst(id) }
         _ = try await removeWork(projectID: projectID, bundle: bundle)
         let host = self.host
@@ -247,13 +252,14 @@ actor BundleService: HostMethodHandler {
         defer { endOperation(operation) }
         try await host.registry.checkWritable(projectID)
         let (id, bundle) = try existing(bundleID, projectID: projectID)
+        await renameOldBranches(projectID: projectID, bundle: bundle)
         switch bundle.status {
         case .draft:
             break
         case .running, .review:
             throw Self.stopFirst(id)
         case .done:
-            throw ProtocolError(.conflict, "\(id) is done.")
+            throw Self.isDone(id)
         }
         // 1. The repository check.
         let git = try await git(projectID: projectID)
@@ -276,7 +282,7 @@ actor BundleService: HostMethodHandler {
         let coordinator: UUID
         do {
             if let existing = bundle.coordinatorSessionID, try await hasSession(existing, projectID: projectID) {
-                let text = "Resume work on \(id): check the state of its tasks with get_bundle."
+                let text = "Resume work on \(id): check the state of its tickets with get_bundle."
                 try await host.sessions.send(projectID: projectID, sessionID: existing, text: text, attachments: [],
                                              deviceID: mainID)
                 coordinator = existing
@@ -299,7 +305,7 @@ actor BundleService: HostMethodHandler {
         }
     }
 
-    /// bundles.stop: `sessions.stop` of the coordinator and of every task session of the bundle; status `draft`.
+    /// bundles.stop: `sessions.stop` of the coordinator and of every ticket session of the bundle; status `draft`.
     func stop(projectID: String, bundleID: String) async throws -> BundleItem {
         let operation = await beginOperation(bundleID, projectID: projectID)
         defer { endOperation(operation) }
@@ -308,7 +314,7 @@ actor BundleService: HostMethodHandler {
         guard Self.isActive(bundle.status) else { throw Self.notRunning(id) }
         let sessions = try await host.sessions.sessions(projectID: projectID)
         let stopped = sessions.filter { session in
-            session.id == bundle.coordinatorSessionID || (session.kind == .task && session.bundleID == id.description)
+            session.id == bundle.coordinatorSessionID || (session.kind == .ticket && session.bundleID == id.description)
         }
         for session in stopped {
             try await host.sessions.stop(projectID: projectID, sessionID: session.id)
@@ -323,11 +329,12 @@ actor BundleService: HostMethodHandler {
     /// get_bundle.
     func details(projectID: String, bundleID: String) async throws -> BundleDetails {
         let (_, bundle) = try existing(bundleID, projectID: projectID)
+        await renameOldBranches(projectID: projectID, bundle: bundle)
         let sessions = try await host.sessions.sessions(projectID: projectID)
         var relative: String?
         var entries: [BundleDetails.Entry] = []
-        for task in bundle.tasks {
-            let worktree = worktreeFolder(projectID: projectID, taskID: task.taskID)
+        for ticket in bundle.tickets {
+            let worktree = worktreeFolder(projectID: projectID, ticketID: ticket.ticketID)
             var workFolder: String?
             if Self.exists(worktree) {
                 if relative == nil {
@@ -336,52 +343,53 @@ actor BundleService: HostMethodHandler {
                 workFolder = Self.workFolder(worktree, relative: relative ?? "").path
             }
             entries.append(BundleDetails.Entry(
-                task: try? await host.tasks.task(projectID: projectID, taskID: task.taskID),
-                session: task.sessionID.flatMap { sessionID in sessions.first { $0.id == sessionID } },
-                branch: Self.branch(task.taskID),
+                ticket: try? await host.tickets.ticket(projectID: projectID, ticketID: ticket.ticketID),
+                session: ticket.sessionID.flatMap { sessionID in sessions.first { $0.id == sessionID } },
+                branch: Self.branch(ticket.ticketID),
                 workFolder: workFolder))
         }
-        return BundleDetails(bundle: bundle, maxParallel: await host.settings().bundles.maxParallel, tasks: entries)
+        return BundleDetails(bundle: bundle, maxParallel: await host.settings().bundles.maxParallel, tickets: entries)
     }
 
-    /// start_bundle_task: instructions for the task's existing session, else a new task session in the task's
-    /// worktree.
-    func startTask(projectID: String, bundleID: String, taskID: String, instructions: String?) async throws
+    /// start_bundle_ticket: instructions for the ticket's existing session, else a new ticket session in the ticket's
+    /// worktree. The ticket's status follows the turns of its session (services/host.md §8.1).
+    func startTicket(projectID: String, bundleID: String, ticketID: String, instructions: String?) async throws
         -> SessionInfo {
         let operation = await beginOperation(bundleID, projectID: projectID)
         defer { endOperation(operation) }
         let (id, bundle) = try existing(bundleID, projectID: projectID)
-        // 1. The task is in the bundle, which runs.
-        let taskText = TaskID(taskID)?.description ?? taskID
-        guard let entry = bundle.tasks.first(where: { $0.taskID == taskText }) else {
-            throw ProtocolError(.badRequest, "\(taskText) is not in \(id).")
+        await renameOldBranches(projectID: projectID, bundle: bundle)
+        // 1. The ticket is in the bundle, which runs.
+        let ticketText = TicketID(ticketID)?.description ?? ticketID
+        guard let entry = bundle.tickets.first(where: { $0.ticketID == ticketText }) else {
+            throw ProtocolError(.badRequest, "\(ticketText) is not in \(id).")
         }
         guard Self.isActive(bundle.status) else { throw Self.notRunning(id) }
-        _ = try await checkedTask(taskText, projectID: projectID)
+        _ = try await checkedTicket(ticketText, projectID: projectID)
         let mainID = await host.mesh.localDevice().id
         let sessions = try await host.sessions.sessions(projectID: projectID)
-        // 2. The task's session gets the instructions.
+        // 2. The ticket's session gets the instructions.
         if let sessionID = entry.sessionID, let existing = sessions.first(where: { $0.id == sessionID }) {
             guard let instructions else {
-                throw ProtocolError(.badRequest, "\(taskText) already has a session: give instructions for it.")
+                throw ProtocolError(.badRequest, "\(ticketText) already has a session: give instructions for it.")
             }
             try await host.sessions.send(projectID: projectID, sessionID: sessionID, text: instructions,
                                          attachments: [], deviceID: mainID)
             return try await host.sessions.sessions(projectID: projectID).first { $0.id == sessionID } ?? existing
         }
-        // 3. The limit of parallel task sessions.
+        // 3. The limit of parallel ticket sessions.
         let busy: Set<SessionStatus> = [.starting, .running, .waitingPermission]
         let running = sessions.filter { session in
-            session.kind == .task && session.bundleID == id.description && busy.contains(session.status)
+            session.kind == .ticket && session.bundleID == id.description && busy.contains(session.status)
         }.count
         let maxParallel = await host.settings().bundles.maxParallel
         guard running < maxParallel else {
-            throw ProtocolError(.conflict, "\(running) task sessions of \(id) are running, the limit of this Main "
-                                + "(Settings ▸ Claude ▸ Bundles). Start \(taskText) when one of them ends its turn.")
+            throw ProtocolError(.conflict, "\(running) ticket sessions of \(id) are running, the limit of this Main "
+                                + "(Settings ▸ Claude ▸ Bundles). Start \(ticketText) when one of them ends its turn.")
         }
         // 4. The worktree.
         let git = try await git(projectID: projectID)
-        let worktree = worktreeFolder(projectID: projectID, taskID: taskText)
+        let worktree = worktreeFolder(projectID: projectID, ticketID: ticketText)
         if !Self.exists(worktree) {
             let base: String
             if let current = bundle.base {
@@ -389,23 +397,15 @@ actor BundleService: HostMethodHandler {
             } else {
                 base = try await git.currentBranch()
             }
-            try await git.createWorktree(at: worktree, branch: Self.branch(taskText), base: base)
+            try await git.createWorktree(at: worktree, branch: Self.branch(ticketText), base: base)
         }
-        // 5. The task session.
-        let session = try await host.sessions.start(SessionStart(projectID: projectID, kind: .task, taskID: taskText,
+        // 5. The ticket session.
+        let session = try await host.sessions.start(SessionStart(projectID: projectID, kind: .ticket, ticketID: ticketText,
                                                                  mode: .implement, message: instructions,
                                                                  deviceID: mainID, bundleID: id.description))
         _ = try await change(projectID: projectID, id: id) { file in
-            for index in file.tasks.indices where file.tasks[index].task == taskText {
-                file.tasks[index].session = session.id
-            }
-        }
-        if let task = try? await host.tasks.task(projectID: projectID, taskID: taskText), task.status == .todo {
-            do {
-                _ = try await host.tasks.update(projectID: projectID, taskID: taskText,
-                                                patch: TaskPatch(status: .inProgress))
-            } catch {
-                Log.host.error("Could not set \(taskText, privacy: .public) in progress: \(ProjectRegistry.protocolError(error).message)")
+            for index in file.tickets.indices where file.tickets[index].ticket == ticketText {
+                file.tickets[index].session = session.id
             }
         }
         return session
@@ -427,30 +427,18 @@ actor BundleService: HostMethodHandler {
     }
 
     /// finish_bundle, for a bundle in `running` or `review`: the worktrees removed, the branches whose work is on
-    /// `base` deleted, the bundle `done`; outside the Forge source project, the tasks whose branch was deleted become
-    /// `done`.
+    /// `base` deleted, the bundle `done`. The statuses of its tickets are left as they are.
     func finish(projectID: String, bundleID: String) async throws -> BundleFinishResult {
         let operation = await beginOperation(bundleID, projectID: projectID)
         defer { endOperation(operation) }
         let (id, bundle) = try existing(bundleID, projectID: projectID)
+        await renameOldBranches(projectID: projectID, bundle: bundle)
         guard Self.isActive(bundle.status) else { throw Self.notRunning(id) }
-        let work = try await removeWork(projectID: projectID, bundle: bundle)
+        let keptBranches = try await removeWork(projectID: projectID, bundle: bundle)
         let item = try await change(projectID: projectID, id: id) { file in
             file.status = .done
         }
-        let settings = await host.settings()
-        let isForgeSource = settings.forge.enabled && settings.forge.sourceProjectID == projectID
-        if !isForgeSource {
-            for taskID in work.deleted {
-                do {
-                    _ = try await host.tasks.update(projectID: projectID, taskID: taskID,
-                                                    patch: TaskPatch(status: .done))
-                } catch {
-                    Log.host.error("Could not set \(taskID, privacy: .public) done: \(ProjectRegistry.protocolError(error).message)")
-                }
-            }
-        }
-        return BundleFinishResult(bundle: item, keptBranches: work.kept)
+        return BundleFinishResult(bundle: item, keptBranches: keptBranches)
     }
 
     // MARK: - HostMethodHandler
@@ -461,7 +449,7 @@ actor BundleService: HostMethodHandler {
             case .bundlesCreate:
                 let request = try Self.decode(BundlesCreateParams.self, params, method)
                 return try WireCoding.encodeJSON(try await create(projectID: request.projectID, name: request.name,
-                                                                  taskIDs: request.taskIDs))
+                                                                  ticketIDs: request.ticketIDs))
             case .bundlesUpdate:
                 let request = try Self.decode(BundlesUpdateParams.self, params, method)
                 return try WireCoding.encodeJSON(try await update(projectID: request.projectID,
@@ -488,10 +476,14 @@ actor BundleService: HostMethodHandler {
 
     // MARK: - Private
 
-    private static let noTask = ProtocolError(.badRequest, "A bundle needs at least one task.")
+    private static let noTicket = ProtocolError(.badRequest, "A bundle needs at least one ticket.")
 
     private static func stopFirst(_ id: BundleID) -> ProtocolError {
         ProtocolError(.conflict, "Stop \(id) first.")
+    }
+
+    private static func isDone(_ id: BundleID) -> ProtocolError {
+        ProtocolError(.conflict, "\(id) is done.")
     }
 
     private static func notRunning(_ id: BundleID) -> ProtocolError {
@@ -548,24 +540,24 @@ actor BundleService: HostMethodHandler {
         return (id, bundle)
     }
 
-    /// A task id given to a method: a task of the project that is not broken.
-    private func checkedTask(_ taskID: String, projectID: String) async throws -> TaskItem {
-        let task = try await host.tasks.task(projectID: projectID, taskID: taskID)
-        if let parseError = task.parseError {
+    /// A ticket id given to a method: a ticket of the project that is not broken.
+    private func checkedTicket(_ ticketID: String, projectID: String) async throws -> TicketItem {
+        let ticket = try await host.tickets.ticket(projectID: projectID, ticketID: ticketID)
+        if let parseError = ticket.parseError {
             throw ProtocolError(.conflict, "The file is invalid: \(parseError)")
         }
-        return task
+        return ticket
     }
 
-    /// A task is in at most one bundle that is not `done`: the first of `taskIDs` that is in another such bundle of
-    /// the project (by number) fails with conflict "<task id> is in <bundle id>.".
-    private func checkNotInOtherBundle(_ taskIDs: [String], projectID: String, except: BundleID?) throws {
+    /// A ticket is in at most one bundle that is not `done`: the first of `ticketIDs` that is in another such bundle of
+    /// the project (by number) fails with conflict "<ticket id> is in <bundle id>.".
+    private func checkNotInOtherBundle(_ ticketIDs: [String], projectID: String, except: BundleID?) throws {
         let others = (cache[projectID] ?? [:])
             .filter { $0.key != except && $0.value.status != .done }
             .sorted { $0.key.number < $1.key.number }
-        for taskID in taskIDs {
-            if let other = others.first(where: { $0.value.tasks.contains { $0.taskID == taskID } }) {
-                throw ProtocolError(.conflict, "\(taskID) is in \(other.key).")
+        for ticketID in ticketIDs {
+            if let other = others.first(where: { $0.value.tickets.contains { $0.ticketID == ticketID } }) {
+                throw ProtocolError(.conflict, "\(ticketID) is in \(other.key).")
             }
         }
     }
@@ -600,21 +592,19 @@ actor BundleService: HostMethodHandler {
         }
     }
 
-    /// For each task in order, except a task in another bundle of the project that is not `done` (its worktree and
+    /// For each ticket in order, except a ticket in another bundle of the project that is not `done` (its worktree and
     /// branch are that bundle's): its worktree removed; with a base, its branch deleted when its work is on the base,
-    /// else kept. Returns the tasks whose branch was deleted and the branches kept.
-    private func removeWork(projectID: String, bundle: BundleItem) async throws
-        -> (deleted: [String], kept: [String]) {
-        var deleted: [String] = []
+    /// else kept. Returns the branches kept.
+    private func removeWork(projectID: String, bundle: BundleItem) async throws -> [String] {
         var kept: [String] = []
         var runner: BundleGit?
-        for task in bundle.tasks {
-            // Read at each task: a bundle created while the work is removed may take the next ones.
+        for ticket in bundle.tickets {
+            // Read at each ticket: a bundle created while the work is removed may take the next ones.
             let inOtherBundle = (cache[projectID] ?? [:]).values.contains { other in
-                other.id != bundle.id && other.status != .done && other.tasks.contains { $0.taskID == task.taskID }
+                other.id != bundle.id && other.status != .done && other.tickets.contains { $0.ticketID == ticket.ticketID }
             }
             guard !inOtherBundle else { continue }
-            let worktree = worktreeFolder(projectID: projectID, taskID: task.taskID)
+            let worktree = worktreeFolder(projectID: projectID, ticketID: ticket.ticketID)
             let hasWorktree = Self.exists(worktree)
             guard hasWorktree || bundle.base != nil else { continue }
             let git: BundleGit
@@ -628,16 +618,35 @@ actor BundleService: HostMethodHandler {
                 try await git.removeWorktree(at: worktree)
             }
             guard let base = bundle.base else { continue }
-            let branch = Self.branch(task.taskID)
+            let branch = Self.branch(ticket.ticketID)
             guard try await git.branchExists(branch) else { continue }
             if try await git.isBroughtIn(branch: branch, base: base) {
                 try await git.deleteBranch(branch)
-                deleted.append(task.taskID)
             } else {
                 kept.append(branch)
             }
         }
-        return (deleted, kept)
+        return kept
+    }
+
+    /// Old branches: `BundleGit.renameOldBranch(ticketID:)` for each ticket of the bundle, in order, while
+    /// `host.info` reports `gitAvailable`; a failure is logged and the method or tool goes on.
+    private func renameOldBranches(projectID: String, bundle: BundleItem) async {
+        guard await host.hostInfo.gitAvailable else { return }
+        let git: BundleGit
+        do {
+            git = try await self.git(projectID: projectID)
+        } catch {
+            Log.host.error("Could not rename the old branches of \(bundle.id, privacy: .public): \(ProjectRegistry.protocolError(error).message)")
+            return
+        }
+        for ticket in bundle.tickets {
+            do {
+                _ = try await git.renameOldBranch(ticketID: ticket.ticketID)
+            } catch {
+                Log.host.error("Could not rename the branch task/\(ticket.ticketID, privacy: .public): \(ProjectRegistry.protocolError(error).message)")
+            }
+        }
     }
 
     /// The project's BundleGit, only while host.info reports gitAvailable.
@@ -684,11 +693,11 @@ actor BundleService: HostMethodHandler {
         await host.emit(.bundleRemoved(BundleRemovedPayload(projectID: projectID, bundleID: id.description)))
     }
 
-    /// `<Application Support>/Hephaestus/Worktrees/<projectID>/<task id>/`
-    private func worktreeFolder(projectID: String, taskID: String) -> URL {
+    /// `<Application Support>/Hephaestus/Worktrees/<projectID>/<ticket id>/`
+    private func worktreeFolder(projectID: String, ticketID: String) -> URL {
         host.appSupport.worktreesFolder
             .appendingPathComponent(projectID, isDirectory: true)
-            .appendingPathComponent(taskID, isDirectory: true)
+            .appendingPathComponent(ticketID, isDirectory: true)
     }
 
     /// The work folder: the code folder's place in the worktree.
@@ -696,9 +705,9 @@ actor BundleService: HostMethodHandler {
         relative.isEmpty ? worktree : worktree.appendingPathComponent(relative, isDirectory: true)
     }
 
-    /// `task/<task id>`
-    private static func branch(_ taskID: String) -> String {
-        "task/\(taskID)"
+    /// `ticket/<ticket id>`
+    private static func branch(_ ticketID: String) -> String {
+        "ticket/\(ticketID)"
     }
 
     /// The project's code folder: `root` + project.yml `code` (`.` is `root`).
@@ -716,7 +725,7 @@ actor BundleService: HostMethodHandler {
     private static func item(_ file: BundleFile) -> BundleItem {
         BundleItem(id: file.id, name: file.name, status: file.status, created: file.created, updated: file.updated,
                    base: file.base, coordinatorSessionID: file.coordinator,
-                   tasks: file.tasks.map { BundleTask(taskID: $0.task, sessionID: $0.session) })
+                   tickets: file.tickets.map { BundleTicket(ticketID: $0.ticket, sessionID: $0.session) })
     }
 
     /// WireCoding decoding of the params; a failure is badRequest "Invalid params for <method>: <coding path>.".

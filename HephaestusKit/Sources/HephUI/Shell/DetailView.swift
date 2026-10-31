@@ -14,6 +14,10 @@ struct DetailView: View {
             .navigationTitle(windowTitle)
             #if os(macOS)
             .toolbar(removing: .title)
+            // The toolbar keeps its material over the detail in every section and state; the content extends under
+            // it (§9.2).
+            .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
+            .toolbarBackground(.bar, for: .windowToolbar)
             #else
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -55,7 +59,7 @@ struct DetailView: View {
                     DevicesView()
                 case .forge:
                     ForgeView()
-                case .overview, .tasks, .code, .docs, .web, .claude, .runs:
+                case .overview, .tickets, .code, .docs, .web, .claude:
                     EmptyView()
                 }
             }
@@ -137,8 +141,8 @@ struct DetailView: View {
         switch section {
         case .overview:
             OverviewView(store: store)
-        case .tasks:
-            TasksView(store: store)
+        case .tickets:
+            TicketsView(store: store)
         case .code:
             CodeView(store: store)
         case .docs:
@@ -147,8 +151,6 @@ struct DetailView: View {
             WebTabsView(store: store)
         case .claude:
             ClaudeView(store: store)
-        case .runs:
-            RunsView(store: store)
         case .devices, .skills, .forge:
             EmptyView()
         }

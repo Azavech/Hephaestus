@@ -65,9 +65,6 @@ public enum PreviewData {
         case .sessionsReadAttachment?:
             let request = try decode(SessionsReadAttachmentParams.self, method: method, params: params)
             return try encode(attachmentRange(offset: request.offset, length: request.length))
-        case .runsOutput?:
-            let request = try decode(RunsOutputParams.self, method: method, params: params)
-            return try encode(try output(request, on: mainDeviceID))
         case .skillsList?:
             return try encode(SkillsListResult(skills: [skill]))
         case .skillsFiles?:
@@ -163,14 +160,10 @@ public enum PreviewData {
 
     static let hephaestus = Project(
         id: "HEPH", name: "Hephaestus", description: "Multi-device project workbench", created: pairedAt, code: ".",
-        docs: "docs", taskCounter: 4, subprojects: ["services/api"],
+        docs: "docs", ticketCounter: 4, feedbackCounter: 0, subprojects: ["services/api"],
         webTabs: [
             WebTab(id: id(0x201), title: "GitHub", url: "https://github.com/Azavech/Hephaestus", locked: true),
             WebTab(id: id(0x202), title: "Swift Forums", url: "https://forums.swift.org", locked: false),
-        ],
-        runs: [
-            RunConfig(name: "Build macOS", command: "./scripts/build.sh macos"),
-            RunConfig(name: "Test", command: "./scripts/test.sh"),
         ],
         skills: [], claude: ClaudeDefaults(model: "opus", permissionMode: .acceptEdits), deviceID: studioID,
         rootPath: "/Users/user/Developer/Hephaestus", migrating: false
@@ -178,9 +171,8 @@ public enum PreviewData {
 
     static let api = Project(
         id: "API", name: "Hephaestus API", description: "Sync service", created: pairedAt, code: ".", docs: "docs",
-        taskCounter: 1, subprojects: [], webTabs: [], runs: [RunConfig(name: "Run", command: "go run .")], skills: [],
-        claude: ClaudeDefaults(), deviceID: studioID, rootPath: "/Users/user/Developer/Hephaestus/services/api",
-        migrating: false
+        ticketCounter: 1, feedbackCounter: 0, subprojects: [], webTabs: [], skills: [], claude: ClaudeDefaults(),
+        deviceID: studioID, rootPath: "/Users/user/Developer/Hephaestus/services/api", migrating: false
     )
 
     /// The projects tree of a Main: `HEPH` with its sub project `API` on Studio; none on Sam's MacBook Pro.
@@ -194,38 +186,40 @@ public enum PreviewData {
                                migrating: false, pendingPermissionCount: 1)]
     }
 
-    // MARK: - Tasks
+    // MARK: - Tickets
 
-    static let tasks: [TaskItem] = [
-        TaskItem(id: "HEPH-1", name: "Set up the repository", description: "Create the Xcode project and the package.",
-                 status: .done, created: at(9, 0, 0), updated: at(10, 0, 0), comments: []),
-        TaskItem(id: "HEPH-2", name: "Sidebar breaks on iPad",
-                 description: "The sidebar overlaps the editor in split view.", status: .inProgress,
-                 created: at(11, 0, 0), updated: at(20, 40, 0),
-                 comments: [
-                     TaskComment(id: id(0x211), author: "Sam's iPad", created: at(11, 5, 0),
-                                 body: "Screenshot attached.",
-                                 attachments: [TaskAttachment(file: "screenshot.png", type: "image/png",
-                                                              size: 18000)]),
-                     TaskComment(id: id(0x212), author: "Claude", created: at(20, 40, 0),
-                                 body: "Fixed the width of the sidebar column; please review.", attachments: []),
-                 ]),
-        TaskItem(id: "HEPH-3", name: "Review the pairing flow",
-                 description: "Check the 6-digit code flow on every platform.", status: .review, created: at(12, 0, 0),
-                 updated: at(19, 0, 0), comments: []),
-        TaskItem(id: "HEPH-4", name: "Add Go highlighting", description: "Keywords, strings, raw strings and comments.",
-                 status: .todo, created: at(20, 10, 0), updated: at(20, 10, 0), comments: []),
+    static let tickets: [TicketItem] = [
+        TicketItem(id: "HEPH-1", name: "Set up the repository",
+                   description: "Create the Xcode project and the package.", status: .done, created: at(9, 0, 0),
+                   updated: at(10, 0, 0), comments: []),
+        TicketItem(id: "HEPH-2", name: "Sidebar breaks on iPad",
+                   description: "The sidebar overlaps the editor in split view.", status: .inProgress,
+                   created: at(11, 0, 0), updated: at(20, 40, 0),
+                   comments: [
+                       TicketComment(id: id(0x211), author: "Sam's iPad", created: at(11, 5, 0),
+                                     body: "Screenshot attached.",
+                                     attachments: [TicketAttachment(file: "screenshot.png", type: "image/png",
+                                                                    size: 18000)]),
+                       TicketComment(id: id(0x212), author: "Claude", created: at(20, 40, 0),
+                                     body: "Fixed the width of the sidebar column; please review.", attachments: []),
+                   ]),
+        TicketItem(id: "HEPH-3", name: "Review the pairing flow",
+                   description: "Check the 6-digit code flow on every platform.", status: .review,
+                   created: at(12, 0, 0), updated: at(19, 0, 0), comments: []),
+        TicketItem(id: "HEPH-4", name: "Add Go highlighting",
+                   description: "Keywords, strings, raw strings and comments.", status: .todo, created: at(20, 10, 0),
+                   updated: at(20, 10, 0), comments: []),
     ]
 
-    static let apiTasks: [TaskItem] = [
-        TaskItem(id: "API-1", name: "Define the endpoints", description: "List the endpoints of the sync service.",
-                 status: .todo, created: at(13, 0, 0), updated: at(13, 0, 0), comments: []),
+    static let apiTickets: [TicketItem] = [
+        TicketItem(id: "API-1", name: "Define the endpoints", description: "List the endpoints of the sync service.",
+                   status: .todo, created: at(13, 0, 0), updated: at(13, 0, 0), comments: []),
     ]
 
     // MARK: - Sessions
 
     static let planSessionID = id(0x301)
-    static let taskSessionID = id(0x302)
+    static let ticketSessionID = id(0x302)
 
     static let permissionRequest = PermissionRequest(requestID: "perm-1", toolName: "Bash",
                                                      input: #"{"command":"./scripts/build.sh ios"}"#,
@@ -235,7 +229,7 @@ public enum PreviewData {
         SessionInfo(id: planSessionID, kind: .project, title: "Plan the release", created: at(20, 0, 0),
                     updated: at(20, 0, 6), permissionMode: .acceptEdits, allowsAllTools: false, status: .idle,
                     pendingPermissions: []),
-        SessionInfo(id: taskSessionID, kind: .task, taskID: "HEPH-2", mode: .implement, title: "Implement HEPH-2",
+        SessionInfo(id: ticketSessionID, kind: .ticket, ticketID: "HEPH-2", mode: .implement, title: "Implement HEPH-2",
                     created: at(20, 30, 0), updated: at(20, 30, 5), permissionMode: .acceptEdits, allowsAllTools: false,
                     status: .waitingPermission, pendingPermissions: [permissionRequest]),
     ]
@@ -246,11 +240,11 @@ public enum PreviewData {
         case planSessionID:
             return [
                 SessionEvent(id: id(0x401).uuidString, at: at(20, 0, 1), type: .user,
-                             text: "Plan the 1.1 release and create the tasks.", deviceID: macBookProID),
+                             text: "Plan the 1.1 release and create the tickets.", deviceID: macBookProID),
                 SessionEvent(id: id(0x402).uuidString, at: at(20, 0, 2), type: .assistant,
-                             text: "I will create the missing task."),
+                             text: "I will create the missing ticket."),
                 SessionEvent(id: id(0x403).uuidString, at: at(20, 0, 3), type: .toolUse, toolUseID: "toolu_1",
-                             name: "mcp__hephaestus__create_task",
+                             name: "mcp__hephaestus__create_ticket",
                              input: #"{"project":"HEPH","name":"Add Go highlighting"}"#),
                 SessionEvent(id: id(0x404).uuidString, at: at(20, 0, 4), type: .toolResult, text: "Created HEPH-4",
                              toolUseID: "toolu_1", isError: false),
@@ -258,7 +252,7 @@ public enum PreviewData {
                 SessionEvent(id: id(0x406).uuidString, at: at(20, 0, 6), type: .result, isError: false,
                              durationMS: 8200, costUSD: 0.04, stopReason: "end_turn"),
             ]
-        case taskSessionID:
+        case ticketSessionID:
             return [
                 SessionEvent(id: id(0x411).uuidString, at: at(20, 30, 1), type: .user,
                              text: "Work on HEPH-2: Sidebar breaks on iPad (implement).", deviceID: macBookProID),
@@ -278,36 +272,21 @@ public enum PreviewData {
         }
     }
 
-    // MARK: - Runs
-
-    static let runs: [RunInfo] = [
-        RunInfo(id: id(0x501), projectID: "HEPH", name: "Test", command: "./scripts/test.sh", startedAt: at(20, 0, 0),
-                endedAt: at(20, 1, 10), exitCode: 0, state: .succeeded),
-        RunInfo(id: id(0x502), projectID: "HEPH", name: "Build macOS", command: "./scripts/build.sh macos",
-                startedAt: at(20, 55, 0), state: .running),
-    ]
-
-    static let runOutputs: [UUID: String] = [
-        id(0x501): "Test Suite 'All tests' passed.\nExecuted 42 tests, with 0 failures.",
-        id(0x502): "Building Hephaestus for macOS…",
-    ]
-
     // MARK: - Snapshots
 
-    /// `projects.snapshot` of HEPH: tasks by number, sessions by `created`, runs newest first.
-    static let hephaestusSnapshot = ProjectsSnapshotResult(project: hephaestus, tasks: tasks, bundles: [],
-                                                           sessions: sessions,
-                                                           runs: runs.sorted { $0.startedAt > $1.startedAt })
+    /// `projects.snapshot` of HEPH: tickets by number, sessions by `created`.
+    static let hephaestusSnapshot = ProjectsSnapshotResult(project: hephaestus, tickets: tickets, bundles: [],
+                                                           sessions: sessions)
 
-    static let apiSnapshot = ProjectsSnapshotResult(project: api, tasks: apiTasks, bundles: [], sessions: [], runs: [])
+    static let apiSnapshot = ProjectsSnapshotResult(project: api, tickets: apiTickets, bundles: [], sessions: [])
 
     // MARK: - Files
 
     /// The files of HEPH by path; the folders `docs` and `Sources`. Every entry is modified at 20:00:00.
     static let files: [String: String] = [
         "README.md": "# Hephaestus\n\nMulti-device project workbench.\n",
-        "docs/README.md": "# Documentation\n\n- [Tasks](tasks.md)\n- Code\n",
-        "docs/tasks.md": "# Tasks\n\nEvery task has an id, a name and a status.\n",
+        "docs/README.md": "# Documentation\n\n- [Tickets](tickets.md)\n- Code\n",
+        "docs/tickets.md": "# Tickets\n\nEvery ticket has an id, a name and a status.\n",
         "Sources/App.swift": "import SwiftUI\n\n@main\nstruct DemoApp: App {\n    var body: some Scene {\n"
             + "        WindowGroup { Text(\"Hello\") }\n    }\n}\n",
     ]
@@ -316,11 +295,11 @@ public enum PreviewData {
 
     // MARK: - Skill
 
-    static let skill = SkillSummary(name: "release-notes", description: "Write release notes from the done tasks",
+    static let skill = SkillSummary(name: "release-notes", description: "Write release notes from the done tickets",
                                     modified: skillModified)
 
-    static let skillContent = "---\nname: release-notes\ndescription: Write release notes from the done tasks\n---\n\n"
-        + "List the tasks done since the last release, one line per task.\n"
+    static let skillContent = "---\nname: release-notes\ndescription: Write release notes from the done tickets\n"
+        + "---\n\nList the tickets done since the last release, one line per ticket.\n"
 
     // MARK: - Attachments
 
@@ -442,13 +421,5 @@ public enum PreviewData {
         let count = min(max(length ?? MethodLimits.maxChunkSize, 1), MethodLimits.maxChunkSize)
         let end = min(start + count, data.count)
         return data.subdata(in: (data.startIndex + start)..<(data.startIndex + end))
-    }
-
-    private static func output(_ request: RunsOutputParams, on mainDeviceID: UUID) throws -> RunsOutputResult {
-        _ = try snapshot(of: request.projectID, on: mainDeviceID)
-        guard request.projectID == hephaestus.id, let text = runOutputs[request.runID] else {
-            throw ProtocolError(.notFound, "Run \(request.runID.uuidString) does not exist.")
-        }
-        return RunsOutputResult(text: text, seq: 1)
     }
 }

@@ -5,7 +5,7 @@ import HephClient
 import HephCore
 import SwiftUI
 
-/// Settings ▸ Claude: the CLI path and status, the defaults of new sessions, the idle timeout and the parallel task
+/// Settings ▸ Claude: the CLI path and status, the defaults of new sessions, the idle timeout and the parallel ticket
 /// sessions of a bundle (docs/ui/settings.md, "Claude").
 struct ClaudeSettingsPane: View {
     @Environment(AppModel.self) private var appModel
@@ -98,7 +98,7 @@ struct ClaudeSettingsPane: View {
                 errorText(.idleMinutes)
             }
             Section {
-                LabeledContent("Parallel task sessions") {
+                LabeledContent("Parallel ticket sessions") {
                     Stepper(value: maxParallel, in: 1...16) {
                         Text(String(settings.settings.bundles.maxParallel) + " per bundle")
                     }
@@ -107,7 +107,7 @@ struct ClaudeSettingsPane: View {
             } header: {
                 Text("Bundles")
             } footer: {
-                Text("How many task sessions of a bundle run at the same time on this Mac.")
+                Text("How many ticket sessions of a bundle run at the same time on this Mac.")
             }
         }
         .formStyle(.grouped)

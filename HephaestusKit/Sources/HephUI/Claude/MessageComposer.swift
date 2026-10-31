@@ -3,7 +3,7 @@ import HephCore
 import SwiftUI
 
 /// Uploads its attachments to `projectID` on the Main `mainDeviceID` as they are added (docs/ui/sessions.md,
-/// "Message composer"). The composer of sessions and of task comments: the attachment tray, then the attach menu, the
+/// "Message composer"). The composer of sessions and of ticket comments: the attachment tray, then the attach menu, the
 /// text view, the Stop button (when given) and the Send button.
 public struct MessageComposer: View {
     private let placeholder: String

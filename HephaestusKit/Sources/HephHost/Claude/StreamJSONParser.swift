@@ -155,7 +155,7 @@ public struct StreamJSONParser: Sendable {
         case "thinking_tokens":
             guard let tokens = Self.integer(object["estimated_tokens"]) else { return [] }
             return [.statusLine("Thinking… (~\(tokens) tokens)")]
-        case "task_summary":
+        case "ticket_summary":
             guard let detail = object["detail"] as? String, !detail.isEmpty else { return [] }
             return [.statusLine(detail)]
         case "post_turn_summary":

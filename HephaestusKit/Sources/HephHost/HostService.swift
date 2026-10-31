@@ -74,13 +74,12 @@ public actor HostService {
     nonisolated var registry: ProjectRegistry { objects.registry }
     nonisolated var watcher: FileWatcher { objects.watcher }
     nonisolated var projects: ProjectService { objects.projects }
-    nonisolated var tasks: TaskService { objects.tasks }
+    nonisolated var tickets: TicketService { objects.tickets }
     nonisolated var bundles: BundleService { objects.bundles }
     nonisolated var tabs: TabService { objects.tabs }
     nonisolated var hostInfo: HostInfoService { objects.hostInfo }
     nonisolated var files: FileService { objects.files }
     public nonisolated var uploads: UploadService { objects.uploads }
-    nonisolated var runs: RunService { objects.runs }
     nonisolated var search: SearchService { objects.search }
     public nonisolated var mesh: MeshService { objects.mesh }
     public nonisolated var migration: MigrationService { objects.migration }
@@ -194,12 +193,8 @@ public actor HostService {
         await forge.shutdown()
         await skills.stop()
         await migration.stop()
-        // 4. Sessions and runs, concurrently.
-        let sessions = sessions
-        let runs = runs
-        async let sessionsStopped: Void = sessions.stopAll()
-        async let runsStopped: Void = runs.stopAll(projectID: nil)
-        _ = await (sessionsStopped, runsStopped)
+        // 4. Sessions; waits for them.
+        await sessions.stopAll()
         // 5. MCP server, file watching, uploads, search cache, projects.
         await mcp.stop()
         await watcher.stopAll()
@@ -493,14 +488,11 @@ public actor HostService {
 
     // MARK: - Dispatch (§4.4)
 
-    /// A session of this Main is starting, running or waitingPermission, a run is running, or a migration runs
+    /// A session of this Main is starting, running or waitingPermission, or a migration runs
     /// (§12.5).
     public func hasActiveWork() async -> Bool {
         guard state == .running else { return false }
         if await sessions.isRunningTurn() {
-            return true
-        }
-        if await runs.activeRunCount(projectID: nil) > 0 {
             return true
         }
         return await migration.isActive()
@@ -560,9 +552,9 @@ public actor HostService {
             handler = migration
         case .uploadsBegin, .uploadsChunk, .uploadsCancel:
             handler = uploads
-        case .tasksCreate, .tasksUpdate, .tasksDelete, .tasksAddComment, .tasksUpdateComment, .tasksDeleteComment,
-             .attachmentsRead:
-            handler = tasks
+        case .ticketsCreate, .ticketsUpdate, .ticketsDelete, .ticketsAddComment, .ticketsUpdateComment,
+             .ticketsDeleteComment, .attachmentsRead:
+            handler = tickets
         case .bundlesCreate, .bundlesUpdate, .bundlesDelete, .bundlesStart, .bundlesStop:
             handler = bundles
         case .filesList, .filesRead, .filesWrite, .filesCreate, .filesRename, .filesDelete:
@@ -572,8 +564,6 @@ public actor HostService {
         case .sessionsStart, .sessionsHistory, .sessionsReadAttachment, .sessionsSend, .sessionsInterrupt,
              .sessionsStop, .sessionsRespond, .sessionsUpdate, .sessionsDelete:
             handler = sessions
-        case .runsStart, .runsStop, .runsOutput:
-            handler = runs
         case .searchQuery:
             handler = search
         case .skillsList, .skillsCreate, .skillsFiles, .skillsReadFile, .skillsWriteFile, .skillsDeleteFile,
@@ -593,7 +583,7 @@ public actor HostService {
             return try WireCoding.encodeJSON(EmptyPayload())
         case .forgeRetry:
             let request = try Self.decode(ForgeRetryParams.self, params, name)
-            try await forge.retry(itemTaskID: request.itemTaskID)
+            try await forge.retry(itemTicketID: request.itemTicketID)
             return try WireCoding.encodeJSON(EmptyPayload())
         }
         return try await handler.handle(method: name, params: params, context: context)
@@ -617,15 +607,17 @@ public actor HostService {
         case .sessionChanged(let payload):
             await registry.setPendingPermissions(payload.projectID, sessionID: payload.session.id,
                                                  count: payload.session.pendingPermissions.count)
+            await tickets.sessionChanged(projectID: payload.projectID, session: payload.session)
             await bundles.sessionChanged(projectID: payload.projectID, session: payload.session)
             await forge.sessionChanged(projectID: payload.projectID, session: payload.session)
         case .sessionRemoved(let payload):
             await registry.setPendingPermissions(payload.projectID, sessionID: payload.sessionID, count: 0)
+            await tickets.sessionRemoved(sessionID: payload.sessionID)
             await forge.sessionRemoved(projectID: payload.projectID, sessionID: payload.sessionID.uuidString)
-        case .taskChanged(let payload):
-            await forge.taskChanged(projectID: payload.projectID, task: payload.task)
-        case .taskRemoved(let payload):
-            await forge.taskRemoved(projectID: payload.projectID, taskID: payload.taskID)
+        case .ticketChanged(let payload):
+            await forge.ticketChanged(projectID: payload.projectID, ticket: payload.ticket)
+        case .ticketRemoved(let payload):
+            await forge.ticketRemoved(projectID: payload.projectID, ticketID: payload.ticketID)
         case .projectsChanged:
             await dropUnregisteredArchives()
         default:
@@ -656,7 +648,7 @@ public actor HostService {
     /// The methods that carry or return file content, or attach uploads: 120 s on another Main
     /// (../client/workspace.md, Conventions).
     private static let longMethods: Set<String> = [
-        RPCMethod.uploadsChunk, .tasksAddComment, .sessionsStart, .sessionsSend, .forgeFeedback, .filesWrite,
+        RPCMethod.uploadsChunk, .ticketsAddComment, .sessionsStart, .sessionsSend, .forgeFeedback, .filesWrite,
         .filesRead, .attachmentsRead, .sessionsReadAttachment, .skillsReadFile, .skillsWriteFile,
     ].reduce(into: Set<String>()) { $0.insert($1.rawValue) }
 }
@@ -692,43 +684,43 @@ extension HostService: SessionHost {
                                     skills: project.file.skills)
     }
 
-    public func claudeTask(projectID: String, taskID: String) async throws -> ClaudeTaskContext {
-        let item = try await tasks.task(projectID: projectID, taskID: taskID)
+    public func claudeTicket(projectID: String, ticketID: String) async throws -> ClaudeTicketContext {
+        let item = try await tickets.ticket(projectID: projectID, ticketID: ticketID)
         let project = try await registry.hosted(projectID)
-        guard let id = TaskID(taskID) else {
-            throw ProtocolError(.notFound, "Task \(taskID) does not exist.")
+        guard let id = TicketID(ticketID) else {
+            throw ProtocolError(.notFound, "Ticket \(ticketID) does not exist.")
         }
         let yaml: String
         do {
-            yaml = try String(contentsOf: TaskFile.url(projectRoot: project.root, id: id), encoding: .utf8)
+            yaml = try String(contentsOf: TicketFile.url(projectRoot: project.root, id: id), encoding: .utf8)
         } catch {
-            throw ProtocolError(.notFound, "Task \(taskID) does not exist.")
+            throw ProtocolError(.notFound, "Ticket \(ticketID) does not exist.")
         }
-        let folder = TaskFile.attachmentsFolder(projectRoot: project.root, id: id)
+        let folder = TicketFile.attachmentsFolder(projectRoot: project.root, id: id)
         let attachments = item.comments.flatMap { comment in
             comment.attachments.map { folder.appendingPathComponent($0.file, isDirectory: false) }
         }
-        return ClaudeTaskContext(id: item.id, name: item.name, description: item.description, yaml: yaml,
+        return ClaudeTicketContext(id: item.id, name: item.name, description: item.description, yaml: yaml,
                                  attachments: attachments, parseError: item.parseError)
     }
 
-    /// From the cached BundleItem and the cached TaskItem of each of its tasks.
+    /// From the cached BundleItem and the cached TicketItem of each of its tickets.
     public func claudeBundle(projectID: String, bundleID: String) async throws -> ClaudeBundleContext {
         let id = BundleID(bundleID)?.description ?? bundleID
         guard let bundle = await bundles.list(projectID: projectID).first(where: { $0.id == id }) else {
             throw ProtocolError(.notFound, "Bundle \(id) does not exist.")
         }
-        var tasks: [ClaudeBundleTask] = []
-        for task in bundle.tasks {
-            let item = try? await self.tasks.task(projectID: projectID, taskID: task.taskID)
-            tasks.append(ClaudeBundleTask(id: task.taskID, name: item?.name ?? "", status: item?.status))
+        var tickets: [ClaudeBundleTicket] = []
+        for ticket in bundle.tickets {
+            let item = try? await self.tickets.ticket(projectID: projectID, ticketID: ticket.ticketID)
+            tickets.append(ClaudeBundleTicket(id: ticket.ticketID, name: item?.name ?? "", status: item?.status))
         }
-        return ClaudeBundleContext(id: bundle.id, name: bundle.name, base: bundle.base ?? "", tasks: tasks,
+        return ClaudeBundleContext(id: bundle.id, name: bundle.name, base: bundle.base ?? "", tickets: tickets,
                                    maxParallel: await settings().bundles.maxParallel)
     }
 
-    public func bundleWorkFolder(projectID: String, taskID: String) async throws -> URL {
-        try await bundles.workFolder(projectID: projectID, taskID: taskID)
+    public func bundleWorkFolder(projectID: String, ticketID: String) async throws -> URL {
+        try await bundles.workFolder(projectID: projectID, ticketID: ticketID)
     }
 
     public func checkWritable(_ projectID: String) async throws {
@@ -837,7 +829,11 @@ extension HostService: MCPHost {
         try await forge.pushRegen(sessionID: sessionID)
     }
 
-    /// The BundleService function of a bundle tool, its result as JSON text. `instructions` of start_bundle_task empty
+    public func closeSession(projectID: String, sessionID: UUID) async throws {
+        try await sessions.close(projectID: projectID, sessionID: sessionID)
+    }
+
+    /// The BundleService function of a bundle tool, its result as JSON text. `instructions` of start_bundle_ticket empty
     /// after trimming counts as absent.
     public func bundleTool(_ name: String, projectID: String, bundleID: String, arguments: Data) async throws
         -> String {
@@ -845,13 +841,13 @@ extension HostService: MCPHost {
         switch name {
         case "get_bundle":
             result = try WireCoding.encodeJSON(try await bundles.details(projectID: projectID, bundleID: bundleID))
-        case "start_bundle_task":
-            let request = try Self.decodeArguments(StartBundleTaskArguments.self, arguments, name)
+        case "start_bundle_ticket":
+            let request = try Self.decodeArguments(StartBundleTicketArguments.self, arguments, name)
             let instructions = request.instructions.flatMap { text in
                 text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
             }
-            result = try WireCoding.encodeJSON(try await bundles.startTask(projectID: projectID, bundleID: bundleID,
-                                                                           taskID: request.task,
+            result = try WireCoding.encodeJSON(try await bundles.startTicket(projectID: projectID, bundleID: bundleID,
+                                                                           ticketID: request.ticket,
                                                                            instructions: instructions))
         case "update_bundle":
             let request = try Self.decodeArguments(UpdateBundleArguments.self, arguments, name)
@@ -865,9 +861,9 @@ extension HostService: MCPHost {
         return String(decoding: result, as: UTF8.self)
     }
 
-    /// The arguments of start_bundle_task.
-    private struct StartBundleTaskArguments: Decodable {
-        var task: String
+    /// The arguments of start_bundle_ticket.
+    private struct StartBundleTicketArguments: Decodable {
+        var ticket: String
         var instructions: String?
     }
 
@@ -962,13 +958,12 @@ private struct HostObjects: Sendable {
     let registry: ProjectRegistry
     let watcher: FileWatcher
     let projects: ProjectService
-    let tasks: TaskService
+    let tickets: TicketService
     let bundles: BundleService
     let tabs: TabService
     let hostInfo: HostInfoService
     let files: FileService
     let uploads: UploadService
-    let runs: RunService
     let search: SearchService
     let mesh: MeshService
     let migration: MigrationService
@@ -983,13 +978,12 @@ private struct HostObjects: Sendable {
         registry = ProjectRegistry(host: host)
         watcher = FileWatcher(host: host)
         projects = ProjectService(host: host)
-        tasks = TaskService(host: host)
+        tickets = TicketService(host: host)
         bundles = BundleService(host: host)
         tabs = TabService(host: host)
         hostInfo = HostInfoService(host: host)
         files = FileService(host: host)
         uploads = UploadService(host: host)
-        runs = RunService(host: host)
         search = SearchService(host: host)
         mesh = MeshService(host: host, appSupport: appSupport, settings: settings, credentialStore: credentialStore,
                            options: options)

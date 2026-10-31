@@ -4,10 +4,10 @@ import XCTest
 @testable import HephCore
 @testable import HephHost
 
-/// Task bundles, their worktrees and branches (docs/services/bundles.md): a TestHost with a project HEPH and the tasks
-/// HEPH-1 to HEPH-3, and a GitSandbox whose git makes the repository in the TestHost's projects folder, so that the
-/// project is a sub folder of it. A bundle is made running or done by writing its file, since bundles.start and
-/// start_bundle_task would run the Claude CLI.
+/// Ticket bundles, their worktrees and branches (docs/services/bundles.md): a TestHost with a project HEPH and the
+/// tickets HEPH-1 to HEPH-3, and a GitSandbox whose git makes the repository in the TestHost's projects folder, so that
+/// the project is a sub folder of it. A bundle is made running or done by writing its file, since bundles.start and
+/// start_bundle_ticket would run the Claude CLI.
 @MainActor
 final class BundleServiceTests: XCTestCase {
     private var testHost: TestHost!
@@ -25,9 +25,9 @@ final class BundleServiceTests: XCTestCase {
         _ = try await testHost.perform(.projectsCreate, ProjectsCreateParams(name: "Hephaestus", identifier: "HEPH"),
                                        as: ProjectSummary.self)
         for (index, name) in ["Sidebar", "Toolbar", "Inspector"].enumerated() {
-            let task = try await testHost.perform(.tasksCreate, TasksCreateParams(projectID: "HEPH", name: name),
-                                                  as: TaskItem.self)
-            XCTAssertEqual(task.id, "HEPH-\(index + 1)")
+            let ticket = try await testHost.perform(.ticketsCreate, TicketsCreateParams(projectID: "HEPH", name: name),
+                                                    as: TicketItem.self)
+            XCTAssertEqual(ticket.id, "HEPH-\(index + 1)")
         }
     }
 
@@ -37,7 +37,7 @@ final class BundleServiceTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testOneOpenBundlePerTask() async throws {
+    func testOneOpenBundlePerTicket() async throws {
         let first = try await createBundle(["HEPH-1"])
         let second = try await createBundle(["HEPH-2"])
         XCTAssertEqual(first.id, "HEPH-B1")
@@ -48,14 +48,32 @@ final class BundleServiceTests: XCTestCase {
         XCTAssertFalse(exists(BundleFile.url(projectRoot: projectFolder, id: try XCTUnwrap(BundleID("HEPH-B3")))))
         let before = try bundleFile("HEPH-B2")
         await assertProtocolError(.conflict, "HEPH-1 is in HEPH-B1.") {
-            try await self.updateTasks("HEPH-B2", ["HEPH-2", "HEPH-1"])
+            try await self.updateTickets("HEPH-B2", ["HEPH-2", "HEPH-1"])
         }
         XCTAssertEqual(try bundleFile("HEPH-B2"), before)
-        let updated = try await updateTasks("HEPH-B2", ["HEPH-2", "HEPH-3"])
-        XCTAssertEqual(updated.tasks.map(\.taskID), ["HEPH-2", "HEPH-3"])
+        let updated = try await updateTickets("HEPH-B2", ["HEPH-2", "HEPH-3"])
+        XCTAssertEqual(updated.tickets.map(\.ticketID), ["HEPH-2", "HEPH-3"])
         try await setBundle("HEPH-B1") { $0.status = .done }
         let third = try await createBundle(["HEPH-1"])
         XCTAssertEqual(third.id, "HEPH-B3")
+    }
+
+    func testDoneBundleTicketsFrozen() async throws {
+        _ = try await createBundle(["HEPH-1"])
+        try await setBundle("HEPH-B1") { $0.status = .done }
+        let before = try bundleFile("HEPH-B1")
+        await assertProtocolError(.conflict, "HEPH-B1 is done.") {
+            try await self.updateTickets("HEPH-B1", ["HEPH-1", "HEPH-2"])
+        }
+        XCTAssertEqual(try bundleFile("HEPH-B1"), before)
+        let renamed = try await testHost.perform(.bundlesUpdate,
+                                                 BundlesUpdateParams(projectID: "HEPH", bundleID: "HEPH-B1",
+                                                                     patch: BundlePatch(name: "Renamed")),
+                                                 as: BundleItem.self)
+        XCTAssertEqual(renamed.name, "Renamed")
+        XCTAssertEqual(renamed.status, .done)
+        XCTAssertEqual(try bundleFile("HEPH-B1").name, "Renamed")
+        XCTAssertEqual(try bundleFile("HEPH-B1").status, .done)
     }
 
     func testStatusToolsNeedRunningBundle() async throws {
@@ -72,7 +90,7 @@ final class BundleServiceTests: XCTestCase {
                 try await self.testHost.host.bundles.finish(projectID: "HEPH", bundleID: "HEPH-B1")
             }
             XCTAssertTrue(exists(worktree(1)))
-            XCTAssertTrue(try branches().contains("task/HEPH-1"))
+            XCTAssertTrue(try branches().contains("ticket/HEPH-1"))
             XCTAssertEqual(try bundleFile("HEPH-B1").status, status)
         }
         await assertProtocolError(.badRequest, "Invalid arguments: status must be one of running, review.") {
@@ -107,18 +125,18 @@ final class BundleServiceTests: XCTestCase {
         for number in 1...3 {
             try await makeWorktree(number)
             XCTAssertTrue(exists(worktree(number).appendingPathComponent("Hephaestus/README.md", isDirectory: false)))
-            let branchExists = try await git.branchExists("task/HEPH-\(number)")
+            let branchExists = try await git.branchExists("ticket/HEPH-\(number)")
             XCTAssertTrue(branchExists)
-            let workFolder = try await testHost.host.bundles.workFolder(projectID: "HEPH", taskID: "HEPH-\(number)")
+            let workFolder = try await testHost.host.bundles.workFolder(projectID: "HEPH", ticketID: "HEPH-\(number)")
             XCTAssertEqual(workFolder.path, worktree(number).appendingPathComponent("Hephaestus", isDirectory: true).path)
         }
         // Brought in: a commit cherry-picked onto main, a commit that is not, no commit.
         let first = try commit("one", in: workFolder(1))
         try sandbox.git(["cherry-pick", first], in: repository)
         let second = try commit("two", in: workFolder(2))
-        let firstIn = try await git.isBroughtIn(branch: "task/HEPH-1", base: "main")
-        let secondIn = try await git.isBroughtIn(branch: "task/HEPH-2", base: "main")
-        let thirdIn = try await git.isBroughtIn(branch: "task/HEPH-3", base: "main")
+        let firstIn = try await git.isBroughtIn(branch: "ticket/HEPH-1", base: "main")
+        let secondIn = try await git.isBroughtIn(branch: "ticket/HEPH-2", base: "main")
+        let thirdIn = try await git.isBroughtIn(branch: "ticket/HEPH-3", base: "main")
         XCTAssertTrue(firstIn)
         XCTAssertFalse(secondIn)
         XCTAssertTrue(thirdIn)
@@ -126,10 +144,10 @@ final class BundleServiceTests: XCTestCase {
         try await git.removeWorktree(at: worktree(2))
         XCTAssertFalse(exists(worktree(2)))
         XCTAssertFalse(try worktreeList().contains(realPath(worktree(2))))
-        XCTAssertTrue(try branches().contains("task/HEPH-2"))
+        XCTAssertTrue(try branches().contains("ticket/HEPH-2"))
         try await makeWorktree(2)
         XCTAssertEqual(try revision("HEAD", in: worktree(2)), second)
-        // finish: worktrees removed, the branches brought in deleted, the other kept.
+        // finish: worktrees removed, the branches brought in deleted, the other kept, the tickets unchanged.
         let main = try revision("main")
         _ = try await createBundle(["HEPH-1", "HEPH-2", "HEPH-3"])
         try await setBundle("HEPH-B1") { file in
@@ -137,20 +155,20 @@ final class BundleServiceTests: XCTestCase {
             file.base = "main"
         }
         let result = try await testHost.host.bundles.finish(projectID: "HEPH", bundleID: "HEPH-B1")
-        XCTAssertEqual(result.keptBranches, ["task/HEPH-2"])
+        XCTAssertEqual(result.keptBranches, ["ticket/HEPH-2"])
         XCTAssertEqual(result.bundle.status, .done)
         XCTAssertEqual(try bundleFile("HEPH-B1").status, .done)
         for number in 1...3 {
             XCTAssertFalse(exists(worktree(number)))
         }
         XCTAssertEqual(try worktreeList(), [realPath(repository)])
-        XCTAssertEqual(try branches(), ["main", "task/HEPH-2"])
-        XCTAssertEqual(try revision("task/HEPH-2"), second)
+        XCTAssertEqual(try branches(), ["main", "ticket/HEPH-2"])
+        XCTAssertEqual(try revision("ticket/HEPH-2"), second)
         XCTAssertEqual(try revision("main"), main)
-        let statuses = try await taskStatuses()
-        XCTAssertEqual(statuses, [.done, .todo, .done])
+        let statuses = try await ticketStatuses()
+        XCTAssertEqual(statuses, [.todo, .todo, .todo])
         await assertProtocolError(.notFound, "the worktree of HEPH-1 was removed with its bundle.") {
-            try await self.testHost.host.bundles.workFolder(projectID: "HEPH", taskID: "HEPH-1")
+            try await self.testHost.host.bundles.workFolder(projectID: "HEPH", ticketID: "HEPH-1")
         }
     }
 
@@ -163,7 +181,7 @@ final class BundleServiceTests: XCTestCase {
         }
         try await makeWorktree(1)
         try await makeWorktree(2)
-        try sandbox.git(["branch", "task/HEPH-3"], in: repository)
+        try sandbox.git(["branch", "ticket/HEPH-3"], in: repository)
         let feature = sandbox.folder.appendingPathComponent("feature", isDirectory: true)
         try sandbox.git(["worktree", "add", "-q", "-b", "feature", feature.path], in: repository)
         let other = try bundleFile("HEPH-B2")
@@ -174,7 +192,7 @@ final class BundleServiceTests: XCTestCase {
         XCTAssertFalse(exists(worktree(1)))
         XCTAssertTrue(exists(worktree(2).appendingPathComponent("Hephaestus/README.md", isDirectory: false)))
         XCTAssertEqual(Set(try worktreeList()), [realPath(repository), realPath(worktree(2)), realPath(feature)])
-        XCTAssertEqual(try branches(), ["feature", "main", "task/HEPH-2", "task/HEPH-3"])
+        XCTAssertEqual(try branches(), ["feature", "main", "ticket/HEPH-2", "ticket/HEPH-3"])
         XCTAssertFalse(exists(BundleFile.url(projectRoot: projectFolder, id: try XCTUnwrap(BundleID("HEPH-B1")))))
         XCTAssertEqual(try bundleFile("HEPH-B2"), other)
         let remaining = await testHost.host.bundles.list(projectID: "HEPH")
@@ -182,7 +200,7 @@ final class BundleServiceTests: XCTestCase {
         XCTAssertEqual(remaining.first, otherItem)
     }
 
-    func testDeleteSkipsTaskOfOpenBundle() async throws {
+    func testDeleteSkipsTicketOfOpenBundle() async throws {
         try makeRepository()
         _ = try await createBundle(["HEPH-1", "HEPH-2"])
         try await setBundle("HEPH-B1") { file in
@@ -197,14 +215,14 @@ final class BundleServiceTests: XCTestCase {
         }
         try await makeWorktree(1)
         try await makeWorktree(2)
-        let broughtIn = try await bundleGit.isBroughtIn(branch: "task/HEPH-1", base: "main")
+        let broughtIn = try await bundleGit.isBroughtIn(branch: "ticket/HEPH-1", base: "main")
         XCTAssertTrue(broughtIn)
         _ = try await testHost.perform(.bundlesDelete, BundlesDeleteParams(projectID: "HEPH", bundleID: "HEPH-B1"),
                                        as: EmptyPayload.self)
         XCTAssertFalse(exists(worktree(2)))
         XCTAssertTrue(exists(worktree(1).appendingPathComponent("Hephaestus/README.md", isDirectory: false)))
         XCTAssertEqual(Set(try worktreeList()), [realPath(repository), realPath(worktree(1))])
-        XCTAssertEqual(try branches(), ["main", "task/HEPH-1"])
+        XCTAssertEqual(try branches(), ["main", "ticket/HEPH-1"])
         XCTAssertFalse(exists(BundleFile.url(projectRoot: projectFolder, id: try XCTUnwrap(BundleID("HEPH-B1")))))
         let remaining = await testHost.host.bundles.list(projectID: "HEPH")
         XCTAssertEqual(remaining.map(\.id), ["HEPH-B2"])
@@ -214,22 +232,46 @@ final class BundleServiceTests: XCTestCase {
     func testFinishWithoutBase() async throws {
         try makeRepository()
         try sandbox.git(["branch", "release"], in: repository)
-        try await bundleGit.createWorktree(at: worktree(1), branch: "task/HEPH-1", base: "release")
+        try await bundleGit.createWorktree(at: worktree(1), branch: "ticket/HEPH-1", base: "release")
         _ = try await createBundle(["HEPH-1"])
         try await setBundle("HEPH-B1") { file in
             file.status = .running
             file.base = "release"
         }
         try sandbox.git(["branch", "-D", "release"], in: repository)
-        let broughtIn = try await bundleGit.isBroughtIn(branch: "task/HEPH-1", base: "release")
+        let broughtIn = try await bundleGit.isBroughtIn(branch: "ticket/HEPH-1", base: "release")
         XCTAssertFalse(broughtIn)
         let result = try await testHost.host.bundles.finish(projectID: "HEPH", bundleID: "HEPH-B1")
-        XCTAssertEqual(result.keptBranches, ["task/HEPH-1"])
+        XCTAssertEqual(result.keptBranches, ["ticket/HEPH-1"])
         XCTAssertEqual(result.bundle.status, .done)
         XCTAssertFalse(exists(worktree(1)))
-        XCTAssertEqual(try branches(), ["main", "task/HEPH-1"])
-        let statuses = try await taskStatuses()
+        XCTAssertEqual(try branches(), ["main", "ticket/HEPH-1"])
+        let statuses = try await ticketStatuses()
         XCTAssertEqual(statuses, [.todo, .todo, .todo])
+    }
+
+    func testOldBranchRenamed() async throws {
+        try makeRepository()
+        try await bundleGit.createWorktree(at: worktree(1), branch: "task/HEPH-1", base: "main")
+        let work = try commit("one", in: workFolder(1))
+        try sandbox.git(["branch", "task/HEPH-2"], in: repository)
+        try sandbox.git(["branch", "ticket/HEPH-2"], in: repository)
+        _ = try await createBundle(["HEPH-1", "HEPH-2"])
+        try await setBundle("HEPH-B1") { file in
+            file.status = .running
+            file.base = "main"
+        }
+        let details = try await testHost.host.bundles.details(projectID: "HEPH", bundleID: "HEPH-B1")
+        XCTAssertEqual(details.tickets.first?.ticket?.id, "HEPH-1")
+        XCTAssertEqual(details.tickets.first?.branch, "ticket/HEPH-1")
+        let names = try branches()
+        XCTAssertFalse(names.contains("task/HEPH-1"))
+        XCTAssertEqual(try revision("ticket/HEPH-1"), work)
+        let head = try sandbox.git(["symbolic-ref", "--short", "HEAD"], in: worktree(1))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertEqual(head, "ticket/HEPH-1")
+        XCTAssertTrue(names.contains("task/HEPH-2"))
+        XCTAssertTrue(names.contains("ticket/HEPH-2"))
     }
 
     func testStartNeedsRepository() async throws {
@@ -286,9 +328,9 @@ final class BundleServiceTests: XCTestCase {
         try sandbox.git(["commit", "-q", "-m", "initial"], in: repository)
     }
 
-    /// The worktree of HEPH-<number>, as start_bundle_task creates it.
+    /// The worktree of HEPH-<number>, as start_bundle_ticket creates it.
     private func makeWorktree(_ number: Int) async throws {
-        try await bundleGit.createWorktree(at: worktree(number), branch: "task/HEPH-\(number)", base: "main")
+        try await bundleGit.createWorktree(at: worktree(number), branch: "ticket/HEPH-\(number)", base: "main")
     }
 
     /// A commit adding `<name>.txt` in `folder`; its SHA.
@@ -329,19 +371,19 @@ final class BundleServiceTests: XCTestCase {
         FileManager.default.fileExists(atPath: url.path)
     }
 
-    /// `bundles.create` of the tasks in HEPH.
+    /// `bundles.create` of the tickets in HEPH.
     @discardableResult
-    private func createBundle(_ taskIDs: [String]) async throws -> BundleItem {
+    private func createBundle(_ ticketIDs: [String]) async throws -> BundleItem {
         try await testHost.perform(.bundlesCreate,
-                                   BundlesCreateParams(projectID: "HEPH", name: "Polish", taskIDs: taskIDs),
+                                   BundlesCreateParams(projectID: "HEPH", name: "Polish", ticketIDs: ticketIDs),
                                    as: BundleItem.self)
     }
 
-    /// `bundles.update` of the tasks of a bundle.
-    private func updateTasks(_ bundleID: String, _ taskIDs: [String]) async throws -> BundleItem {
+    /// `bundles.update` of the tickets of a bundle.
+    private func updateTickets(_ bundleID: String, _ ticketIDs: [String]) async throws -> BundleItem {
         try await testHost.perform(.bundlesUpdate,
                                    BundlesUpdateParams(projectID: "HEPH", bundleID: bundleID,
-                                                       patch: BundlePatch(taskIDs: taskIDs)),
+                                                       patch: BundlePatch(ticketIDs: ticketIDs)),
                                    as: BundleItem.self)
     }
 
@@ -365,10 +407,10 @@ final class BundleServiceTests: XCTestCase {
     }
 
     /// The statuses of HEPH-1 to HEPH-3.
-    private func taskStatuses() async throws -> [TaskStatus] {
-        var statuses: [TaskStatus] = []
+    private func ticketStatuses() async throws -> [TicketStatus] {
+        var statuses: [TicketStatus] = []
         for number in 1...3 {
-            statuses.append(try await testHost.host.tasks.task(projectID: "HEPH", taskID: "HEPH-\(number)").status)
+            statuses.append(try await testHost.host.tickets.ticket(projectID: "HEPH", ticketID: "HEPH-\(number)").status)
         }
         return statuses
     }

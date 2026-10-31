@@ -18,13 +18,11 @@ actor ProjectService: HostMethodHandler {
     /// projects.snapshot (§7.2): served while the project is migrating.
     func snapshot(projectID: String) async throws -> ProjectsSnapshotResult {
         let project = try await host.registry.project(projectID)
-        let tasks = try await host.tasks.list(projectID: projectID)
+        let tickets = try await host.tickets.list(projectID: projectID)
         let bundles = await host.bundles.list(projectID: projectID)
         let sessions = try await host.sessions.sessions(projectID: projectID)
             .sorted { $0.created < $1.created }
-        let runs = await host.runs.list(projectID: projectID).reversed()
-        return ProjectsSnapshotResult(project: project, tasks: tasks, bundles: bundles, sessions: sessions,
-                                      runs: Array(runs))
+        return ProjectsSnapshotResult(project: project, tickets: tickets, bundles: bundles, sessions: sessions)
     }
 
     /// projects.create (§7.3).
@@ -93,7 +91,7 @@ actor ProjectService: HostMethodHandler {
         // 5. Identifier available on this Main and on the connected Mains.
         try await host.registry.checkIdentifiersAvailable([identifier])
 
-        // 6. project.yml, .hephaestus/tasks/ and the docs folder.
+        // 6. project.yml, .hephaestus/tickets/ and the docs folder.
         do {
             try ProjectFile.create(ProjectFile(id: identifier, name: name, description: params.description),
                                    projectRoot: target)
@@ -217,9 +215,6 @@ actor ProjectService: HostMethodHandler {
                 file = try ProjectFile.update(projectRoot: project.root) { file in
                     if let name = patch.name { file.name = name }
                     if let description = patch.description { file.description = description }
-                    if let runs = patch.runs {
-                        file.runs = runs.map { ProjectFile.RunEntry(name: $0.name, command: $0.command, cwd: $0.cwd) }
-                    }
                     if let skills = patch.skills { file.skills = skills }
                     if let claude = patch.claude { file.claude = claude }
                 }
@@ -239,14 +234,12 @@ actor ProjectService: HostMethodHandler {
         try await host.registry.checkWritable(projectID)
         let project = try await host.registry.hosted(projectID)
 
-        // 2. The sessions and runs of the project and of its sub projects.
+        // 2. The sessions of the project and of its sub projects.
         let ids = [projectID] + (await host.registry.descendants(of: projectID))
         let sessions: SessionService = host.sessions
-        let runs: RunService = host.runs
         await withTaskGroup(of: Void.self) { group in
             for id in ids {
                 group.addTask { await sessions.stopAll(projectID: id) }
-                group.addTask { await runs.stopAll(projectID: id) }
             }
         }
 
@@ -311,11 +304,6 @@ actor ProjectService: HostMethodHandler {
                 return try WireCoding.encodeJSON(try await importFolder(request))
             case .projectsUpdate:
                 let request = try Self.decode(ProjectsUpdateParams.self, params, method)
-                // §7.5: runs.start runs their commands without a permission request, so no Claude session (an MCP
-                // tool) defines one; refused before the write.
-                if request.patch.runs != nil, context.author == Self.claude {
-                    throw ProtocolError(.badRequest, "Run configurations are changed by the user in the app.")
-                }
                 return try WireCoding.encodeJSON(try await update(projectID: request.projectID, patch: request.patch))
             case .projectsRemove:
                 let request = try Self.decode(ProjectsRemoveParams.self, params, method)
@@ -336,8 +324,6 @@ actor ProjectService: HostMethodHandler {
     }
 
     private static let invalidFolder = ProtocolError(.badRequest, "Invalid folder name.")
-    /// The `context.author` of the MCP tools.
-    private static let claude = "Claude"
 
     /// What exists at `url` (lstat: a dangling symbolic link exists); a symbolic link to a folder is a folder.
     private static func itemKind(_ url: URL) -> ItemKind? {

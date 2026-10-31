@@ -188,7 +188,7 @@ public actor SessionArchive {
     // MARK: - Attachments
 
     /// Moves the file at `fileAt` (a complete upload) into <id>/ (Attachments).
-    public func saveAttachment(fileAt: URL, originalName: String, to id: UUID) throws -> TaskAttachment {
+    public func saveAttachment(fileAt: URL, originalName: String, to id: UUID) throws -> TicketAttachment {
         let fileManager = FileManager.default
         let attachments = attachmentsFolder(id)
         var name = AttachmentNaming.sanitize(originalName)
@@ -198,7 +198,7 @@ public actor SessionArchive {
             let destination = attachments.appendingPathComponent(name, isDirectory: false)
             try fileManager.moveItem(at: fileAt, to: destination)
             let size = (try fileManager.attributesOfItem(atPath: destination.path)[.size] as? NSNumber)?.intValue ?? 0
-            return TaskAttachment(file: name, type: AttachmentNaming.mimeType(forFileName: name), size: size)
+            return TicketAttachment(file: name, type: AttachmentNaming.mimeType(forFileName: name), size: size)
         } catch {
             throw DataError.io("\(name): \(error.localizedDescription)")
         }

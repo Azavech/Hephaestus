@@ -108,7 +108,7 @@ extension ForgeService {
         }
         let context = RegenerationContext(
             trigger: cycle.trigger.rawValue, attempt: attempt, targetCommit: cycle.targetCommit,
-            items: cycleItems().map { RegenerationItem(taskID: $0.taskID, docsCommit: $0.docsCommit) },
+            items: cycleItems().map { RegenerationItem(ticketID: $0.ticketID, docsCommit: $0.docsCommit) },
             failedRun: failedRun)
         var title = "Regeneration \(Self.titleFormatter.string(from: Date()))"
         if attempt > 1 {
@@ -301,33 +301,31 @@ extension ForgeService {
         }
     }
 
-    /// Completion step 2: a comment and the status `done` for each item of the cycle, in order. A task that no longer
-    /// exists removes its item. Returns false when another error stopped it (the cycle stays `released`).
+    /// Completion step 2: a comment for each item of the cycle, in order; the ticket's status is left as it is. A
+    /// ticket that no longer exists removes its item. Returns false when another error stopped it (the cycle stays `released`).
     func completeItems() async -> Bool {
         guard configuration != nil, let cycle, let release = cycle.release, let run = cycle.run else {
             return true
         }
         let author = await host.mesh.localDevice().name
-        for taskID in cycle.itemTaskIDs {
-            guard let item = items.first(where: { $0.taskID == taskID && $0.cycleID == cycle.id }),
+        for ticketID in cycle.itemTicketIDs {
+            guard let item = items.first(where: { $0.ticketID == ticketID && $0.cycleID == cycle.id }),
                   item.state == .released
             else { continue }
             let body = Self.completionComment(item: item, cycle: cycle, run: run, release: release,
                                               repository: ForgeConfig.publicRepository)
             do {
-                _ = try await host.tasks.addComment(projectID: item.projectID, taskID: taskID, body: body,
+                _ = try await host.tickets.addComment(projectID: item.projectID, ticketID: ticketID, body: body,
                                                     attachments: [], author: author)
-                _ = try await host.tasks.update(projectID: item.projectID, taskID: taskID,
-                                                patch: TaskPatch(status: .done))
-                if let index = items.firstIndex(where: { $0.taskID == taskID }) {
+                if let index = items.firstIndex(where: { $0.ticketID == ticketID }) {
                     items[index].state = .done
                     items[index].error = nil
                     items[index].updated = Date()
                 }
             } catch let error as ProtocolError where error.code == .notFound {
-                items.removeAll { $0.taskID == taskID }
+                items.removeAll { $0.ticketID == ticketID }
                 if var current = self.cycle {
-                    current.itemTaskIDs.removeAll { $0 == taskID }
+                    current.itemTicketIDs.removeAll { $0 == ticketID }
                     self.cycle = current
                 }
             } catch {

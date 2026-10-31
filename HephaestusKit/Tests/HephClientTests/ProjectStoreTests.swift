@@ -14,17 +14,10 @@ final class ProjectStoreTests: XCTestCase {
                     pendingPermissions: pending)
     }
 
-    private func run(_ id: UUID = UUID(), minute: Int, state: RunState = .succeeded) -> RunInfo {
-        RunInfo(id: id, projectID: "HEPH", name: "Test", command: "./scripts/test.sh",
-                startedAt: start.addingTimeInterval(TimeInterval(minute * 60)),
-                endedAt: state == .running ? nil : start.addingTimeInterval(TimeInterval(minute * 60 + 30)),
-                exitCode: state == .running ? nil : 0, state: state)
-    }
-
-    private func snapshot(_ projectID: String = "HEPH", mainID: UUID, tasks: [TaskItem] = [],
-                          sessions: [SessionInfo] = [], runs: [RunInfo] = []) -> ProjectsSnapshotResult {
-        ProjectsSnapshotResult(project: TestMesh.project(projectID, mainID: mainID), tasks: tasks, bundles: [],
-                               sessions: sessions, runs: runs)
+    private func snapshot(_ projectID: String = "HEPH", mainID: UUID, tickets: [TicketItem] = [],
+                          sessions: [SessionInfo] = []) -> ProjectsSnapshotResult {
+        ProjectsSnapshotResult(project: TestMesh.project(projectID, mainID: mainID), tickets: tickets, bundles: [],
+                               sessions: sessions)
     }
 
     /// A connected workspace whose Main hosts HEPH, and the loaded store of HEPH.
@@ -44,35 +37,32 @@ final class ProjectStoreTests: XCTestCase {
     func testSnapshotSorted() async throws {
         let early = session(created: start)
         let late = session(created: start.addingTimeInterval(60))
-        let firstRun = run(minute: 1)
-        let secondRun = run(minute: 2)
         let (_, _, store) = try await loadedStore { mainID in
-            self.snapshot(mainID: mainID, tasks: [TestMesh.task("HEPH-10"), TestMesh.task("HEPH-2")],
-                          sessions: [late, early], runs: [secondRun, firstRun])
+            self.snapshot(mainID: mainID, tickets: [TestMesh.ticket("HEPH-10"), TestMesh.ticket("HEPH-2")],
+                          sessions: [late, early])
         }
-        XCTAssertEqual(store.tasks.map(\.id), ["HEPH-2", "HEPH-10"])
+        XCTAssertEqual(store.tickets.map(\.id), ["HEPH-2", "HEPH-10"])
         XCTAssertEqual(store.sessions.map(\.id), [early.id, late.id])
-        XCTAssertEqual(store.runs.map(\.id), [firstRun.id, secondRun.id])
         XCTAssertNotNil(store.project)
     }
 
     func testIdempotentEvents() async throws {
         let (_, fakeMain, store) = try await loadedStore { mainID in
-            self.snapshot(mainID: mainID, tasks: [TestMesh.task("HEPH-1", name: "Old")])
+            self.snapshot(mainID: mainID, tickets: [TestMesh.ticket("HEPH-1", name: "Old")])
         }
-        let changed = TestMesh.task("HEPH-1", name: "New", updated: start.addingTimeInterval(60))
-        fakeMain.emit(.taskChanged(TaskChangedPayload(projectID: "HEPH", task: changed)))
-        fakeMain.emit(.taskChanged(TaskChangedPayload(projectID: "HEPH", task: changed)))
+        let changed = TestMesh.ticket("HEPH-1", name: "New", updated: start.addingTimeInterval(60))
+        fakeMain.emit(.ticketChanged(TicketChangedPayload(projectID: "HEPH", ticket: changed)))
+        fakeMain.emit(.ticketChanged(TicketChangedPayload(projectID: "HEPH", ticket: changed)))
         // A marker applied after both events.
-        fakeMain.emit(.taskChanged(TaskChangedPayload(projectID: "HEPH", task: TestMesh.task("HEPH-3"))))
-        try await waitUntil { store.task("HEPH-3") != nil }
-        XCTAssertEqual(store.tasks, [changed, TestMesh.task("HEPH-3")])
+        fakeMain.emit(.ticketChanged(TicketChangedPayload(projectID: "HEPH", ticket: TestMesh.ticket("HEPH-3"))))
+        try await waitUntil { store.ticket("HEPH-3") != nil }
+        XCTAssertEqual(store.tickets, [changed, TestMesh.ticket("HEPH-3")])
 
-        fakeMain.emit(.taskRemoved(TaskRemovedPayload(projectID: "HEPH", taskID: "HEPH-99")))
-        fakeMain.emit(.taskChanged(TaskChangedPayload(projectID: "HEPH", task: TestMesh.task("HEPH-4"))))
-        try await waitUntil { store.task("HEPH-4") != nil }
-        XCTAssertEqual(store.tasks.map(\.id), ["HEPH-1", "HEPH-3", "HEPH-4"])
-        XCTAssertEqual(store.task("HEPH-1"), changed)
+        fakeMain.emit(.ticketRemoved(TicketRemovedPayload(projectID: "HEPH", ticketID: "HEPH-99")))
+        fakeMain.emit(.ticketChanged(TicketChangedPayload(projectID: "HEPH", ticket: TestMesh.ticket("HEPH-4"))))
+        try await waitUntil { store.ticket("HEPH-4") != nil }
+        XCTAssertEqual(store.tickets.map(\.id), ["HEPH-1", "HEPH-3", "HEPH-4"])
+        XCTAssertEqual(store.ticket("HEPH-1"), changed)
     }
 
     func testEventsDuringLoad() async throws {
@@ -81,17 +71,17 @@ final class ProjectStoreTests: XCTestCase {
             projects: [TestMesh.summary("HEPH", mainID: mainID)], mainID: mainID
         ) { fakeMain in
             fakeMain.answer("projects.snapshot",
-                            with: self.snapshot(mainID: mainID, tasks: [TestMesh.task("HEPH-1", name: "Old")]),
+                            with: self.snapshot(mainID: mainID, tickets: [TestMesh.ticket("HEPH-1", name: "Old")]),
                             after: .milliseconds(300))
         }
         let store = workspace.projectStore(mainDeviceID: mainID, projectID: "HEPH")
         try await waitUntil { fakeMain.requests("projects.snapshot").count == 1 }
         XCTAssertEqual(store.phase, .loading)
-        let newer = TestMesh.task("HEPH-1", name: "New", updated: start.addingTimeInterval(60))
-        fakeMain.emit(.taskChanged(TaskChangedPayload(projectID: "HEPH", task: newer)))
+        let newer = TestMesh.ticket("HEPH-1", name: "New", updated: start.addingTimeInterval(60))
+        fakeMain.emit(.ticketChanged(TicketChangedPayload(projectID: "HEPH", ticket: newer)))
 
         try await waitUntil { store.phase == .loaded }
-        XCTAssertEqual(store.task("HEPH-1"), newer)
+        XCTAssertEqual(store.ticket("HEPH-1"), newer)
     }
 
     func testUnknownSession() async throws {
@@ -104,17 +94,6 @@ final class ProjectStoreTests: XCTestCase {
         fakeMain.emit(.sessionEvent(SessionEventPayload(projectID: "HEPH", sessionID: unknown, event: event)))
         try await waitUntil { fakeMain.requests("projects.snapshot").count == 2 }
         try await waitUntil { store.phase == .loaded }
-    }
-
-    func testRunsTrim() async throws {
-        let finished = (0..<21).map { run(minute: $0) }
-        let running = run(minute: 30, state: .running)
-        let (_, _, store) = try await loadedStore { mainID in
-            self.snapshot(mainID: mainID, runs: finished + [running])
-        }
-        XCTAssertEqual(store.runs.count, 20)
-        XCTAssertEqual(store.runs.map(\.id), finished.suffix(19).map(\.id) + [running.id])
-        XCTAssertTrue(store.runs.contains { $0.state == .running })
     }
 
     func testRemovedProject() async throws {
@@ -130,21 +109,21 @@ final class ProjectStoreTests: XCTestCase {
     }
 
     func testResultInserted() async throws {
-        let original = TestMesh.task("HEPH-1", name: "Original")
+        let original = TestMesh.ticket("HEPH-1", name: "Original")
         let (workspace, fakeMain, store) = try await loadedStore { mainID in
-            self.snapshot(mainID: mainID, tasks: [original])
+            self.snapshot(mainID: mainID, tickets: [original])
         }
         let connection = try XCTUnwrap(workspace.connection(fakeMain.device.id))
-        let created = TestMesh.task("HEPH-5", name: "Created")
-        fakeMain.answer("tasks.create", with: created)
-        _ = try await connection.createTask(projectID: "HEPH", name: "Created")
-        XCTAssertEqual(store.task("HEPH-5"), created)
+        let created = TestMesh.ticket("HEPH-5", name: "Created")
+        fakeMain.answer("tickets.create", with: created)
+        _ = try await connection.createTicket(projectID: "HEPH", name: "Created")
+        XCTAssertEqual(store.ticket("HEPH-5"), created)
 
-        fakeMain.answer("tasks.update", with: TestMesh.task("HEPH-1", name: "Changed"))
-        let result = try await connection.updateTask(projectID: "HEPH", taskID: "HEPH-1", patch: TaskPatch(name: "x"))
+        fakeMain.answer("tickets.update", with: TestMesh.ticket("HEPH-1", name: "Changed"))
+        let result = try await connection.updateTicket(projectID: "HEPH", ticketID: "HEPH-1", patch: TicketPatch(name: "x"))
         XCTAssertEqual(result.name, "Changed")
-        XCTAssertEqual(store.task("HEPH-1"), original)
-        XCTAssertEqual(store.tasks.map(\.id), ["HEPH-1", "HEPH-5"])
+        XCTAssertEqual(store.ticket("HEPH-1"), original)
+        XCTAssertEqual(store.tickets.map(\.id), ["HEPH-1", "HEPH-5"])
     }
 
     func testPendingPermissions() async throws {

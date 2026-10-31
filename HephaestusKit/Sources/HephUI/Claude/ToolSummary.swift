@@ -104,7 +104,7 @@ enum ToolSummary {
             return "\(todos.count) items"
         default:
             if toolName.hasPrefix("mcp__hephaestus__") {
-                for key in ["task", "project", "name", "query", "url", "run"] {
+                for key in ["ticket", "project", "name", "query", "url"] {
                     if let string = value(key) {
                         return string
                     }

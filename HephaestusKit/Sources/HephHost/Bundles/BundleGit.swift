@@ -110,6 +110,17 @@ struct BundleGit: Sendable {
         try await branchExists(branch, in: try await topFolder())
     }
 
+    /// Old branches: `git branch -m task/<ticketID> ticket/<ticketID>` when the first exists and the second does not.
+    /// Returns true when it renamed the branch. Runs in `<top>`.
+    func renameOldBranch(ticketID: String) async throws -> Bool {
+        let top = try await topFolder()
+        let old = "task/\(ticketID)"
+        let new = "ticket/\(ticketID)"
+        guard try await branchExists(old, in: top), !(try await branchExists(new, in: top)) else { return false }
+        _ = try await run(["branch", "-m", old, new], in: top)
+        return true
+    }
+
     // MARK: - Private
 
     private static let timeout = Duration.seconds(60)

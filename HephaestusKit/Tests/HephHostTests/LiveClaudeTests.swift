@@ -26,7 +26,9 @@ final class LiveClaudeTests: XCTestCase {
             let history = try await sessions.history(projectID: "FIX", sessionID: session.id, before: nil, limit: nil)
             let answered = history.events.contains { $0.type == .assistant && ($0.text ?? "").contains("OK") }
             let finished = history.events.contains { $0.type == .result && $0.isError == false }
-            return answered && finished
+            // The generated title (docs/claude/cli.md 5.10) replaced the default one.
+            let titled = try await sessions.sessions(projectID: "FIX").first { $0.id == session.id }?.title != "Chat 1"
+            return answered && finished && titled
         }
         try await sessions.stop(projectID: "FIX", sessionID: session.id)
         let stopped = try await sessions.sessions(projectID: "FIX").first { $0.id == session.id }

@@ -32,17 +32,13 @@ struct MCPToolHandler: Sendable {
             case "get_project": text = try await getProject(arguments)
             case "create_project": text = try await createProject(arguments)
             case "update_project": text = try await updateProject(arguments)
-            case "list_tasks": text = try await listTasks(arguments)
-            case "get_task": text = try await getTask(arguments, context: context)
-            case "create_task": text = try await createTask(arguments)
-            case "update_task": text = try await updateTask(arguments, context: context)
-            case "delete_task": text = try await deleteTask(arguments)
-            case "comment_task": text = try await commentTask(arguments, context: context)
-            case "start_task_session": text = try await startTaskSession(arguments)
-            case "list_runs": text = try await listRuns(arguments)
-            case "start_run": text = try await startRun(arguments)
-            case "stop_run": text = try await stopRun(arguments)
-            case "get_run_output": text = try await getRunOutput(arguments)
+            case "list_tickets": text = try await listTickets(arguments)
+            case "get_ticket": text = try await getTicket(arguments, context: context)
+            case "create_ticket": text = try await createTicket(arguments)
+            case "update_ticket": text = try await updateTicket(arguments, context: context)
+            case "delete_ticket": text = try await deleteTicket(arguments)
+            case "comment_ticket": text = try await commentTicket(arguments, context: context)
+            case "start_ticket_session": text = try await startTicketSession(arguments)
             case "list_web_tabs": text = try await listWebTabs(arguments)
             case "open_web_tab": text = try await openWebTab(arguments)
             case "search": text = try await search(arguments)
@@ -51,8 +47,10 @@ struct MCPToolHandler: Sendable {
             case "save_skill": text = try await saveSkill(arguments)
             case "forge_push_docs": text = try await forgePush(context: context, docs: true)
             case "forge_push_regen": text = try await forgePush(context: context, docs: false)
-            case "get_bundle", "start_bundle_task", "update_bundle", "finish_bundle":
+            case "get_bundle", "start_bundle_ticket", "update_bundle", "finish_bundle":
                 text = try await bundleTool(name, arguments, context: context)
+            case "rename_session": text = try await renameSession(arguments, context: context)
+            case "close_session": text = try await closeSession(context: context)
             default: throw ToolFailure.message("Unknown tool: \(name)")
             }
             return MCPToolResult(text: text, isError: false)
@@ -110,8 +108,7 @@ struct MCPToolHandler: Sendable {
         struct Result: Encodable {
             let main: MainRef
             let project: Project
-            let taskCounts: [String: Int]
-            let runs: [RunInfo]
+            let ticketCounts: [String: Int]
         }
 
         let projectID = try arguments.project("project")
@@ -119,12 +116,12 @@ struct MCPToolHandler: Sendable {
         let snapshot = try await perform(.projectsSnapshot, ProjectsSnapshotParams(projectID: projectID), on: main.id,
                                          as: ProjectsSnapshotResult.self)
         var counts: [String: Int] = ["todo": 0, "in_progress": 0, "review": 0, "done": 0, "broken": 0]
-        for task in snapshot.tasks {
-            let key = task.parseError == nil ? task.status.rawValue : "broken"
+        for ticket in snapshot.tickets {
+            let key = ticket.parseError == nil ? ticket.status.rawValue : "broken"
             counts[key, default: 0] += 1
         }
         return try json(Result(main: MainRef(id: main.id, name: main.name), project: snapshot.project,
-                               taskCounts: counts, runs: snapshot.runs))
+                               ticketCounts: counts))
     }
 
     // MARK: - 6.4, 6.5
@@ -154,7 +151,6 @@ struct MCPToolHandler: Sendable {
                                           on: target.id, as: ProjectSummary.self))
     }
 
-    /// No tool changes run configurations: an argument `runs` is ignored like any argument the schema does not list.
     private func updateProject(_ arguments: Arguments) async throws -> String {
         let projectID = try arguments.project("project")
         let name = try arguments.optionalString("name", minLength: 1)
@@ -167,94 +163,101 @@ struct MCPToolHandler: Sendable {
 
     // MARK: - 6.6 to 6.12
 
-    private func listTasks(_ arguments: Arguments) async throws -> String {
-        struct TaskLine: Encodable {
+    private func listTickets(_ arguments: Arguments) async throws -> String {
+        struct TicketLine: Encodable {
             let id: String
             let name: String?
-            let status: TaskStatus?
+            let status: TicketStatus?
             let created: Date?
             let updated: Date?
             let comments: Int?
             let parseError: String?
         }
-        struct Result: Encodable { let project: String; let tasks: [TaskLine] }
+        struct Result: Encodable { let project: String; let tickets: [TicketLine] }
 
         let projectID = try arguments.project("project")
-        let status = try arguments.optionalEnum("status", TaskStatus.self)
+        let status = try arguments.optionalEnum("status", TicketStatus.self)
         let main = try await locate(projectID)
         let snapshot = try await perform(.projectsSnapshot, ProjectsSnapshotParams(projectID: projectID), on: main.id,
                                          as: ProjectsSnapshotResult.self)
-        let lines = snapshot.tasks
-            .sorted { (TaskID($0.id)?.number ?? Int.max, $0.id) < (TaskID($1.id)?.number ?? Int.max, $1.id) }
-            .compactMap { task -> TaskLine? in
-                if let parseError = task.parseError {
+        let lines = snapshot.tickets
+            .sorted { lhs, rhs in
+                switch (TicketID(lhs.id), TicketID(rhs.id)) {
+                case let (left?, right?): return left < right
+                case (.some, nil): return true
+                case (nil, .some): return false
+                case (nil, nil): return lhs.id < rhs.id
+                }
+            }
+            .compactMap { ticket -> TicketLine? in
+                if let parseError = ticket.parseError {
                     guard status == nil else { return nil }
-                    return TaskLine(id: task.id, name: nil, status: nil, created: nil, updated: nil, comments: nil,
+                    return TicketLine(id: ticket.id, name: nil, status: nil, created: nil, updated: nil, comments: nil,
                                     parseError: parseError)
                 }
-                if let status, task.status != status { return nil }
-                return TaskLine(id: task.id, name: task.name, status: task.status, created: task.created,
-                                updated: task.updated, comments: task.comments.count, parseError: nil)
+                if let status, ticket.status != status { return nil }
+                return TicketLine(id: ticket.id, name: ticket.name, status: ticket.status, created: ticket.created,
+                                updated: ticket.updated, comments: ticket.comments.count, parseError: nil)
             }
-        return try json(Result(project: projectID, tasks: lines))
+        return try json(Result(project: projectID, tickets: lines))
     }
 
-    private func getTask(_ arguments: Arguments, context: MCPSessionContext) async throws -> String {
-        struct Result: Encodable { let task: TaskItem; let attachmentsFolder: String? }
+    private func getTicket(_ arguments: Arguments, context: MCPSessionContext) async throws -> String {
+        struct Result: Encodable { let ticket: TicketItem; let attachmentsFolder: String? }
 
-        let task = try arguments.task()
-        if context.kind == .feedback, task.taskID != context.taskID?.uppercased() {
-            throw ToolFailure.message("Forge sessions can only read their own feedback task.")
+        let ticket = try arguments.ticket()
+        if context.kind == .feedback, ticket.ticketID != context.ticketID?.uppercased() {
+            throw ToolFailure.message("Forge sessions can only read their own feedback ticket.")
         }
-        let main = try await locate(task.projectID)
-        let snapshot = try await perform(.projectsSnapshot, ProjectsSnapshotParams(projectID: task.projectID),
+        let main = try await locate(ticket.projectID)
+        let snapshot = try await perform(.projectsSnapshot, ProjectsSnapshotParams(projectID: ticket.projectID),
                                          on: main.id, as: ProjectsSnapshotResult.self)
-        guard let item = snapshot.tasks.first(where: { $0.id == task.taskID }) else {
-            throw ToolFailure.protocolError(ProtocolError(.notFound, "Task \(task.taskID) does not exist."))
+        guard let item = snapshot.tickets.first(where: { $0.id == ticket.ticketID }) else {
+            throw ToolFailure.protocolError(ProtocolError(.notFound, "Ticket \(ticket.ticketID) does not exist."))
         }
-        let folder = await host.localProjectRoot(task.projectID).map { root in
+        let folder = await host.localProjectRoot(ticket.projectID).map { root in
             root.appendingPathComponent(".hephaestus", isDirectory: true)
                 .appendingPathComponent("attachments", isDirectory: true)
-                .appendingPathComponent(task.taskID, isDirectory: true).path
+                .appendingPathComponent(ticket.ticketID, isDirectory: true).path
         }
-        return try json(Result(task: item, attachmentsFolder: folder))
+        return try json(Result(ticket: item, attachmentsFolder: folder))
     }
 
-    private func createTask(_ arguments: Arguments) async throws -> String {
+    private func createTicket(_ arguments: Arguments) async throws -> String {
         let projectID = try arguments.project("project")
         let name = try arguments.requiredString("name", minLength: 1)
         let description = try arguments.optionalString("description")
-        let status = try arguments.optionalEnum("status", TaskStatus.self)
+        let status = try arguments.optionalEnum("status", TicketStatus.self)
         let main = try await locate(projectID)
-        let params = TasksCreateParams(projectID: projectID, name: name, description: description, status: status)
-        return try json(try await perform(.tasksCreate, params, on: main.id, as: TaskItem.self))
+        let params = TicketsCreateParams(projectID: projectID, name: name, description: description, status: status)
+        return try json(try await perform(.ticketsCreate, params, on: main.id, as: TicketItem.self))
     }
 
-    private func updateTask(_ arguments: Arguments, context: MCPSessionContext) async throws -> String {
-        let task = try arguments.task()
+    private func updateTicket(_ arguments: Arguments, context: MCPSessionContext) async throws -> String {
+        let ticket = try arguments.ticket()
         let name = try arguments.optionalString("name", minLength: 1)
         let description = try arguments.optionalString("description")
-        let status = try arguments.optionalEnum("status", TaskStatus.self)
-        try Self.checkOwnFeedbackTask(task.taskID, context: context)
-        let main = try await locate(task.projectID)
-        let params = TasksUpdateParams(projectID: task.projectID, taskID: task.taskID,
-                                       patch: TaskPatch(name: name, description: description, status: status))
-        return try json(try await perform(.tasksUpdate, params, on: main.id, as: TaskItem.self))
+        let status = try arguments.optionalEnum("status", TicketStatus.self)
+        try Self.checkOwnFeedbackTicket(ticket.ticketID, context: context)
+        let main = try await locate(ticket.projectID)
+        let params = TicketsUpdateParams(projectID: ticket.projectID, ticketID: ticket.ticketID,
+                                       patch: TicketPatch(name: name, description: description, status: status))
+        return try json(try await perform(.ticketsUpdate, params, on: main.id, as: TicketItem.self))
     }
 
-    private func deleteTask(_ arguments: Arguments) async throws -> String {
-        let task = try arguments.task()
-        let main = try await locate(task.projectID)
-        _ = try await perform(.tasksDelete, TasksDeleteParams(projectID: task.projectID, taskID: task.taskID),
+    private func deleteTicket(_ arguments: Arguments) async throws -> String {
+        let ticket = try arguments.ticket()
+        let main = try await locate(ticket.projectID)
+        _ = try await perform(.ticketsDelete, TicketsDeleteParams(projectID: ticket.projectID, ticketID: ticket.ticketID),
                               on: main.id, as: EmptyPayload.self)
-        return try json(["deleted": task.taskID])
+        return try json(["deleted": ticket.ticketID])
     }
 
-    private func commentTask(_ arguments: Arguments, context: MCPSessionContext) async throws -> String {
-        let task = try arguments.task()
+    private func commentTicket(_ arguments: Arguments, context: MCPSessionContext) async throws -> String {
+        let ticket = try arguments.ticket()
         let body = try arguments.requiredString("body", minLength: 1)
         let paths = try arguments.optionalStrings("files") ?? []
-        try Self.checkOwnFeedbackTask(task.taskID, context: context)
+        try Self.checkOwnFeedbackTicket(ticket.ticketID, context: context)
 
         // Each path: an absolute path of a readable regular file of this Main; nothing is sent otherwise.
         var files: [(path: String, size: Int)] = []
@@ -275,29 +278,29 @@ struct MCPToolHandler: Sendable {
             files.append((path, Int(info.st_size)))
         }
 
-        let main = try await locate(task.projectID)
+        let main = try await locate(ticket.projectID)
         var refs: [UploadRef] = []
         do {
             for file in files {
-                refs.append(try await upload(file.path, size: file.size, projectID: task.projectID, on: main.id,
+                refs.append(try await upload(file.path, size: file.size, projectID: ticket.projectID, on: main.id,
                                              begun: refs))
             }
         } catch let failure as UploadFailure {
             await cancelUploads(failure.begun, on: main.id)
             throw ToolFailure.message("Cannot attach \(failure.path): \(Self.withoutFinalPeriod(failure.reason)).")
         }
-        let params = TasksAddCommentParams(projectID: task.projectID, taskID: task.taskID, body: body,
+        let params = TicketsAddCommentParams(projectID: ticket.projectID, ticketID: ticket.ticketID, body: body,
                                            attachments: refs, author: "Claude")
         do {
-            return try json(try await perform(.tasksAddComment, params, on: main.id, as: TaskItem.self))
+            return try json(try await perform(.ticketsAddComment, params, on: main.id, as: TicketItem.self))
         } catch {
             await cancelUploads(refs, on: main.id)
             throw error
         }
     }
 
-    private func startTaskSession(_ arguments: Arguments) async throws -> String {
-        let task = try arguments.task()
+    private func startTicketSession(_ arguments: Arguments) async throws -> String {
+        let ticket = try arguments.ticket()
         guard let mode = try arguments.optionalEnum("mode", SessionMode.self) else {
             throw ToolFailure.invalidArguments("mode is missing")
         }
@@ -305,59 +308,13 @@ struct MCPToolHandler: Sendable {
         if mode == .custom, (instructions ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw ToolFailure.message("Mode custom needs instructions.")
         }
-        let main = try await locate(task.projectID)
-        let params = SessionsStartParams(projectID: task.projectID, kind: .task, taskID: task.taskID, mode: mode,
+        let main = try await locate(ticket.projectID)
+        let params = SessionsStartParams(projectID: ticket.projectID, kind: .ticket, ticketID: ticket.ticketID, mode: mode,
                                          message: instructions)
         return try json(try await perform(.sessionsStart, params, on: main.id, as: SessionInfo.self))
     }
 
-    // MARK: - 6.13 to 6.16
-
-    private func listRuns(_ arguments: Arguments) async throws -> String {
-        struct Result: Encodable { let configurations: [RunConfig]; let runs: [RunInfo] }
-
-        let projectID = try arguments.project("project")
-        let main = try await locate(projectID)
-        let snapshot = try await perform(.projectsSnapshot, ProjectsSnapshotParams(projectID: projectID), on: main.id,
-                                         as: ProjectsSnapshotResult.self)
-        return try json(Result(configurations: snapshot.project.runs, runs: snapshot.runs))
-    }
-
-    private func startRun(_ arguments: Arguments) async throws -> String {
-        let projectID = try arguments.project("project")
-        let name = try arguments.requiredString("name", minLength: 1)
-        let main = try await locate(projectID)
-        return try json(try await perform(.runsStart, RunsStartParams(projectID: projectID, name: name), on: main.id,
-                                          as: RunInfo.self))
-    }
-
-    private func stopRun(_ arguments: Arguments) async throws -> String {
-        let projectID = try arguments.project("project")
-        let runID = try arguments.runID()
-        let main = try await locate(projectID)
-        _ = try await perform(.runsStop, RunsStopParams(projectID: projectID, runID: runID), on: main.id,
-                              as: EmptyPayload.self)
-        return try json(["stopped": runID.uuidString])
-    }
-
-    private func getRunOutput(_ arguments: Arguments) async throws -> String {
-        let projectID = try arguments.project("project")
-        let runID = try arguments.runID()
-        let main = try await locate(projectID)
-        let output = try await perform(.runsOutput, RunsOutputParams(projectID: projectID, runID: runID), on: main.id,
-                                       as: RunsOutputResult.self)
-        guard !output.text.isEmpty else { return "(no output)" }
-        let bytes = Array(output.text.utf8)
-        let limit = 65_536
-        guard bytes.count > limit else { return output.text }
-        var tail = bytes[(bytes.count - limit)...]
-        if let newline = tail.firstIndex(of: 0x0A) {
-            tail = tail[tail.index(after: newline)...]
-        }
-        return "[… earlier output omitted]\n" + String(decoding: tail, as: UTF8.self)
-    }
-
-    // MARK: - 6.17 to 6.19
+    // MARK: - 6.13 to 6.15
 
     private func listWebTabs(_ arguments: Arguments) async throws -> String {
         let projectID = try arguments.project("project")
@@ -406,7 +363,7 @@ struct MCPToolHandler: Sendable {
         return try json(["results": merged])
     }
 
-    // MARK: - 6.20 to 6.22
+    // MARK: - 6.16 to 6.18
 
     private func listSkills() async throws -> String {
         let local = await host.localMain()
@@ -454,14 +411,14 @@ struct MCPToolHandler: Sendable {
         return try json(summary)
     }
 
-    /// In a `feedback` session, `task` uppercased must be the session's `taskID` (6.9, 6.11).
-    private static func checkOwnFeedbackTask(_ taskID: String, context: MCPSessionContext) throws {
-        if context.kind == .feedback, taskID != context.taskID?.uppercased() {
-            throw ToolFailure.message("Forge sessions can only change their own feedback task.")
+    /// In a `feedback` session, `ticket` uppercased must be the session's `ticketID` (6.9, 6.11).
+    private static func checkOwnFeedbackTicket(_ ticketID: String, context: MCPSessionContext) throws {
+        if context.kind == .feedback, ticketID != context.ticketID?.uppercased() {
+            throw ToolFailure.message("Forge sessions can only change their own feedback ticket.")
         }
     }
 
-    // MARK: - 6.23, 6.24
+    // MARK: - 6.19, 6.20
 
     private func forgePush(context: MCPSessionContext, docs: Bool) async throws -> String {
         try await Self.hookResult {
@@ -472,16 +429,16 @@ struct MCPToolHandler: Sendable {
         }
     }
 
-    // MARK: - 6.25 to 6.28
+    // MARK: - 6.21 to 6.24
 
     /// The bundle tools: the arguments are checked, then `MCPHost.bundleTool` runs with the token's project and
-    /// bundle and the checked arguments (`task` uppercased; `instructions` empty after trimming left out).
+    /// bundle and the checked arguments (`ticket` uppercased; `instructions` empty after trimming left out).
     private func bundleTool(_ name: String, _ arguments: Arguments, context: MCPSessionContext) async throws
         -> String {
         var checked: [String: Any] = [:]
         switch name {
-        case "start_bundle_task":
-            checked["task"] = try arguments.task().taskID
+        case "start_bundle_ticket":
+            checked["ticket"] = try arguments.ticket().ticketID
             if let instructions = try arguments.optionalString("instructions"),
                !instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 checked["instructions"] = instructions
@@ -507,7 +464,30 @@ struct MCPToolHandler: Sendable {
         }
     }
 
-    /// A Forge or bundle tool's `MCPHost` call: a thrown error's message alone is the tool error (section 8).
+    // MARK: - 6.25, 6.26
+
+    /// The session of the token is renamed on this Main, which hosts every project whose sessions it runs.
+    private func renameSession(_ arguments: Arguments, context: MCPSessionContext) async throws -> String {
+        let title = try arguments.requiredString("title", minLength: 1)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, !title.contains(where: { $0.isNewline }) else {
+            throw ToolFailure.message("The title must not be empty and must be on one line.")
+        }
+        let local = await host.localMain()
+        let params = SessionsUpdateParams(projectID: context.projectID, sessionID: context.sessionID,
+                                          patch: SessionPatch(title: title))
+        return try json(try await perform(.sessionsUpdate, params, on: local.id, as: SessionInfo.self))
+    }
+
+    private func closeSession(context: MCPSessionContext) async throws -> String {
+        _ = try await Self.hookResult {
+            try await host.closeSession(projectID: context.projectID, sessionID: context.sessionID)
+            return ""
+        }
+        return "This conversation is over. End your turn now: the session accepts no more messages."
+    }
+
+    /// A Forge, bundle or close tool's `MCPHost` call: a thrown error's message alone is the tool error (section 8).
     private static func hookResult(_ call: () async throws -> String) async throws -> String {
         do {
             return try await call()
@@ -581,7 +561,7 @@ struct MCPToolHandler: Sendable {
         let begun: [UploadRef]
     }
 
-    /// Uploads one file to the Main hosting the task's project: uploads.begin, then its bytes in chunks of
+    /// Uploads one file to the Main hosting the ticket's project: uploads.begin, then its bytes in chunks of
     /// `MethodLimits.maxChunkSize`, one request at a time.
     private func upload(_ path: String, size: Int, projectID: String, on mainID: UUID,
                         begun: [UploadRef]) async throws -> UploadRef {
@@ -793,27 +773,20 @@ private struct Arguments {
         return value
     }
 
-    /// The `task` argument: uppercased, then it must match ^[A-Z]{2,8}-[0-9]+$; its project is the part before `-`.
-    func task() throws -> (taskID: String, projectID: String) {
-        let value = try requiredString("task").uppercased()
+    /// The `ticket` argument: uppercased, then it must match ^[A-Z]{2,8}-F?[0-9]+$; its project is the part before `-`.
+    func ticket() throws -> (ticketID: String, projectID: String) {
+        let value = try requiredString("ticket").uppercased()
         let parts = value.split(separator: "-", omittingEmptySubsequences: false)
+        // A feedback ticket id has an F before its number.
+        let number = parts.count == 2 && parts[1].hasPrefix("F") ? parts[1].dropFirst() : parts.last ?? ""
         guard parts.count == 2,
               (2...8).contains(parts[0].unicodeScalars.count),
               parts[0].unicodeScalars.allSatisfy({ ("A"..."Z").contains($0) }),
-              !parts[1].isEmpty, parts[1].unicodeScalars.allSatisfy({ ("0"..."9").contains($0) })
+              !number.isEmpty, number.unicodeScalars.allSatisfy({ ("0"..."9").contains($0) })
         else {
-            throw ToolFailure.invalidArguments("task is not a task id")
+            throw ToolFailure.invalidArguments("ticket is not a ticket id")
         }
         return (value, String(parts[0]))
-    }
-
-    /// The `run` argument: a run id.
-    func runID() throws -> UUID {
-        let value = try requiredString("run", minLength: 1)
-        guard let id = UUID(uuidString: value) else {
-            throw ToolFailure.invalidArguments("run is not a run id")
-        }
-        return id
     }
 
     /// The `name` of a skill: ^[a-z0-9-]{1,64}$.

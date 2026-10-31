@@ -10,12 +10,12 @@ public protocol SessionHost: Sendable {
     func settings() async -> DeviceSettings
     /// Throws ProtocolError notFound when the project is not hosted on this Main.
     func claudeProject(_ projectID: String) async throws -> ClaudeProjectContext
-    /// Throws ProtocolError notFound when the task does not exist.
-    func claudeTask(projectID: String, taskID: String) async throws -> ClaudeTaskContext
+    /// Throws ProtocolError notFound when the ticket does not exist.
+    func claudeTicket(projectID: String, ticketID: String) async throws -> ClaudeTicketContext
     /// Throws ProtocolError notFound when the bundle does not exist (services/bundles.md).
     func claudeBundle(projectID: String, bundleID: String) async throws -> ClaudeBundleContext
-    /// BundleService.workFolder: the working directory of a task session of a bundle.
-    func bundleWorkFolder(projectID: String, taskID: String) async throws -> URL
+    /// BundleService.workFolder: the working directory of a ticket session of a bundle.
+    func bundleWorkFolder(projectID: String, ticketID: String) async throws -> URL
     /// ProjectRegistry.checkWritable: throws locked when the project or an ancestor is migrating.
     func checkWritable(_ projectID: String) async throws
     /// The project's SessionArchive (data/sessions.md).
@@ -39,7 +39,7 @@ public protocol SessionHost: Sendable {
 public struct SessionStart: Sendable {
     public var projectID: String
     public var kind: SessionKind
-    public var taskID: String?
+    public var ticketID: String?
     public var mode: SessionMode?
     public var title: String?
     public var message: String?
@@ -47,16 +47,16 @@ public struct SessionStart: Sendable {
     public var permissionMode: PermissionMode?
     public var model: String?
     public var deviceID: UUID                        // requesting device; this Main's id for the Forge
-    public var bundleID: String?                     // bundle sessions, and the task sessions a bundle starts
+    public var bundleID: String?                     // bundle sessions, and the ticket sessions a bundle starts
     public var regeneration: RegenerationContext?    // regeneration sessions (prompts.md)
 
-    public init(projectID: String, kind: SessionKind, taskID: String? = nil, mode: SessionMode? = nil,
+    public init(projectID: String, kind: SessionKind, ticketID: String? = nil, mode: SessionMode? = nil,
                 title: String? = nil, message: String? = nil, attachments: [UploadRef] = [],
                 permissionMode: PermissionMode? = nil, model: String? = nil, deviceID: UUID,
                 bundleID: String? = nil, regeneration: RegenerationContext? = nil) {
         self.projectID = projectID
         self.kind = kind
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.mode = mode
         self.title = title
         self.message = message
@@ -79,6 +79,8 @@ public actor SessionService: HostMethodHandler {
     private var projects: [String: [UUID: Session]] = [:]
     /// The process lifecycle operations of each session (deliveries, stops, restarts, deletion), one at a time.
     private var lifecycles: [UUID: Task<Void, Never>] = [:]
+    /// The title calls in progress (5.10), per session id.
+    private var titleCalls: [UUID: Task<Void, Never>] = [:]
     private var nextGeneration = 0
 
     public init(host: any SessionHost) {
@@ -97,6 +99,10 @@ public actor SessionService: HostMethodHandler {
         running = false
         let keys = projects.flatMap { projectID, sessions in sessions.keys.map { (projectID, $0) } }
         await terminateAll(keys)
+        for call in titleCalls.values {
+            call.cancel()
+        }
+        titleCalls.removeAll()
         projects.removeAll()
         lifecycles.removeAll()
     }
@@ -108,6 +114,8 @@ public actor SessionService: HostMethodHandler {
         await terminateAll(keys)
         for (_, sessionID) in keys {
             lifecycles[sessionID] = nil
+            titleCalls[sessionID]?.cancel()
+            titleCalls[sessionID] = nil
         }
         projects[projectID] = nil
     }
@@ -133,6 +141,9 @@ public actor SessionService: HostMethodHandler {
                      deviceID: UUID) async throws {
         // 1. Checks.
         let session = try await session(projectID, sessionID)
+        guard session.file.closed == nil else {
+            throw ProtocolError(.conflict, "This conversation is over.")
+        }
         try await host.checkWritable(projectID)
         guard !text.isEmpty || !attachments.isEmpty else {
             throw ProtocolError(.badRequest, "The message is empty.")
@@ -145,9 +156,10 @@ public actor SessionService: HostMethodHandler {
 
         try await serialized(session) {
             // 2. The files, then 4. the user event.
-            var stored: [TaskAttachment] = []
+            var stored: [TicketAttachment] = []
             var moved: [(upload: ClaimedUpload, url: URL)] = []
             let event: SessionEvent
+            let first = await Self.hasNoEvent(archive, sessionID)
             do {
                 for upload in claimed {
                     let attachment = try await archive.saveAttachment(fileAt: upload.url, originalName: upload.fileName,
@@ -171,6 +183,9 @@ public actor SessionService: HostMethodHandler {
             }
             await self.host.sessionEvent(projectID: projectID, sessionID: sessionID, event: event)
             await self.writeFile(session) { _ in }
+            if first {
+                self.startTitleCall(session, text: text)
+            }
             // 3. The CLI text, then 5. the delivery.
             try await self.deliver(Self.cliText(text, attachments: stored, archive: archive, sessionID: sessionID),
                                    to: session, firstStart: nil)
@@ -289,7 +304,7 @@ public actor SessionService: HostMethodHandler {
         await changed(session)
         // A new permission mode or model applies at the next process start.
         if session.file.permissionMode != previous.permissionMode || session.file.model != previous.model,
-           session.process != nil {
+           session.process != nil, session.file.closed == nil {
             session.restartPending = true
             if session.status == .idle {
                 scheduleRestart(session)
@@ -319,6 +334,34 @@ public actor SessionService: HostMethodHandler {
             await self.host.sessionRemoved(projectID: projectID, sessionID: sessionID)
         }
         lifecycles[sessionID] = nil
+        titleCalls[sessionID]?.cancel()
+        titleCalls[sessionID] = nil
+    }
+
+    /// MCP tool close_session (5.11).
+    public func close(projectID: String, sessionID: UUID) async throws {
+        let session = try await session(projectID, sessionID)
+        guard session.file.kind != .regeneration else {
+            throw ProtocolError(.badRequest, "A regeneration session cannot be closed.")
+        }
+        try await host.checkWritable(projectID)
+        guard session.file.closed == nil else { return }
+        let archive = try await host.sessionArchive(projectID)
+        let now = YAMLCoding.now()
+        session.file = try await archive.update(sessionID) { $0.closed = now }
+        session.restartPending = false
+        Log.host.info("Closed session \(sessionID.uuidString, privacy: .public)")
+        await changed(session)
+        // In idle, the process is terminated at once; during the turn that called the tool, when that turn's result
+        // has been handled (3.3).
+        if session.status == .idle {
+            Task {
+                try? await self.serialized(session) {
+                    guard let live = session.process, session.status == .idle else { return }
+                    await self.terminate(session, live, reason: .close)
+                }
+            }
+        }
     }
 
     // MARK: - Other areas
@@ -347,7 +390,7 @@ public actor SessionService: HostMethodHandler {
             switch RPCMethod(rawValue: method) {
             case .sessionsStart:
                 let request = try Self.decode(SessionsStartParams.self, params, method)
-                let start = SessionStart(projectID: request.projectID, kind: request.kind, taskID: request.taskID,
+                let start = SessionStart(projectID: request.projectID, kind: request.kind, ticketID: request.ticketID,
                                          mode: request.mode, title: request.title, message: request.message,
                                          attachments: request.attachments ?? [],
                                          permissionMode: request.permissionMode, model: request.model,
@@ -407,47 +450,47 @@ public actor SessionService: HostMethodHandler {
         // 1. Hosted and writable.
         let project = try await host.claudeProject(projectID)
         try await host.checkWritable(projectID)
-        // 2. Over the wire, project and task sessions only: the Forge starts feedback and regeneration sessions, and
-        // BundleService bundle sessions and the task sessions of a bundle, in process.
+        // 2. Over the wire, project and ticket sessions only: the Forge starts feedback and regeneration sessions, and
+        // BundleService bundle sessions and the ticket sessions of a bundle, in process.
         if overWire, request.kind == .bundle {
             throw ProtocolError(.badRequest, "Bundle sessions are started with bundles.start.")
         }
-        if overWire, request.kind != .project, request.kind != .task {
+        if overWire, request.kind != .project, request.kind != .ticket {
             throw ProtocolError(.badRequest, "Only the Forge starts feedback and regeneration sessions.")
         }
         // 3 to 5. The kind's fields.
-        var task: ClaudeTaskContext?
+        var ticket: ClaudeTicketContext?
         var bundle: ClaudeBundleContext?
         switch request.kind {
         case .project:
-            guard request.taskID == nil, request.mode == nil else {
-                throw ProtocolError(.badRequest, "A project session has no task and no mode.")
+            guard request.ticketID == nil, request.mode == nil else {
+                throw ProtocolError(.badRequest, "A project session has no ticket and no mode.")
             }
-        case .task:
-            guard let taskID = request.taskID, let mode = request.mode else {
-                throw ProtocolError(.badRequest, "A task session needs a task and a mode.")
+        case .ticket:
+            guard let ticketID = request.ticketID, let mode = request.mode else {
+                throw ProtocolError(.badRequest, "A ticket session needs a ticket and a mode.")
             }
-            task = try await existingTask(projectID: projectID, taskID: taskID)
+            ticket = try await existingTicket(projectID: projectID, ticketID: ticketID)
             if mode == .custom, (request.message ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 throw ProtocolError(.badRequest, "Mode custom needs instructions.")
             }
         case .feedback:
-            guard let taskID = request.taskID else {
-                throw ProtocolError(.badRequest, "A feedback session needs a task.")
+            guard let ticketID = request.ticketID else {
+                throw ProtocolError(.badRequest, "A feedback session needs a ticket.")
             }
-            task = try await existingTask(projectID: projectID, taskID: taskID)
+            ticket = try await existingTicket(projectID: projectID, ticketID: ticketID)
         case .regeneration:
-            guard request.taskID == nil else {
-                throw ProtocolError(.badRequest, "A regeneration session has no task.")
+            guard request.ticketID == nil else {
+                throw ProtocolError(.badRequest, "A regeneration session has no ticket.")
             }
         case .bundle:
             bundle = try await host.claudeBundle(projectID: projectID, bundleID: request.bundleID ?? "")
-            guard request.taskID == nil, request.mode == nil else {
-                throw ProtocolError(.badRequest, "A bundle session has no task and no mode.")
+            guard request.ticketID == nil, request.mode == nil else {
+                throw ProtocolError(.badRequest, "A bundle session has no ticket and no mode.")
             }
         }
-        if request.bundleID != nil, request.kind != .bundle, request.kind != .task {
-            throw ProtocolError(.badRequest, "Only bundle and task sessions belong to a bundle.")
+        if request.bundleID != nil, request.kind != .bundle, request.kind != .ticket {
+            throw ProtocolError(.badRequest, "Only bundle and ticket sessions belong to a bundle.")
         }
         // 6. Title and model.
         let title = try request.title.map(Self.validTitle)
@@ -481,10 +524,10 @@ public actor SessionService: HostMethodHandler {
         switch request.kind {
         case .project:
             defaultTitle = "Chat \(1 + existing.values.filter { $0.file.kind == .project }.count)"
-        case .task:
-            defaultTitle = "\(request.mode?.displayName ?? "") \(task?.id ?? request.taskID ?? "")"
+        case .ticket:
+            defaultTitle = "\(request.mode?.displayName ?? "") \(ticket?.id ?? request.ticketID ?? "")"
         case .feedback:
-            defaultTitle = "Feedback \(task?.id ?? request.taskID ?? "")"
+            defaultTitle = "Feedback \(ticket?.id ?? request.ticketID ?? "")"
         case .regeneration:
             defaultTitle = "Regeneration"
         case .bundle:
@@ -496,7 +539,7 @@ public actor SessionService: HostMethodHandler {
             permissionMode = .acceptEdits
         } else if Self.belongsToBundle(request.kind, bundleID: bundleID),
                   await isPublicRepositorySession(request.kind, project: project, settings: settings) {
-            // Bundle sessions and the task sessions of a bundle that are sessions of 3.5 work without waiting for
+            // Bundle sessions and the ticket sessions of a bundle that are sessions of 3.5 work without waiting for
             // the user.
             permissionMode = .acceptEdits
         } else {
@@ -506,12 +549,12 @@ public actor SessionService: HostMethodHandler {
             model = project.claude.model ?? (settings.defaultModel.isEmpty ? nil : settings.defaultModel)
         }
         let now = YAMLCoding.now()
-        let file = SessionFile(id: id, kind: request.kind, taskID: task?.id ?? request.taskID, mode: request.mode,
+        let file = SessionFile(id: id, kind: request.kind, ticketID: ticket?.id ?? request.ticketID, mode: request.mode,
                                bundleID: bundleID, title: title ?? defaultTitle, created: now, updated: now,
                                permissionMode: permissionMode, model: model, status: .stopped)
 
         // The first message's files are moved in before the session file is created.
-        var stored: [TaskAttachment] = []
+        var stored: [TicketAttachment] = []
         var moved: [(upload: ClaimedUpload, url: URL)] = []
         do {
             for upload in claimed {
@@ -543,7 +586,7 @@ public actor SessionService: HostMethodHandler {
         // The first message, delivered as by sessions.send.
         guard hasFirstMessage else { return info(session) }
         let text: String
-        let attachments: [TaskAttachment]
+        let attachments: [TicketAttachment]
         if request.kind == .project {
             text = request.message ?? ""
             attachments = stored
@@ -551,12 +594,12 @@ public actor SessionService: HostMethodHandler {
             attachments = []
             let publicRepository = await isPublicRepositorySession(request.kind, project: project, settings: settings)
             let context = PromptContext(kind: request.kind, publicRepository: publicRepository, mainName: "",
-                                        devices: [], project: project, task: task, mode: request.mode,
+                                        devices: [], project: project, ticket: ticket, mode: request.mode,
                                         instructions: request.message, regeneration: request.regeneration,
                                         bundle: bundle, workFolder: nil, branch: settings.forge.branch)
             text = Prompts.firstMessage(context) ?? ""
         }
-        let firstStart = FirstStart(instructions: request.kind == .task ? request.message : nil,
+        let firstStart = FirstStart(instructions: request.kind == .ticket ? request.message : nil,
                                     regeneration: request.regeneration)
         do {
             try await serialized(session) {
@@ -564,6 +607,7 @@ public actor SessionService: HostMethodHandler {
                                              deviceID: request.deviceID),
                                   in: session)
                 await self.writeFile(session) { _ in }
+                self.startTitleCall(session, text: text)
                 try await self.deliver(Self.cliText(text, attachments: attachments, archive: archive, sessionID: id),
                                        to: session, firstStart: firstStart)
             }
@@ -574,13 +618,13 @@ public actor SessionService: HostMethodHandler {
         return info(session)
     }
 
-    /// An existing task that is not broken (notFound, conflict).
-    private func existingTask(projectID: String, taskID: String) async throws -> ClaudeTaskContext {
-        let task = try await host.claudeTask(projectID: projectID, taskID: taskID)
-        if let parseError = task.parseError {
+    /// An existing ticket that is not broken (notFound, conflict).
+    private func existingTicket(projectID: String, ticketID: String) async throws -> ClaudeTicketContext {
+        let ticket = try await host.claudeTicket(projectID: projectID, ticketID: ticketID)
+        if let parseError = ticket.parseError {
             throw ProtocolError(.conflict, "The file is invalid: \(parseError)")
         }
-        return task
+        return ticket
     }
 
     // MARK: - 5.3 Starting the process
@@ -624,7 +668,7 @@ public actor SessionService: HostMethodHandler {
             let executable = try await preflight()
             let registered = await host.mcp.register(MCPSessionContext(sessionID: sessionID, projectID: projectID,
                                                                        kind: session.file.kind,
-                                                                       taskID: session.file.taskID,
+                                                                       ticketID: session.file.ticketID,
                                                                        bundleID: session.file.bundleID))
             token = registered
             // The project, read for steps 3 and 4.
@@ -641,8 +685,8 @@ public actor SessionService: HostMethodHandler {
             } catch {
                 throw LaunchFailure(message: "Could not start Claude: \(Self.protocolError(error).message)")
             }
-            // 4. The system prompt, rendered from the data read now; whether the session is a session of 3.5. A task
-            // session of a bundle works in its task's work folder.
+            // 4. The system prompt, rendered from the data read now; whether the session is a session of 3.5. A ticket
+            // session of a bundle works in its ticket's work folder.
             let settings = await host.settings()
             let kind = session.file.kind
             let publicRepository = await isPublicRepositorySession(kind, project: project, settings: settings)
@@ -650,8 +694,8 @@ public actor SessionService: HostMethodHandler {
                 .appendingPathComponent("system-prompt.md", isDirectory: false)
             var workFolder: URL?
             do {
-                if kind == .task, session.file.bundleID != nil, let taskID = session.file.taskID {
-                    workFolder = try await host.bundleWorkFolder(projectID: projectID, taskID: taskID)
+                if kind == .ticket, session.file.bundleID != nil, let ticketID = session.file.ticketID {
+                    workFolder = try await host.bundleWorkFolder(projectID: projectID, ticketID: ticketID)
                 }
                 let context = try await promptContext(session, project: project, settings: settings,
                                                       publicRepository: publicRepository, workFolder: workFolder,
@@ -675,9 +719,9 @@ public actor SessionService: HostMethodHandler {
                 allowedTools = ForgeSessionRules.allowedTools(.regeneration, branch: settings.forge.branch)
             case .bundle where publicRepository:
                 allowedTools = ForgeSessionRules.allowedTools(.bundle, branch: settings.forge.branch)
-            case .task where publicRepository && session.file.bundleID != nil:
+            case .ticket where publicRepository && session.file.bundleID != nil:
                 allowedTools = ForgeSessionRules.allowedTools(.feedback, branch: settings.forge.branch)
-            case .project, .task, .bundle:
+            case .project, .ticket, .bundle:
                 allowedTools = ["mcp__hephaestus"]
             }
             let disallowedTools = publicRepository ? ForgeSessionRules.disallowedTools : ["Edit(**/.hephaestus/**)"]
@@ -751,7 +795,7 @@ public actor SessionService: HostMethodHandler {
         }
     }
 
-    /// The prompt context of 5.3 step 4. `workFolder`: the work folder of a task session of a bundle.
+    /// The prompt context of 5.3 step 4. `workFolder`: the work folder of a ticket session of a bundle.
     private func promptContext(_ session: Session, project: ClaudeProjectContext, settings: DeviceSettings,
                                publicRepository: Bool, workFolder: URL?,
                                firstStart: FirstStart?) async throws -> PromptContext {
@@ -760,9 +804,9 @@ public actor SessionService: HostMethodHandler {
             PromptDevice(name: record.name, platform: record.platform.rawValue, isMain: record.isMain,
                          isThisMac: record.id == local.id)
         }
-        var task: ClaudeTaskContext?
-        if session.file.kind == .task || session.file.kind == .feedback, let taskID = session.file.taskID {
-            task = try await host.claudeTask(projectID: session.projectID, taskID: taskID)
+        var ticket: ClaudeTicketContext?
+        if session.file.kind == .ticket || session.file.kind == .feedback, let ticketID = session.file.ticketID {
+            ticket = try await host.claudeTicket(projectID: session.projectID, ticketID: ticketID)
         }
         var bundle: ClaudeBundleContext?
         if let bundleID = session.file.bundleID, Self.belongsToBundle(session.file.kind, bundleID: bundleID) {
@@ -770,7 +814,7 @@ public actor SessionService: HostMethodHandler {
             bundle?.maxParallel = settings.bundles.maxParallel
         }
         var instructions: String?
-        if session.file.kind == .task {
+        if session.file.kind == .ticket {
             if let firstStart {
                 instructions = firstStart.instructions
             } else {
@@ -778,18 +822,16 @@ public actor SessionService: HostMethodHandler {
             }
         }
         return PromptContext(kind: session.file.kind, publicRepository: publicRepository, mainName: local.name,
-                             devices: devices, project: project, task: task, mode: session.file.mode,
+                             devices: devices, project: project, ticket: ticket, mode: session.file.mode,
                              instructions: instructions, regeneration: firstStart?.regeneration, bundle: bundle,
                              workFolder: workFolder, branch: settings.forge.branch)
     }
 
-    /// A bundle session, or a task session of a bundle.
+    /// A bundle session, or a ticket session of a bundle.
     private static func belongsToBundle(_ kind: SessionKind, bundleID: String?) -> Bool {
-        bundleID != nil && (kind == .bundle || kind == .task)
+        bundleID != nil && (kind == .bundle || kind == .ticket)
     }
 
-    /// The permission mode that sessions.update cannot change: that of feedback and regeneration sessions, and of
-    /// the bundle sessions and task sessions of a bundle that are sessions of 3.5 (5.2), as read now.
     /// A session of 3.5, which works in the public repository: a feedback or regeneration session, or, while the
     /// setting forge.enabled is true, a session whose project, or an ancestor reached through claudeProject(_:) of each
     /// parent, is forge.sourceProjectID, or one of whose ancestors cannot be read (claudeProject(_:) throws, which ends
@@ -863,7 +905,7 @@ public actor SessionService: HostMethodHandler {
     }
 
     /// The text sent to the CLI: the message, then the absolute paths of its files.
-    private static func cliText(_ text: String, attachments: [TaskAttachment], archive: SessionArchive,
+    private static func cliText(_ text: String, attachments: [TicketAttachment], archive: SessionArchive,
                                 sessionID: UUID) -> String {
         guard !attachments.isEmpty else { return text }
         let lines = attachments.map { "- " + archive.attachmentURL(sessionID, file: $0.file).path }
@@ -1017,6 +1059,15 @@ public actor SessionService: HostMethodHandler {
             live.interrupted = false
             await writeFile(session) { _ in }
             guard session.process === live else { return }
+            if session.file.closed != nil {
+                // A closed session (5.11): the process is terminated, no idle timer; its end sets `stopped`.
+                if live.stopReason == nil {
+                    live.stopReason = .close
+                }
+                let process = live.process
+                Task { await process.terminate() }
+                return
+            }
             setStatus(.idle, session)
             await changed(session)
             becameIdle(session)
@@ -1092,7 +1143,7 @@ public actor SessionService: HostMethodHandler {
     // MARK: - 5.6 Stop, idle stop, restarts
 
     private enum StopReason {
-        case stop, idleStop, restart, stopAll, delete, writeFailure, initializeError
+        case stop, idleStop, restart, stopAll, delete, writeFailure, initializeError, close
     }
 
     /// Terminates the process (SIGTERM to its group, SIGKILL after 5 s) and returns once its end is handled.
@@ -1110,7 +1161,7 @@ public actor SessionService: HostMethodHandler {
     private func scheduleRestart(_ session: Session) {
         Task {
             try? await self.serialized(session) {
-                guard session.restartPending, let live = session.process else { return }
+                guard session.restartPending, session.file.closed == nil, let live = session.process else { return }
                 guard session.status == .idle else { return }
                 await self.terminate(session, live, reason: .restart)
                 guard self.isCurrent(session) else { return }
@@ -1209,6 +1260,51 @@ public actor SessionService: HostMethodHandler {
         await changed(session)
     }
 
+    // MARK: - 5.10 Generated titles
+
+    /// No event was appended to the session yet: the next `user` event is its first.
+    private static func hasNoEvent(_ archive: SessionArchive, _ sessionID: UUID) async -> Bool {
+        (try? await archive.history(sessionID, before: nil, limit: 1))?.total == 0
+    }
+
+    /// Starts the title call of a `project`, `feedback` or `bundle` session for its first message, in a task of its
+    /// own; a text empty after trimming gives no call.
+    private func startTitleCall(_ session: Session, text: String) {
+        let kind = session.file.kind
+        guard kind == .project || kind == .feedback || kind == .bundle,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+        let sessionID = session.file.id
+        let id = kind == .feedback ? session.file.ticketID : session.file.bundleID
+        titleCalls[sessionID]?.cancel()
+        titleCalls[sessionID] = Task {
+            let settings = await self.host.settings()
+            guard let executable = await ClaudeLocator.shared.current(configured: settings.claudeURL) else { return }
+            let environment = await LoginEnvironment.shared.environment()
+            guard let title = try? await SessionTitler.generate(executable: executable, text: text,
+                                                                environment: environment),
+                  !Task.isCancelled
+            else { return }
+            await self.applyTitle(SessionTitler.sessionTitle(title, kind: kind, id: id), to: session)
+        }
+    }
+
+    /// Step 6: written when the session still exists and its project is writable; otherwise dropped.
+    private func applyTitle(_ title: String, to session: Session) async {
+        let sessionID = session.file.id
+        titleCalls[sessionID] = nil
+        guard isCurrent(session) else { return }
+        do {
+            try await host.checkWritable(session.projectID)
+            let archive = try await host.sessionArchive(session.projectID)
+            session.file = try await archive.update(sessionID) { $0.title = title }
+        } catch {
+            Log.host.notice("Dropped the generated title of session \(sessionID.uuidString, privacy: .public)")
+            return
+        }
+        await changed(session)
+    }
+
     // MARK: - Statuses and events
 
     /// Sets the status; the idle timer runs exactly while the status is `idle`.
@@ -1271,16 +1367,16 @@ public actor SessionService: HostMethodHandler {
 
     private func info(_ session: Session) -> SessionInfo {
         let file = session.file
-        return SessionInfo(id: file.id, kind: file.kind, taskID: file.taskID, mode: file.mode,
+        return SessionInfo(id: file.id, kind: file.kind, ticketID: file.ticketID, mode: file.mode,
                            bundleID: file.bundleID, title: file.title, created: file.created, updated: file.updated,
                            permissionMode: file.permissionMode, allowsAllTools: file.allowsAllTools,
-                           model: file.model, status: session.status,
+                           model: file.model, status: session.status, closed: file.closed,
                            statusLine: session.statusLine,
                            error: session.status == .failed ? session.error : nil,
                            pendingPermissions: session.process == nil ? [] : broker.pending(sessionID: file.id))
     }
 
-    private static func event(_ type: SessionEventType, text: String, attachments: [TaskAttachment]? = nil,
+    private static func event(_ type: SessionEventType, text: String, attachments: [TicketAttachment]? = nil,
                               deviceID: UUID? = nil) -> SessionEvent {
         SessionEvent(id: UUID().uuidString, at: Date(), type: type, text: text, attachments: attachments,
                      deviceID: deviceID)

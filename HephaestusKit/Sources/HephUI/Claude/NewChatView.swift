@@ -32,8 +32,7 @@ struct NewChatView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             Divider()
-            Text("Chat with Claude about \(projectName). Claude can plan, create and update tasks, edit code, start "
-                 + "runs and more.")
+            Text("Chat with Claude about \(projectName). Claude can plan, create and update tickets, edit code and more.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(24)
@@ -96,7 +95,7 @@ struct NewChatView: View {
         var started: SessionInfo?
         let succeeded = await banners.perform {
             let connection = try ClaudeNames.connection(of: store, in: workspace)
-            started = try await connection.startSession(projectID: store.projectID, kind: .project, taskID: nil,
+            started = try await connection.startSession(projectID: store.projectID, kind: .project, ticketID: nil,
                                                         mode: nil, title: nil, message: text.isEmpty ? nil : text,
                                                         attachments: uploads, permissionMode: permissionMode,
                                                         model: model)

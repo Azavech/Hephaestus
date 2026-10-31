@@ -45,10 +45,10 @@ public struct Project: Codable, Sendable, Hashable, Identifiable {
     public var created: Date
     public var code: String
     public var docs: String
-    public var taskCounter: Int
+    public var ticketCounter: Int
+    public var feedbackCounter: Int
     public var subprojects: [String]
     public var webTabs: [WebTab]
-    public var runs: [RunConfig]
     public var skills: [String]
     public var claude: ClaudeDefaults
     public var deviceID: UUID
@@ -63,10 +63,10 @@ public struct Project: Codable, Sendable, Hashable, Identifiable {
         created: Date,
         code: String,
         docs: String,
-        taskCounter: Int,
+        ticketCounter: Int,
+        feedbackCounter: Int,
         subprojects: [String],
         webTabs: [WebTab],
-        runs: [RunConfig],
         skills: [String],
         claude: ClaudeDefaults,
         deviceID: UUID,
@@ -80,10 +80,10 @@ public struct Project: Codable, Sendable, Hashable, Identifiable {
         self.created = created
         self.code = code
         self.docs = docs
-        self.taskCounter = taskCounter
+        self.ticketCounter = ticketCounter
+        self.feedbackCounter = feedbackCounter
         self.subprojects = subprojects
         self.webTabs = webTabs
-        self.runs = runs
         self.skills = skills
         self.claude = claude
         self.deviceID = deviceID
@@ -108,20 +108,17 @@ public struct ClaudeDefaults: Codable, Sendable, Hashable {
 public struct ProjectPatch: Codable, Sendable, Hashable {
     public var name: String?
     public var description: String?
-    public var runs: [RunConfig]?
     public var skills: [String]?
     public var claude: ClaudeDefaults?
 
     public init(
         name: String? = nil,
         description: String? = nil,
-        runs: [RunConfig]? = nil,
         skills: [String]? = nil,
         claude: ClaudeDefaults? = nil
     ) {
         self.name = name
         self.description = description
-        self.runs = runs
         self.skills = skills
         self.claude = claude
     }

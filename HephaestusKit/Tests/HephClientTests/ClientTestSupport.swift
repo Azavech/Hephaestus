@@ -381,14 +381,14 @@ enum TestMesh {
     }
 
     static func project(_ id: String, mainID: UUID) -> Project {
-        Project(id: id, name: id, created: pairedAt, code: ".", docs: "docs", taskCounter: 0, subprojects: [],
-                webTabs: [], runs: [], skills: [], claude: ClaudeDefaults(), deviceID: mainID,
+        Project(id: id, name: id, created: pairedAt, code: ".", docs: "docs", ticketCounter: 0, feedbackCounter: 0,
+                subprojects: [], webTabs: [], skills: [], claude: ClaudeDefaults(), deviceID: mainID,
                 rootPath: "/Users/user/Developer/\(id)", migrating: false)
     }
 
-    static func task(_ id: String, name: String = "Task", updated: Date = updatedAt) -> TaskItem {
-        TaskItem(id: id, name: name, description: "", status: .todo, created: pairedAt, updated: updated,
-                 comments: [])
+    static func ticket(_ id: String, name: String = "Ticket", updated: Date = updatedAt) -> TicketItem {
+        TicketItem(id: id, name: name, description: "", status: .todo, created: pairedAt, updated: updated,
+                   comments: [])
     }
 
     /// A FakeMain answering host.info (with `forge`), projects.list (with `projects`), skills.list and subscribe.

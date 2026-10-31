@@ -43,8 +43,8 @@ final class MigrationRecoveryTests: XCTestCase {
         let projects = try await Self.projects(source)
         let project = try XCTUnwrap(projects.first { $0.id == "HEPH" })
         XCTAssertFalse(project.migrating)
-        let task = try await Self.createTask(source)
-        XCTAssertEqual(task.id, "HEPH-1")
+        let ticket = try await Self.createTicket(source)
+        XCTAssertEqual(ticket.id, "HEPH-1")
         XCTAssertTrue(Self.journalIsEmpty(source.appSupport))
     }
 
@@ -60,8 +60,8 @@ final class MigrationRecoveryTests: XCTestCase {
         let project = try XCTUnwrap(projects.first { $0.id == "HEPH" })
         XCTAssertTrue(project.migrating)
         do {
-            _ = try await Self.createTask(source)
-            XCTFail("tasks.create succeeded on a migrating project")
+            _ = try await Self.createTicket(source)
+            XCTFail("tickets.create succeeded on a migrating project")
         } catch let error as ProtocolError {
             XCTAssertEqual(error.code, .locked)
         }
@@ -104,8 +104,8 @@ final class MigrationRecoveryTests: XCTestCase {
         let projects = try await Self.projects(source)
         let project = try XCTUnwrap(projects.first { $0.id == "HEPH" })
         XCTAssertFalse(project.migrating)
-        let task = try await Self.createTask(source)
-        XCTAssertEqual(task.id, "HEPH-1")
+        let ticket = try await Self.createTicket(source)
+        XCTAssertEqual(ticket.id, "HEPH-1")
         XCTAssertTrue(Self.exists(Self.projectRoot(source.projectsFolder)))
     }
 
@@ -185,11 +185,11 @@ final class MigrationRecoveryTests: XCTestCase {
         return try WireCoding.decodeJSON(ProjectsListResult.self, from: data).projects
     }
 
-    private static func createTask(_ testHost: TestHost) async throws -> TaskItem {
-        let params = try WireCoding.encodeJSON(TasksCreateParams(projectID: "HEPH", name: "Sidebar breaks on iPad"))
-        let data = try await testHost.host.perform(RPCMethod.tasksCreate.rawValue, params: params,
+    private static func createTicket(_ testHost: TestHost) async throws -> TicketItem {
+        let params = try WireCoding.encodeJSON(TicketsCreateParams(projectID: "HEPH", name: "Sidebar breaks on iPad"))
+        let data = try await testHost.host.perform(RPCMethod.ticketsCreate.rawValue, params: params,
                                                    context: testHost.deviceContext)
-        return try WireCoding.decodeJSON(TaskItem.self, from: data)
+        return try WireCoding.decodeJSON(TicketItem.self, from: data)
     }
 
     /// `migration.status` in process: an in-process call counts as a Main.

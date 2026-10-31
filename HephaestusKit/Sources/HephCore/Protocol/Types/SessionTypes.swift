@@ -6,17 +6,17 @@ import Foundation
 public enum SessionKind: String, Codable, Sendable, Hashable, CaseIterable {
     /// Project chat.
     case project
-    /// Session bound to a task.
-    case task
+    /// Session bound to a ticket.
+    case ticket
     /// Forge feedback discussion.
     case feedback
     /// Forge regeneration.
     case regeneration
-    /// Coordinator of a task bundle.
+    /// Coordinator of a ticket bundle.
     case bundle
 }
 
-/// The mode of a task session.
+/// The mode of a ticket session.
 public enum SessionMode: String, Codable, Sendable, Hashable, CaseIterable {
     case implement
     case debug
@@ -103,9 +103,9 @@ public enum SessionDeltaKind: String, Codable, Sendable, Hashable, CaseIterable 
 public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
     public var id: UUID
     public var kind: SessionKind
-    public var taskID: String?
+    public var ticketID: String?
     public var mode: SessionMode?
-    /// Bundle sessions, and task sessions started by a bundle: the bundle.
+    /// Bundle sessions, and ticket sessions started by a bundle: the bundle.
     public var bundleID: String?
     public var title: String
     public var created: Date
@@ -115,6 +115,8 @@ public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
     public var allowsAllTools: Bool
     public var model: String?
     public var status: SessionStatus
+    /// When Claude closed the session; `nil` while it is open.
+    public var closed: Date?
     public var statusLine: String?
     public var error: String?
     public var pendingPermissions: [PermissionRequest]
@@ -122,7 +124,7 @@ public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
     public init(
         id: UUID,
         kind: SessionKind,
-        taskID: String? = nil,
+        ticketID: String? = nil,
         mode: SessionMode? = nil,
         bundleID: String? = nil,
         title: String,
@@ -132,13 +134,14 @@ public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
         allowsAllTools: Bool,
         model: String? = nil,
         status: SessionStatus,
+        closed: Date? = nil,
         statusLine: String? = nil,
         error: String? = nil,
         pendingPermissions: [PermissionRequest]
     ) {
         self.id = id
         self.kind = kind
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.mode = mode
         self.bundleID = bundleID
         self.title = title
@@ -148,6 +151,7 @@ public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
         self.allowsAllTools = allowsAllTools
         self.model = model
         self.status = status
+        self.closed = closed
         self.statusLine = statusLine
         self.error = error
         self.pendingPermissions = pendingPermissions
@@ -177,7 +181,7 @@ public struct SessionEvent: Codable, Sendable, Hashable, Identifiable {
     public var at: Date
     public var type: SessionEventType
     public var text: String?
-    public var attachments: [TaskAttachment]?
+    public var attachments: [TicketAttachment]?
     public var deviceID: UUID?
     public var messageID: String?
     public var index: Int?
@@ -200,7 +204,7 @@ public struct SessionEvent: Codable, Sendable, Hashable, Identifiable {
         at: Date,
         type: SessionEventType,
         text: String? = nil,
-        attachments: [TaskAttachment]? = nil,
+        attachments: [TicketAttachment]? = nil,
         deviceID: UUID? = nil,
         messageID: String? = nil,
         index: Int? = nil,

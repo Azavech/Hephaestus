@@ -119,9 +119,9 @@ public final class ForgeModel {
         await refresh()
     }
 
-    /// `retryForge(itemTaskID:)`, then `refresh()`.
-    public func retry(itemTaskID: String) async throws {
-        try await hostConnection().retryForge(itemTaskID: itemTaskID)
+    /// `retryForge(itemTicketID:)`, then `refresh()`.
+    public func retry(itemTicketID: String) async throws {
+        try await hostConnection().retryForge(itemTicketID: itemTicketID)
         await refresh()
     }
 

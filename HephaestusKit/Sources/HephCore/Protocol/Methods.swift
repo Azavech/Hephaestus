@@ -28,12 +28,12 @@ public enum RPCMethod: String, CaseIterable, Sendable {
     case uploadsBegin = "uploads.begin"
     case uploadsChunk = "uploads.chunk"
     case uploadsCancel = "uploads.cancel"
-    case tasksCreate = "tasks.create"
-    case tasksUpdate = "tasks.update"
-    case tasksDelete = "tasks.delete"
-    case tasksAddComment = "tasks.addComment"
-    case tasksUpdateComment = "tasks.updateComment"
-    case tasksDeleteComment = "tasks.deleteComment"
+    case ticketsCreate = "tickets.create"
+    case ticketsUpdate = "tickets.update"
+    case ticketsDelete = "tickets.delete"
+    case ticketsAddComment = "tickets.addComment"
+    case ticketsUpdateComment = "tickets.updateComment"
+    case ticketsDeleteComment = "tickets.deleteComment"
     case attachmentsRead = "attachments.read"
     case bundlesCreate = "bundles.create"
     case bundlesUpdate = "bundles.update"
@@ -59,9 +59,6 @@ public enum RPCMethod: String, CaseIterable, Sendable {
     case sessionsRespond = "sessions.respond"
     case sessionsUpdate = "sessions.update"
     case sessionsDelete = "sessions.delete"
-    case runsStart = "runs.start"
-    case runsStop = "runs.stop"
-    case runsOutput = "runs.output"
     case searchQuery = "search.query"
     case skillsList = "skills.list"
     case skillsCreate = "skills.create"
@@ -99,12 +96,11 @@ public enum RPCMethod: String, CaseIterable, Sendable {
     public var writesProject: Bool {
         switch self {
         case .projectsCreate, .projectsUpdate, .projectsRemove, .projectsMigrate,
-             .tasksCreate, .tasksUpdate, .tasksDelete, .tasksAddComment, .tasksUpdateComment, .tasksDeleteComment,
+             .ticketsCreate, .ticketsUpdate, .ticketsDelete, .ticketsAddComment, .ticketsUpdateComment, .ticketsDeleteComment,
              .bundlesCreate, .bundlesUpdate, .bundlesDelete, .bundlesStart, .bundlesStop,
              .filesWrite, .filesCreate, .filesRename, .filesDelete,
              .tabsOpen, .tabsUpdate, .tabsClose, .tabsMove,
-             .sessionsStart, .sessionsSend, .sessionsRespond, .sessionsUpdate, .sessionsDelete,
-             .runsStart:
+             .sessionsStart, .sessionsSend, .sessionsRespond, .sessionsUpdate, .sessionsDelete:
             return true
         default:
             return false
@@ -327,17 +323,15 @@ public struct ProjectsSnapshotParams: Codable, Sendable, Hashable {
 /// `projects.snapshot` result: everything a client mirrors for one project.
 public struct ProjectsSnapshotResult: Codable, Sendable, Hashable {
     public var project: Project
-    public var tasks: [TaskItem]
+    public var tickets: [TicketItem]
     public var bundles: [BundleItem]
     public var sessions: [SessionInfo]
-    public var runs: [RunInfo]
 
-    public init(project: Project, tasks: [TaskItem], bundles: [BundleItem], sessions: [SessionInfo], runs: [RunInfo]) {
+    public init(project: Project, tickets: [TicketItem], bundles: [BundleItem], sessions: [SessionInfo]) {
         self.project = project
-        self.tasks = tasks
+        self.tickets = tickets
         self.bundles = bundles
         self.sessions = sessions
-        self.runs = runs
     }
 }
 
@@ -463,14 +457,14 @@ public struct UploadsCancelParams: Codable, Sendable, Hashable {
     }
 }
 
-/// `tasks.create` params.
-public struct TasksCreateParams: Codable, Sendable, Hashable {
+/// `tickets.create` params.
+public struct TicketsCreateParams: Codable, Sendable, Hashable {
     public var projectID: String
     public var name: String
     public var description: String?
-    public var status: TaskStatus?
+    public var status: TicketStatus?
 
-    public init(projectID: String, name: String, description: String? = nil, status: TaskStatus? = nil) {
+    public init(projectID: String, name: String, description: String? = nil, status: TicketStatus? = nil) {
         self.projectID = projectID
         self.name = name
         self.description = description
@@ -478,71 +472,71 @@ public struct TasksCreateParams: Codable, Sendable, Hashable {
     }
 }
 
-/// `tasks.update` params.
-public struct TasksUpdateParams: Codable, Sendable, Hashable {
+/// `tickets.update` params.
+public struct TicketsUpdateParams: Codable, Sendable, Hashable {
     public var projectID: String
-    public var taskID: String
-    public var patch: TaskPatch
+    public var ticketID: String
+    public var patch: TicketPatch
 
-    public init(projectID: String, taskID: String, patch: TaskPatch) {
+    public init(projectID: String, ticketID: String, patch: TicketPatch) {
         self.projectID = projectID
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.patch = patch
     }
 }
 
-/// `tasks.delete` params.
-public struct TasksDeleteParams: Codable, Sendable, Hashable {
+/// `tickets.delete` params.
+public struct TicketsDeleteParams: Codable, Sendable, Hashable {
     public var projectID: String
-    public var taskID: String
+    public var ticketID: String
 
-    public init(projectID: String, taskID: String) {
+    public init(projectID: String, ticketID: String) {
         self.projectID = projectID
-        self.taskID = taskID
+        self.ticketID = ticketID
     }
 }
 
-/// `tasks.addComment` params.
-public struct TasksAddCommentParams: Codable, Sendable, Hashable {
+/// `tickets.addComment` params.
+public struct TicketsAddCommentParams: Codable, Sendable, Hashable {
     public var projectID: String
-    public var taskID: String
+    public var ticketID: String
     public var body: String
     public var attachments: [UploadRef]
     public var author: String?
 
-    public init(projectID: String, taskID: String, body: String, attachments: [UploadRef], author: String? = nil) {
+    public init(projectID: String, ticketID: String, body: String, attachments: [UploadRef], author: String? = nil) {
         self.projectID = projectID
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.body = body
         self.attachments = attachments
         self.author = author
     }
 }
 
-/// `tasks.updateComment` params.
-public struct TasksUpdateCommentParams: Codable, Sendable, Hashable {
+/// `tickets.updateComment` params.
+public struct TicketsUpdateCommentParams: Codable, Sendable, Hashable {
     public var projectID: String
-    public var taskID: String
+    public var ticketID: String
     public var commentID: UUID
     public var body: String
 
-    public init(projectID: String, taskID: String, commentID: UUID, body: String) {
+    public init(projectID: String, ticketID: String, commentID: UUID, body: String) {
         self.projectID = projectID
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.commentID = commentID
         self.body = body
     }
 }
 
-/// `tasks.deleteComment` params.
-public struct TasksDeleteCommentParams: Codable, Sendable, Hashable {
+/// `tickets.deleteComment` params.
+public struct TicketsDeleteCommentParams: Codable, Sendable, Hashable {
     public var projectID: String
-    public var taskID: String
+    public var ticketID: String
     public var commentID: UUID
 
-    public init(projectID: String, taskID: String, commentID: UUID) {
+    public init(projectID: String, ticketID: String, commentID: UUID) {
         self.projectID = projectID
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.commentID = commentID
     }
 }
@@ -550,14 +544,14 @@ public struct TasksDeleteCommentParams: Codable, Sendable, Hashable {
 /// `attachments.read` params.
 public struct AttachmentsReadParams: Codable, Sendable, Hashable {
     public var projectID: String
-    public var taskID: String
+    public var ticketID: String
     public var fileName: String
     public var offset: Int?
     public var length: Int?
 
-    public init(projectID: String, taskID: String, fileName: String, offset: Int? = nil, length: Int? = nil) {
+    public init(projectID: String, ticketID: String, fileName: String, offset: Int? = nil, length: Int? = nil) {
         self.projectID = projectID
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.fileName = fileName
         self.offset = offset
         self.length = length
@@ -581,12 +575,12 @@ public struct AttachmentsReadResult: Codable, Sendable, Hashable {
 public struct BundlesCreateParams: Codable, Sendable, Hashable {
     public var projectID: String
     public var name: String
-    public var taskIDs: [String]
+    public var ticketIDs: [String]
 
-    public init(projectID: String, name: String, taskIDs: [String]) {
+    public init(projectID: String, name: String, ticketIDs: [String]) {
         self.projectID = projectID
         self.name = name
-        self.taskIDs = taskIDs
+        self.ticketIDs = ticketIDs
     }
 }
 
@@ -801,7 +795,7 @@ public struct TabsMoveParams: Codable, Sendable, Hashable {
 public struct SessionsStartParams: Codable, Sendable, Hashable {
     public var projectID: String
     public var kind: SessionKind
-    public var taskID: String?
+    public var ticketID: String?
     public var mode: SessionMode?
     public var title: String?
     public var message: String?
@@ -812,7 +806,7 @@ public struct SessionsStartParams: Codable, Sendable, Hashable {
     public init(
         projectID: String,
         kind: SessionKind,
-        taskID: String? = nil,
+        ticketID: String? = nil,
         mode: SessionMode? = nil,
         title: String? = nil,
         message: String? = nil,
@@ -822,7 +816,7 @@ public struct SessionsStartParams: Codable, Sendable, Hashable {
     ) {
         self.projectID = projectID
         self.kind = kind
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.mode = mode
         self.title = title
         self.message = message
@@ -958,50 +952,6 @@ public struct SessionsDeleteParams: Codable, Sendable, Hashable {
     public init(projectID: String, sessionID: UUID) {
         self.projectID = projectID
         self.sessionID = sessionID
-    }
-}
-
-/// `runs.start` params.
-public struct RunsStartParams: Codable, Sendable, Hashable {
-    public var projectID: String
-    public var name: String
-
-    public init(projectID: String, name: String) {
-        self.projectID = projectID
-        self.name = name
-    }
-}
-
-/// `runs.stop` params.
-public struct RunsStopParams: Codable, Sendable, Hashable {
-    public var projectID: String
-    public var runID: UUID
-
-    public init(projectID: String, runID: UUID) {
-        self.projectID = projectID
-        self.runID = runID
-    }
-}
-
-/// `runs.output` params.
-public struct RunsOutputParams: Codable, Sendable, Hashable {
-    public var projectID: String
-    public var runID: UUID
-
-    public init(projectID: String, runID: UUID) {
-        self.projectID = projectID
-        self.runID = runID
-    }
-}
-
-/// `runs.output` result.
-public struct RunsOutputResult: Codable, Sendable, Hashable {
-    public var text: String
-    public var seq: Int
-
-    public init(text: String, seq: Int) {
-        self.text = text
-        self.seq = seq
     }
 }
 
@@ -1241,21 +1191,21 @@ public struct ForgeFeedbackParams: Codable, Sendable, Hashable {
 /// `forge.feedback` result.
 public struct ForgeFeedbackResult: Codable, Sendable, Hashable {
     public var projectID: String
-    public var taskID: String
+    public var ticketID: String
     public var sessionID: UUID
 
-    public init(projectID: String, taskID: String, sessionID: UUID) {
+    public init(projectID: String, ticketID: String, sessionID: UUID) {
         self.projectID = projectID
-        self.taskID = taskID
+        self.ticketID = ticketID
         self.sessionID = sessionID
     }
 }
 
-/// `forge.retry` params: the `taskID` of a failed Forge item.
+/// `forge.retry` params: the `ticketID` of a failed Forge item.
 public struct ForgeRetryParams: Codable, Sendable, Hashable {
-    public var itemTaskID: String
+    public var itemTicketID: String
 
-    public init(itemTaskID: String) {
-        self.itemTaskID = itemTaskID
+    public init(itemTicketID: String) {
+        self.itemTicketID = itemTicketID
     }
 }

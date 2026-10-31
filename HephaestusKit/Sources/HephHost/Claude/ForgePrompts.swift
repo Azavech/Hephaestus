@@ -9,12 +9,13 @@ enum ForgePrompts {
     /// The Forge common part: the public repository rule, the session's own tools, no device of the mesh.
     static func commonPart(_ context: PromptContext) -> String {
         var values = Prompts.placeholders(context)
-        values["forgeToolLines"] = forgeToolLines(context.kind)
-        values["pushLine"] = pushLine(context.kind)
+        let ofBundle = context.bundle != nil
+        values["forgeToolLines"] = forgeToolLines(context.kind, ofBundle: ofBundle)
+        values["pushLine"] = pushLine(context.kind, ofBundle: ofBundle)
         return Prompts.render(ForgeTemplates.forgeCommon, values)
     }
 
-    /// The feedback part: `kind` = `feedback`; `task` is the feedback task created by the Forge.
+    /// The feedback part: `kind` = `feedback`; `ticket` is the feedback ticket created by the Forge.
     static func feedbackPart(_ context: PromptContext) -> String {
         Prompts.render(ForgeTemplates.feedbackPart, Prompts.placeholders(context))
     }
@@ -26,20 +27,27 @@ enum ForgePrompts {
         return Prompts.render(ForgeTemplates.regenerationPart, values)
     }
 
-    /// `{forgeToolLines}`: the tools of the session's kind (claude/mcp.md §6).
-    private static func forgeToolLines(_ kind: SessionKind) -> String {
+    /// `{forgeToolLines}`: the tools of the session's kind (claude/mcp.md §6). `ofBundle`: a ticket session of a bundle.
+    private static func forgeToolLines(_ kind: SessionKind, ofBundle: Bool) -> String {
         switch kind {
         case .feedback:
             return [
-                "- get_task: the current state of your feedback task, with its comments; only that task.",
-                "- update_task: change the name, description or status of your feedback task; only that task.",
-                "- comment_task: add a comment to your feedback task; only that task.",
-                "- forge_push_docs: check your documentation commits for personal data and push them to GitHub.",
+                "- get_ticket: the current state of your feedback ticket, with its comments; only that ticket.",
+                "- update_ticket: change the name, description or status of your feedback ticket; only that ticket.",
+                "- comment_ticket: add a comment to your feedback ticket; only that ticket.",
+                "- close_session: close this session once no question is open; it then accepts no message.",
+                ToolLines.rename,
             ].joined(separator: "\n")
         case .regeneration:
-            return "- forge_push_regen: check your regeneration commits for personal data and push them to GitHub."
-        case .project, .task:
+            return "- forge_push_regen: check your regeneration commits for personal data and push them to GitHub.\n"
+                + ToolLines.rename
+        case .project:
             return Prompts.toolLines(kind)
+        case .ticket:
+            guard !ofBundle else { return Prompts.toolLines(kind) }
+            return Prompts.toolLines(kind) + "\n"
+                + "- forge_push_docs: check the documentation commits of your ticket for personal data and push them "
+                + "to GitHub."
         case .bundle:
             return Prompts.toolLines(kind) + "\n"
                 + "- forge_push_docs: check the documentation commits of your bundle for personal data and push them "
@@ -47,29 +55,35 @@ enum ForgePrompts {
         }
     }
 
-    /// `{pushLine}`.
-    private static func pushLine(_ kind: SessionKind) -> String {
+    /// `{pushLine}`. `ofBundle`: a ticket session of a bundle.
+    private static func pushLine(_ kind: SessionKind, ofBundle: Bool) -> String {
+        let forgePush = "Never push. The Forge checks your commits for personal data when you call its push tool "
+            + "below, and pushes them: when it refuses them, remove what it reports, rewrite the commits and call it "
+            + "again."
+        let byHand = "Never push: the user reviews your commits and pushes them by hand."
         switch kind {
-        case .feedback, .regeneration, .bundle:
-            return "Never push. The Forge checks your commits for personal data when you call its push tool below, "
-                + "and pushes them: when it refuses them, remove what it reports, rewrite the commits and call it "
-                + "again."
-        case .project, .task:
-            return "Never push: the user reviews your commits and pushes them by hand."
+        case .regeneration, .bundle:
+            return forgePush
+        case .ticket:
+            return ofBundle ? byHand : forgePush
+        case .feedback:
+            return "Never commit or push: this session changes no file."
+        case .project:
+            return byHand
         }
     }
 
     /// `{regenerationLines}`: no line without a regeneration context (later starts); otherwise its paragraphs, each
-    /// preceded by an empty line. The title of a feedback task, its user's first words, is left out.
+    /// preceded by an empty line. The title of a feedback ticket, its user's first words, is left out.
     private static func regenerationLines(_ regeneration: RegenerationContext?) -> String {
         guard let regeneration else { return "" }
         var paragraphs = ["This regeneration starts from commit \(regeneration.targetCommit) (trigger: "
             + "\(regeneration.trigger), attempt \(regeneration.attempt))."]
         if !regeneration.items.isEmpty {
             let items = regeneration.items.map { item in
-                "- \(item.taskID)" + (item.docsCommit.map { " (docs commit \($0))" } ?? "")
+                "- \(item.ticketID)" + (item.docsCommit.map { " (docs commit \($0))" } ?? "")
             }
-            paragraphs.append((["It includes the documentation changes of these feedback tasks:"] + items)
+            paragraphs.append((["It includes the documentation changes of these feedback tickets:"] + items)
                 .joined(separator: "\n"))
         }
         if let run = regeneration.failedRun {
@@ -97,7 +111,7 @@ private enum ForgeTemplates {
         - Code folder: {codeFolder}
         - Documentation folder: {docsFolder}
 
-        Hephaestus keeps the data of the project (its tasks, their attachments and the Claude sessions) in {projectRoot}/.hephaestus/. git ignores that folder. Never create, edit or delete files under it yourself.
+        Hephaestus keeps the data of the project (its tickets, their attachments and the Claude sessions) in {projectRoot}/.hephaestus/. git ignores that folder. Never create, edit or delete files under it yourself.
 
         ## Public repository
 
@@ -115,40 +129,37 @@ private enum ForgeTemplates {
         {forgeToolLines}
 
         When one of them returns an error, do what its message says, then call it again.
+
+        ## Questions
+
+        When you ask the user two or more questions in a message, label each with a capital letter, in order: A, B, C, and so on, so the user can answer "A: …, B: …". A single question has no letter. A new set of questions starts again at A. A follow-up question on the answer to a lettered question takes that question's letter followed by a number: follow-ups on C are C.1, C.2, and so on.
         """
 
     /// Feedback part: `kind` = `feedback`.
     static let feedbackPart = """
-        ## Feedback {taskID}
+        ## Feedback {ticketID}
 
-        {taskID} is feedback the user sent about the Hephaestus app itself, usually with a screenshot of the app. Its description holds the user's comment and the app's context (device, version, docs hash, current screen). The documentation in {docsFolder} is the specification the code of the app is generated from: the app changes when that documentation changes.
+        {ticketID} is feedback the user sent about the Hephaestus app itself, usually with a screenshot of the app. Its description holds the user's comment and the app's context (device, version, docs hash, current screen). The documentation in {docsFolder} is the specification the code of the app is generated from: the app changes when that documentation changes.
 
         {fence}yaml
-        {taskYAML}
+        {ticketYAML}
         {fence}
 
-        Files attached to the task:
+        Files attached to the ticket:
         {attachmentLines}
 
-        First turn the feedback into a task:
+        This session only turns the feedback into a ticket:
 
         1. Read the comment, look at the screenshot and read the documentation the feedback concerns.
-        2. Rewrite {taskID} with mcp__hephaestus__update_task, without changing its status:
+        2. Rewrite {ticketID} with mcp__hephaestus__update_ticket, without changing its status:
            - name: one line that says the change to make, in general terms;
            - description, in Markdown: a "Problem" section (what the app does now), a "Change" section (what it should do; when the feedback asks for several independent changes, one item per change), a "Docs" section (the files of {docsFolder} the change concerns, as paths relative to it), then a line "---" and the original description, unchanged.
-        3. Add a comment to {taskID} with mcp__hephaestus__comment_task that says in one or two sentences what you understood and lists the questions that are still open.
-        4. Stop: show the user the new name and description, and ask whether to implement the task now or leave it for later.
+        3. Add a comment to {ticketID} with mcp__hephaestus__comment_ticket that says in one or two sentences what you understood and lists the questions that are still open.
+        4. Show the user the new name and description. When a question is open, ask it and stop.
+        5. When the user answers, record the answers in {ticketID} with mcp__hephaestus__update_ticket and mcp__hephaestus__comment_ticket, show the user what changed, and ask the questions that are still open, follow-up questions included.
+        6. As soon as no question is open, right after step 4 when there is none, tell the user that the ticket is ready and that they implement it from the ticket when they choose, then call mcp__hephaestus__close_session.
 
-        Until the user explicitly asks you to implement the task, change no file: only rewrite {taskID}, comment on it and record in it what you agree on. Answers to your open questions are not that request: record them in {taskID} with mcp__hephaestus__update_task or mcp__hephaestus__comment_task, show the user what changed, and ask again whether to implement the task now or leave it for later.
-
-        When the user explicitly asks you to implement it:
-
-        1. Propose documentation changes that address the task, and refine them with the user. Describe the app in general terms: nothing of the comment, the screenshot or the context goes into the documentation (Public repository).
-        2. Edit only files under {docsFolder}.
-        3. When the user agrees, commit only that folder with the message "docs: <summary> ({taskID})", <summary> being a one-line summary of the change that names nothing personal: git add -A -- {docsFolder}, then git commit -m "<message>" -- {docsFolder}.
-        4. Call mcp__hephaestus__forge_push_docs. It checks the commits that are not on GitHub yet for personal data and pushes them to {branch}; when it returns an error, do what the error says, then call it again. The Forge then regenerates the code, CI builds it and the app updates itself on the user's Macs.
-
-        Do not commit or call forge_push_docs before the user agrees, and never change files outside {docsFolder}.
+        Change no file and do not commit. Do not ask whether to implement the ticket, and do not implement it: the user implements it later from the ticket, in a ticket session in mode implement or in a ticket bundle. When the user asks you to implement it, tell them so.
         """
 
     /// Regeneration part: `kind` = `regeneration`.

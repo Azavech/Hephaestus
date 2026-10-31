@@ -11,8 +11,8 @@ enum SearchNavigation {
         switch result.kind {
         case .projects:
             return (result.deviceID, result.projectID, .overview, nil)
-        case .tasks, .comments:
-            return (result.deviceID, result.projectID, .tasks, result.taskID)
+        case .tickets, .comments:
+            return (result.deviceID, result.projectID, .tickets, result.ticketID)
         case .docs:
             return (result.deviceID, result.projectID, .docs, fileItem(of: result))
         case .code:

@@ -13,7 +13,7 @@ final class TranscriptBuilderTests: XCTestCase {
     func testUser() {
         var builder = TranscriptBuilder()
         let deviceID = UUID()
-        let attachment = TaskAttachment(file: "shot.png", type: "image/png", size: 10)
+        let attachment = TicketAttachment(file: "shot.png", type: "image/png", size: 10)
         builder.apply(SessionEvent(id: "u1", at: at, type: .user, text: "Hello", attachments: [attachment],
                                    deviceID: deviceID))
         XCTAssertEqual(builder.items, [.user(UserMessageItem(id: "u1", at: at, text: "Hello",

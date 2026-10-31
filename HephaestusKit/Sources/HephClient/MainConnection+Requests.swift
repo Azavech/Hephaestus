@@ -110,27 +110,28 @@ extension MainConnection {
                        as: ProjectsMigrateResult.self).migrationID
     }
 
-    // MARK: - Tasks
+    // MARK: - Tickets
 
-    public func createTask(projectID: String, name: String, description: String? = nil,
-                           status: TaskStatus? = nil) async throws -> TaskItem {
-        let task = try await send(.tasksCreate,
-                                  TasksCreateParams(projectID: projectID, name: name, description: description,
-                                                    status: status),
-                                  as: TaskItem.self)
-        insertIfAbsent(task, projectID: projectID)
-        return task
+    public func createTicket(projectID: String, name: String, description: String? = nil,
+                             status: TicketStatus? = nil) async throws -> TicketItem {
+        let ticket = try await send(.ticketsCreate,
+                                    TicketsCreateParams(projectID: projectID, name: name, description: description,
+                                                        status: status),
+                                    as: TicketItem.self)
+        insertIfAbsent(ticket, projectID: projectID)
+        return ticket
     }
 
-    public func updateTask(projectID: String, taskID: String, patch: TaskPatch) async throws -> TaskItem {
-        let task = try await send(.tasksUpdate, TasksUpdateParams(projectID: projectID, taskID: taskID, patch: patch),
-                                  as: TaskItem.self)
-        insertIfAbsent(task, projectID: projectID)
-        return task
+    public func updateTicket(projectID: String, ticketID: String, patch: TicketPatch) async throws -> TicketItem {
+        let ticket = try await send(.ticketsUpdate,
+                                    TicketsUpdateParams(projectID: projectID, ticketID: ticketID, patch: patch),
+                                    as: TicketItem.self)
+        insertIfAbsent(ticket, projectID: projectID)
+        return ticket
     }
 
-    public func deleteTask(projectID: String, taskID: String) async throws {
-        _ = try await send(.tasksDelete, TasksDeleteParams(projectID: projectID, taskID: taskID),
+    public func deleteTicket(projectID: String, ticketID: String) async throws {
+        _ = try await send(.ticketsDelete, TicketsDeleteParams(projectID: projectID, ticketID: ticketID),
                            as: EmptyPayload.self)
     }
 
@@ -153,46 +154,47 @@ extension MainConnection {
 
     // MARK: - Comments and attachments
 
-    public func addComment(projectID: String, taskID: String, body: String,
-                           attachments: [UploadRef] = []) async throws -> TaskItem {
-        let task = try await send(.tasksAddComment,
-                                  TasksAddCommentParams(projectID: projectID, taskID: taskID, body: body,
-                                                        attachments: attachments),
-                                  as: TaskItem.self, timeout: Self.contentTimeout)
-        insertIfAbsent(task, projectID: projectID)
-        return task
+    public func addComment(projectID: String, ticketID: String, body: String,
+                           attachments: [UploadRef] = []) async throws -> TicketItem {
+        let ticket = try await send(.ticketsAddComment,
+                                    TicketsAddCommentParams(projectID: projectID, ticketID: ticketID, body: body,
+                                                            attachments: attachments),
+                                    as: TicketItem.self, timeout: Self.contentTimeout)
+        insertIfAbsent(ticket, projectID: projectID)
+        return ticket
     }
 
-    public func updateComment(projectID: String, taskID: String, commentID: UUID, body: String) async throws
-        -> TaskItem {
-        let task = try await send(.tasksUpdateComment,
-                                  TasksUpdateCommentParams(projectID: projectID, taskID: taskID, commentID: commentID,
-                                                           body: body),
-                                  as: TaskItem.self)
-        insertIfAbsent(task, projectID: projectID)
-        return task
+    public func updateComment(projectID: String, ticketID: String, commentID: UUID, body: String) async throws
+        -> TicketItem {
+        let ticket = try await send(.ticketsUpdateComment,
+                                    TicketsUpdateCommentParams(projectID: projectID, ticketID: ticketID,
+                                                               commentID: commentID, body: body),
+                                    as: TicketItem.self)
+        insertIfAbsent(ticket, projectID: projectID)
+        return ticket
     }
 
-    public func deleteComment(projectID: String, taskID: String, commentID: UUID) async throws -> TaskItem {
-        let task = try await send(.tasksDeleteComment,
-                                  TasksDeleteCommentParams(projectID: projectID, taskID: taskID, commentID: commentID),
-                                  as: TaskItem.self)
-        insertIfAbsent(task, projectID: projectID)
-        return task
+    public func deleteComment(projectID: String, ticketID: String, commentID: UUID) async throws -> TicketItem {
+        let ticket = try await send(.ticketsDeleteComment,
+                                    TicketsDeleteCommentParams(projectID: projectID, ticketID: ticketID,
+                                                               commentID: commentID),
+                                    as: TicketItem.self)
+        insertIfAbsent(ticket, projectID: projectID)
+        return ticket
     }
 
-    public func readAttachment(projectID: String, taskID: String, fileName: String, offset: Int? = nil,
+    public func readAttachment(projectID: String, ticketID: String, fileName: String, offset: Int? = nil,
                                length: Int? = nil) async throws -> AttachmentsReadResult {
         try await send(.attachmentsRead,
-                       AttachmentsReadParams(projectID: projectID, taskID: taskID, fileName: fileName, offset: offset,
-                                             length: length),
+                       AttachmentsReadParams(projectID: projectID, ticketID: ticketID, fileName: fileName,
+                                             offset: offset, length: length),
                        as: AttachmentsReadResult.self, timeout: Self.contentTimeout)
     }
 
     // MARK: - Bundles
 
-    public func createBundle(projectID: String, name: String, taskIDs: [String]) async throws -> BundleItem {
-        try await send(.bundlesCreate, BundlesCreateParams(projectID: projectID, name: name, taskIDs: taskIDs),
+    public func createBundle(projectID: String, name: String, ticketIDs: [String]) async throws -> BundleItem {
+        try await send(.bundlesCreate, BundlesCreateParams(projectID: projectID, name: name, ticketIDs: ticketIDs),
                        as: BundleItem.self)
     }
 
@@ -275,11 +277,11 @@ extension MainConnection {
 
     // MARK: - Sessions
 
-    public func startSession(projectID: String, kind: SessionKind, taskID: String? = nil, mode: SessionMode? = nil,
+    public func startSession(projectID: String, kind: SessionKind, ticketID: String? = nil, mode: SessionMode? = nil,
                              title: String? = nil, message: String? = nil, attachments: [UploadRef] = [],
                              permissionMode: PermissionMode? = nil, model: String? = nil) async throws
         -> SessionInfo {
-        let params = SessionsStartParams(projectID: projectID, kind: kind, taskID: taskID, mode: mode, title: title,
+        let params = SessionsStartParams(projectID: projectID, kind: kind, ticketID: ticketID, mode: mode, title: title,
                                          message: message, attachments: attachments.isEmpty ? nil : attachments,
                                          permissionMode: permissionMode, model: model)
         let session = try await send(.sessionsStart, params, as: SessionInfo.self, timeout: Self.contentTimeout)
@@ -340,22 +342,6 @@ extension MainConnection {
     public func deleteSession(projectID: String, sessionID: UUID) async throws {
         _ = try await send(.sessionsDelete, SessionsDeleteParams(projectID: projectID, sessionID: sessionID),
                            as: EmptyPayload.self)
-    }
-
-    // MARK: - Runs
-
-    public func startRun(projectID: String, name: String) async throws -> RunInfo {
-        let run = try await send(.runsStart, RunsStartParams(projectID: projectID, name: name), as: RunInfo.self)
-        workspace?.existingStore(mainDeviceID: id, projectID: projectID)?.insertIfAbsent(run)
-        return run
-    }
-
-    public func stopRun(projectID: String, runID: UUID) async throws {
-        _ = try await send(.runsStop, RunsStopParams(projectID: projectID, runID: runID), as: EmptyPayload.self)
-    }
-
-    public func runOutput(projectID: String, runID: UUID) async throws -> RunsOutputResult {
-        try await send(.runsOutput, RunsOutputParams(projectID: projectID, runID: runID), as: RunsOutputResult.self)
     }
 
     // MARK: - Search
@@ -432,8 +418,8 @@ extension MainConnection {
         _ = try await send(.forgeRegenerate, EmptyPayload(), as: EmptyPayload.self)
     }
 
-    public func retryForge(itemTaskID: String) async throws {
-        _ = try await send(.forgeRetry, ForgeRetryParams(itemTaskID: itemTaskID), as: EmptyPayload.self)
+    public func retryForge(itemTicketID: String) async throws {
+        _ = try await send(.forgeRetry, ForgeRetryParams(itemTicketID: itemTicketID), as: EmptyPayload.self)
     }
 
     // MARK: - Subscriptions (Workspace)
@@ -471,8 +457,8 @@ extension MainConnection {
         return try await peer.request(method, params, as: R.self, timeout: timeout)
     }
 
-    /// A task returned for a project whose store does not contain it yet is inserted into the store.
-    private func insertIfAbsent(_ task: TaskItem, projectID: String) {
-        workspace?.existingStore(mainDeviceID: id, projectID: projectID)?.insertIfAbsent(task)
+    /// A ticket returned for a project whose store does not contain it yet is inserted into the store.
+    private func insertIfAbsent(_ ticket: TicketItem, projectID: String) {
+        workspace?.existingStore(mainDeviceID: id, projectID: projectID)?.insertIfAbsent(ticket)
     }
 }

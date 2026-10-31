@@ -77,7 +77,7 @@ private struct TranscriptUserMessage: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
-            TranscriptBubbleLayout(fraction: 0.85) {
+            TranscriptBubbleLayout(fraction: 0.85, edge: .trailing) {
                 VStack(alignment: .leading, spacing: 8) {
                     if !message.text.isEmpty {
                         Text(message.text)
@@ -109,7 +109,7 @@ private struct TranscriptUserMessage: View {
         return "\(device) · \(time)"
     }
 
-    private func attachmentView(_ attachment: TaskAttachment) -> some View {
+    private func attachmentView(_ attachment: TicketAttachment) -> some View {
         let store = store
         let workspace = workspace
         let sessionID = sessionID
@@ -128,8 +128,9 @@ private struct TranscriptUserMessage: View {
     }
 }
 
-/// `.assistant` and streamed text: leading, full width, Markdown with the link rules of the task descriptions: an
-/// http(s) link opens a new web tab in the project, which the window then shows.
+/// `.assistant` and streamed text: a leading bubble, styled like the user's but filled with a neutral color, holding
+/// the Markdown of the reply with the link rules of the ticket descriptions (an http(s) link opens a new web tab in the
+/// project, which the window then shows). A selection reaches across the blocks of the reply, up to a table.
 private struct TranscriptAssistantText: View {
     let text: String
     let store: ProjectStore
@@ -140,8 +141,12 @@ private struct TranscriptAssistantText: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        MarkdownView(text, linkHandler: openLink)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        TranscriptBubbleLayout(fraction: 0.85, edge: .leading) {
+            MarkdownView(text, linkHandler: openLink, selection: .acrossBlocks)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.secondary.opacity(0.15)))
+        }
     }
 
     private func openLink(_ target: MarkdownLinkTarget) {
@@ -249,9 +254,10 @@ private struct TranscriptDisclosure<Content: View>: View {
     }
 }
 
-/// Places its one subview at the trailing edge, at most `fraction` of the proposed width.
+/// Places its one subview at the leading or trailing edge, at most `fraction` of the proposed width.
 struct TranscriptBubbleLayout: Layout {
     let fraction: CGFloat
+    let edge: HorizontalEdge
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let subview = subviews.first else { return .zero }
@@ -266,7 +272,9 @@ struct TranscriptBubbleLayout: Layout {
         guard let subview = subviews.first else { return }
         let maxWidth = bounds.width * fraction
         let size = subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
-        subview.place(at: CGPoint(x: bounds.maxX, y: bounds.minY), anchor: .topTrailing,
+        let isLeading = edge == .leading
+        subview.place(at: CGPoint(x: isLeading ? bounds.minX : bounds.maxX, y: bounds.minY),
+                      anchor: isLeading ? .topLeading : .topTrailing,
                       proposal: ProposedViewSize(width: min(size.width, maxWidth), height: size.height))
     }
 }

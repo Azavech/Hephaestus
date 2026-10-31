@@ -12,10 +12,10 @@ final class BundleFileTests: XCTestCase {
         updated: 2026-10-30T09:12:00Z
         base: main
         coordinator: 6A1F0C2E-3B4D-4E5F-8A9B-0C1D2E3F4A5B
-        tasks:
-        - task: HEPH-12
+        tickets:
+        - ticket: HEPH-12
           session: 0B1E5C6A-2F3D-4E5F-8A9B-0C1D2E3F4A5B
-        - task: HEPH-14
+        - ticket: HEPH-14
 
         """
 
@@ -30,9 +30,9 @@ final class BundleFileTests: XCTestCase {
         XCTAssertEqual(file.updated, try date("2026-10-30T09:12:00Z"))
         XCTAssertEqual(file.base, "main")
         XCTAssertEqual(file.coordinator, try uuid("6A1F0C2E-3B4D-4E5F-8A9B-0C1D2E3F4A5B"))
-        XCTAssertEqual(file.tasks, [
-            BundleFile.Item(task: "HEPH-12", session: try uuid("0B1E5C6A-2F3D-4E5F-8A9B-0C1D2E3F4A5B")),
-            BundleFile.Item(task: "HEPH-14", session: nil),
+        XCTAssertEqual(file.tickets, [
+            BundleFile.Item(ticket: "HEPH-12", session: try uuid("0B1E5C6A-2F3D-4E5F-8A9B-0C1D2E3F4A5B")),
+            BundleFile.Item(ticket: "HEPH-14", session: nil),
         ])
     }
 
@@ -47,7 +47,8 @@ final class BundleFileTests: XCTestCase {
         XCTAssertEqual(BundleID("heph-b3"), BundleID(projectID: "HEPH", number: 3))
         XCTAssertNil(BundleID("HEPH-3"))
         XCTAssertNil(BundleID("HEPH-B0"))
-        XCTAssertNil(TaskID("HEPH-B3"))
+        XCTAssertNil(BundleID("HEPH-F3"))
+        XCTAssertNil(TicketID("HEPH-B3"))
     }
 
     func testAllocateID() throws {
@@ -62,20 +63,20 @@ final class BundleFileTests: XCTestCase {
         XCTAssertEqual(try BundleFile.allocateID(projectRoot: root, projectID: "HEPH").description, "HEPH-B5")
     }
 
-    func testRepeatedTask() {
+    func testRepeatedTicket() {
         let text = """
             id: HEPH-B1
             name: Sidebar polish
             created: 2026-10-30T08:00:00Z
             updated: 2026-10-30T08:00:00Z
-            tasks:
-            - task: HEPH-2
-            - task: HEPH-2
+            tickets:
+            - ticket: HEPH-2
+            - ticket: HEPH-2
 
             """
         XCTAssertThrowsError(try BundleFile.decode(text, fileID: b1)) { error in
             XCTAssertEqual(error as? DataError,
-                           .invalid("HEPH-B1.yml: tasks[1].task must be a task of HEPH listed once"))
+                           .invalid("HEPH-B1.yml: tickets[1].ticket must be a ticket of HEPH listed once"))
         }
     }
 
@@ -86,8 +87,8 @@ final class BundleFileTests: XCTestCase {
             created: 2026-10-30T08:00:00Z
             updated: 2026-10-30T08:00:00Z
             base: --detach
-            tasks:
-            - task: HEPH-2
+            tickets:
+            - ticket: HEPH-2
 
             """
         XCTAssertThrowsError(try BundleFile.decode(text, fileID: b1)) { error in

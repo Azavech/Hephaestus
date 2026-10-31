@@ -4,15 +4,15 @@ import Observation
 
 /// The sections of the sidebar (docs/client/workspace.md, "Selection").
 public enum SidebarSection: String, Codable, CaseIterable, Sendable {
-    /// Project sections, ⌘1–⌘7 in this order.
-    case overview, tasks, code, docs, web, claude, runs
+    /// Project sections, ⌘1–⌘6 in this order.
+    case overview, tickets, code, docs, web, claude
     /// Workspace sections.
     case devices, skills, forge
 
-    /// True for the seven project sections.
+    /// True for the six project sections.
     public var isProjectSection: Bool {
         switch self {
-        case .overview, .tasks, .code, .docs, .web, .claude, .runs:
+        case .overview, .tickets, .code, .docs, .web, .claude:
             return true
         case .devices, .skills, .forge:
             return false

@@ -34,16 +34,12 @@ public struct EmptyPayload: Codable, Sendable, Hashable {
 /// A subscription topic.
 public enum Topic: RawRepresentable, Hashable, Sendable {
     case session(UUID)
-    case run(UUID)
 
-    /// "session:<uuid>" or "run:<uuid>", uuid in either case; anything else is nil.
+    /// "session:<uuid>", uuid in either case; anything else is nil.
     public init?(rawValue: String) {
         let sessionPrefix = "session:"
-        let runPrefix = "run:"
         if rawValue.hasPrefix(sessionPrefix), let id = UUID(uuidString: String(rawValue.dropFirst(sessionPrefix.count))) {
             self = .session(id)
-        } else if rawValue.hasPrefix(runPrefix), let id = UUID(uuidString: String(rawValue.dropFirst(runPrefix.count))) {
-            self = .run(id)
         } else {
             return nil
         }
@@ -53,7 +49,6 @@ public enum Topic: RawRepresentable, Hashable, Sendable {
     public var rawValue: String {
         switch self {
         case .session(let id): return "session:" + id.uuidString
-        case .run(let id): return "run:" + id.uuidString
         }
     }
 }

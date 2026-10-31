@@ -2,7 +2,7 @@ import HephClient
 import HephCore
 import SwiftUI
 
-/// The context menu of the rows of the session list and of the session tabs of a task (docs/ui/sessions.md, "Session
+/// The context menu of the rows of the session list and of the session tabs of a ticket (docs/ui/sessions.md, "Session
 /// context menu"). A row or a tab has no `SessionModel`, so the items call the request functions of `store.connection`
 /// directly, through the window's banners.
 ///
@@ -60,7 +60,8 @@ struct SessionContextMenu: ViewModifier {
                     },
                     onOtherModel: { isModelSheetPresented = true }
                 )
-                .disabled(isDisabled)
+                // A closed session never starts Claude again.
+                .disabled(isDisabled || session.closed != nil)
             }
             .sheet(isPresented: $isRenamePresented) {
                 SessionRenameSheet(title: session.title) { title in

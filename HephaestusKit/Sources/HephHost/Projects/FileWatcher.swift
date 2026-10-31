@@ -4,7 +4,7 @@ import Foundation
 import HephCore
 
 /// FSEvents → events (docs/services/host.md §11): one stream per top-level folder of projects.json that exists,
-/// registered or not; each batch becomes project, task and `files.changed` events.
+/// registered or not; each batch becomes project, ticket and `files.changed` events.
 actor FileWatcher {
     /// One FSEvents batch of one stream.
     struct Batch: Sendable {
@@ -104,7 +104,7 @@ actor FileWatcher {
         var projects = await registry.all()
         var rereads: [String] = []
         var registrations: [(root: URL, parentID: String?)] = []
-        var reloads: [(projectID: String, taskID: TaskID)] = []
+        var reloads: [(projectID: String, ticketID: TicketID)] = []
         var rescans: [String] = []
         var flaggedPaths: [String] = []
         var paths: [String] = []
@@ -149,13 +149,13 @@ actor FileWatcher {
                 Log.host.error("Could not register \(registration.root.path): \(ProjectRegistry.protocolError(error).message)")
             }
         }
-        // Then task events.
-        let tasks: TaskService = host.tasks
+        // Then ticket events.
+        let tickets: TicketService = host.tickets
         for reload in reloads {
-            await tasks.reload(projectID: reload.projectID, taskID: reload.taskID)
+            await tickets.reload(projectID: reload.projectID, ticketID: reload.ticketID)
         }
         for projectID in Self.unique(rescans) {
-            await tasks.rescan(projectID: projectID)
+            await tickets.rescan(projectID: projectID)
         }
         // 4. Then files.changed, per project containing at least one path, with the projects as they are now.
         projects = await registry.all()
@@ -179,19 +179,19 @@ actor FileWatcher {
     /// The row of §11.3 for `rel`, the path relative to the owner's root.
     private func classify(_ rel: String, owner: HostedProject, rereads: inout [String],
                           registrations: inout [(root: URL, parentID: String?)],
-                          reloads: inout [(projectID: String, taskID: TaskID)], rescans: inout [String]) {
+                          reloads: inout [(projectID: String, ticketID: TicketID)], rescans: inout [String]) {
         if rel == ProjectFile.relativePath {
             rereads.append(owner.id)
             return
         }
-        if rel == Self.tasksFolder {
+        if rel == Self.ticketsFolder {
             rescans.append(owner.id)
             return
         }
-        if rel.hasPrefix(Self.tasksFolder + "/") {
-            let name = String(rel.dropFirst(Self.tasksFolder.count + 1))
-            if !name.contains("/"), let taskID = TaskID(fileName: name), taskID.projectID == owner.id {
-                reloads.append((owner.id, taskID))
+        if rel.hasPrefix(Self.ticketsFolder + "/") {
+            let name = String(rel.dropFirst(Self.ticketsFolder.count + 1))
+            if !name.contains("/"), let ticketID = TicketID(fileName: name), ticketID.projectID == owner.id {
+                reloads.append((owner.id, ticketID))
             }
             return
         }
@@ -225,7 +225,7 @@ actor FileWatcher {
 
     // MARK: - Private
 
-    private static let tasksFolder = ".hephaestus/tasks"
+    private static let ticketsFolder = ".hephaestus/tickets"
     private static let rootChanged = FSEventStreamEventFlags(kFSEventStreamEventFlagRootChanged)
     private static let mustScan = FSEventStreamEventFlags(kFSEventStreamEventFlagMustScanSubDirs
         | kFSEventStreamEventFlagUserDropped | kFSEventStreamEventFlagKernelDropped)

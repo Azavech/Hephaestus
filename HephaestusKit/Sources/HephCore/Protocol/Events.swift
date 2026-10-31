@@ -7,8 +7,8 @@ public enum EventName: String, CaseIterable, Sendable {
     case meshChanged = "mesh.changed"
     case projectsChanged = "projects.changed"
     case projectChanged = "project.changed"
-    case taskChanged = "task.changed"
-    case taskRemoved = "task.removed"
+    case ticketChanged = "ticket.changed"
+    case ticketRemoved = "ticket.removed"
     case bundleChanged = "bundle.changed"
     case bundleRemoved = "bundle.removed"
     case filesChanged = "files.changed"
@@ -18,8 +18,6 @@ public enum EventName: String, CaseIterable, Sendable {
     case sessionDelta = "session.delta"
     case permissionRequested = "permission.requested"
     case permissionResolved = "permission.resolved"
-    case runChanged = "run.changed"
-    case runOutput = "run.output"
     case skillsChanged = "skills.changed"
     case migrationProgress = "migration.progress"
     case forgeChanged = "forge.changed"
@@ -27,7 +25,7 @@ public enum EventName: String, CaseIterable, Sendable {
     /// Who receives the event (the Delivery column).
     public var delivery: EventDelivery {
         switch self {
-        case .sessionEvent, .sessionDelta, .runOutput:
+        case .sessionEvent, .sessionDelta:
             return .subscribers
         default:
             return .broadcast
@@ -47,8 +45,8 @@ public enum ServerEvent: Sendable, Hashable {
     case meshChanged(MeshChangedPayload)
     case projectsChanged(ProjectsChangedPayload)
     case projectChanged(ProjectChangedPayload)
-    case taskChanged(TaskChangedPayload)
-    case taskRemoved(TaskRemovedPayload)
+    case ticketChanged(TicketChangedPayload)
+    case ticketRemoved(TicketRemovedPayload)
     case bundleChanged(BundleChangedPayload)
     case bundleRemoved(BundleRemovedPayload)
     case filesChanged(FilesChangedPayload)
@@ -58,8 +56,6 @@ public enum ServerEvent: Sendable, Hashable {
     case sessionDelta(SessionDeltaPayload)
     case permissionRequested(PermissionRequestedPayload)
     case permissionResolved(PermissionResolvedPayload)
-    case runChanged(RunChangedPayload)
-    case runOutput(RunOutputPayload)
     case skillsChanged(SkillsChangedPayload)
     case migrationProgress(MigrationProgressPayload)
     case forgeChanged(ForgeChangedPayload)
@@ -69,8 +65,8 @@ public enum ServerEvent: Sendable, Hashable {
         case .meshChanged: return .meshChanged
         case .projectsChanged: return .projectsChanged
         case .projectChanged: return .projectChanged
-        case .taskChanged: return .taskChanged
-        case .taskRemoved: return .taskRemoved
+        case .ticketChanged: return .ticketChanged
+        case .ticketRemoved: return .ticketRemoved
         case .bundleChanged: return .bundleChanged
         case .bundleRemoved: return .bundleRemoved
         case .filesChanged: return .filesChanged
@@ -80,21 +76,18 @@ public enum ServerEvent: Sendable, Hashable {
         case .sessionDelta: return .sessionDelta
         case .permissionRequested: return .permissionRequested
         case .permissionResolved: return .permissionResolved
-        case .runChanged: return .runChanged
-        case .runOutput: return .runOutput
         case .skillsChanged: return .skillsChanged
         case .migrationProgress: return .migrationProgress
         case .forgeChanged: return .forgeChanged
         }
     }
 
-    /// The topic of a subscriber event (`session.event`, `session.delta`: `.session(sessionID)`;
-    /// `run.output`: `.run(runID)`); `nil` for broadcast events.
+    /// The topic of a subscriber event (`session.event`, `session.delta`: `.session(sessionID)`); `nil` for
+    /// broadcast events.
     public var topic: Topic? {
         switch self {
         case .sessionEvent(let payload): return .session(payload.sessionID)
         case .sessionDelta(let payload): return .session(payload.sessionID)
-        case .runOutput(let payload): return .run(payload.runID)
         default: return nil
         }
     }
@@ -106,8 +99,8 @@ public enum ServerEvent: Sendable, Hashable {
         case .meshChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .projectsChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .projectChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
-        case .taskChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
-        case .taskRemoved(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
+        case .ticketChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
+        case .ticketRemoved(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .bundleChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .bundleRemoved(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .filesChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
@@ -117,8 +110,6 @@ public enum ServerEvent: Sendable, Hashable {
         case .sessionDelta(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .permissionRequested(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .permissionResolved(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
-        case .runChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
-        case .runOutput(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .skillsChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .migrationProgress(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .forgeChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
@@ -133,8 +124,8 @@ public enum ServerEvent: Sendable, Hashable {
         case .meshChanged: return .meshChanged(try event.decodeParams())
         case .projectsChanged: return .projectsChanged(try event.decodeParams())
         case .projectChanged: return .projectChanged(try event.decodeParams())
-        case .taskChanged: return .taskChanged(try event.decodeParams())
-        case .taskRemoved: return .taskRemoved(try event.decodeParams())
+        case .ticketChanged: return .ticketChanged(try event.decodeParams())
+        case .ticketRemoved: return .ticketRemoved(try event.decodeParams())
         case .bundleChanged: return .bundleChanged(try event.decodeParams())
         case .bundleRemoved: return .bundleRemoved(try event.decodeParams())
         case .filesChanged: return .filesChanged(try event.decodeParams())
@@ -144,8 +135,6 @@ public enum ServerEvent: Sendable, Hashable {
         case .sessionDelta: return .sessionDelta(try event.decodeParams())
         case .permissionRequested: return .permissionRequested(try event.decodeParams())
         case .permissionResolved: return .permissionResolved(try event.decodeParams())
-        case .runChanged: return .runChanged(try event.decodeParams())
-        case .runOutput: return .runOutput(try event.decodeParams())
         case .skillsChanged: return .skillsChanged(try event.decodeParams())
         case .migrationProgress: return .migrationProgress(try event.decodeParams())
         case .forgeChanged: return .forgeChanged(try event.decodeParams())
@@ -184,25 +173,25 @@ public struct ProjectChangedPayload: Codable, Sendable, Hashable {
     }
 }
 
-/// `task.changed`: the task after the change.
-public struct TaskChangedPayload: Codable, Sendable, Hashable {
+/// `ticket.changed`: the ticket after the change.
+public struct TicketChangedPayload: Codable, Sendable, Hashable {
     public var projectID: String
-    public var task: TaskItem
+    public var ticket: TicketItem
 
-    public init(projectID: String, task: TaskItem) {
+    public init(projectID: String, ticket: TicketItem) {
         self.projectID = projectID
-        self.task = task
+        self.ticket = ticket
     }
 }
 
-/// `task.removed`.
-public struct TaskRemovedPayload: Codable, Sendable, Hashable {
+/// `ticket.removed`.
+public struct TicketRemovedPayload: Codable, Sendable, Hashable {
     public var projectID: String
-    public var taskID: String
+    public var ticketID: String
 
-    public init(projectID: String, taskID: String) {
+    public init(projectID: String, ticketID: String) {
         self.projectID = projectID
-        self.taskID = taskID
+        self.ticketID = ticketID
     }
 }
 
@@ -328,32 +317,6 @@ public struct PermissionResolvedPayload: Codable, Sendable, Hashable {
         self.requestID = requestID
         self.decision = decision
         self.deviceID = deviceID
-    }
-}
-
-/// `run.changed`: the run after the change.
-public struct RunChangedPayload: Codable, Sendable, Hashable {
-    public var projectID: String
-    public var run: RunInfo
-
-    public init(projectID: String, run: RunInfo) {
-        self.projectID = projectID
-        self.run = run
-    }
-}
-
-/// `run.output`: output text to append; `seq` numbers the batches of the run from 1.
-public struct RunOutputPayload: Codable, Sendable, Hashable {
-    public var projectID: String
-    public var runID: UUID
-    public var text: String
-    public var seq: Int
-
-    public init(projectID: String, runID: UUID, text: String, seq: Int) {
-        self.projectID = projectID
-        self.runID = runID
-        self.text = text
-        self.seq = seq
     }
 }
 

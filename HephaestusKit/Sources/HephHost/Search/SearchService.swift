@@ -92,8 +92,8 @@ actor SearchService: HostMethodHandler {
         if scopes.contains(.projects) {
             searchProjects(projects, state: &state)
         }
-        if scopes.contains(.tasks) || scopes.contains(.comments) {
-            await searchTasks(projects, tasks: scopes.contains(.tasks), comments: scopes.contains(.comments),
+        if scopes.contains(.tickets) || scopes.contains(.comments) {
+            await searchTickets(projects, tickets: scopes.contains(.tickets), comments: scopes.contains(.comments),
                               state: &state)
         }
         if scopes.contains(.docs) || scopes.contains(.code) {
@@ -169,27 +169,27 @@ actor SearchService: HostMethodHandler {
         }
     }
 
-    private func searchTasks(_ projects: [HostedProject], tasks searchTasks: Bool, comments searchComments: Bool,
+    private func searchTickets(_ projects: [HostedProject], tickets searchTickets: Bool, comments searchComments: Bool,
                              state: inout QueryState) async {
         for project in projects {
             guard state.goesOn() else { return }
-            guard let tasks = try? await host.tasks.list(projectID: project.id) else { continue }
-            for task in tasks {
+            guard let tickets = try? await host.tickets.list(projectID: project.id) else { continue }
+            for ticket in tickets {
                 guard state.goesOn() else { return }
-                if searchTasks {
-                    // A broken task is searched by its id only.
-                    let broken = task.parseError != nil
-                    state.add(id: task.id, title: broken ? "" : task.name, fields: broken ? [] : [task.description],
-                              result: SearchResult(kind: .tasks, deviceID: state.deviceID, projectID: project.id,
-                                                   itemID: task.id, taskID: task.id, title: task.name, snippet: "",
-                                                   rank: 0, date: task.updated))
+                if searchTickets {
+                    // A broken ticket is searched by its id only.
+                    let broken = ticket.parseError != nil
+                    state.add(id: ticket.id, title: broken ? "" : ticket.name, fields: broken ? [] : [ticket.description],
+                              result: SearchResult(kind: .tickets, deviceID: state.deviceID, projectID: project.id,
+                                                   itemID: ticket.id, ticketID: ticket.id, title: ticket.name, snippet: "",
+                                                   rank: 0, date: ticket.updated))
                 }
                 if searchComments {
-                    for comment in task.comments {
+                    for comment in ticket.comments {
                         state.add(id: nil, title: "", fields: [comment.body],
                                   result: SearchResult(kind: .comments, deviceID: state.deviceID,
                                                        projectID: project.id, itemID: comment.id.uuidString,
-                                                       taskID: task.id, title: task.name, snippet: "", rank: 0,
+                                                       ticketID: ticket.id, title: ticket.name, snippet: "", rank: 0,
                                                        date: comment.edited ?? comment.created))
                     }
                 }
@@ -220,7 +220,7 @@ actor SearchService: HostMethodHandler {
                 let texts = await sessionTexts(projectRoot: project.root, sessionID: session.id, archive: archive)
                 state.add(id: nil, title: session.title, fields: texts,
                           result: SearchResult(kind: .sessions, deviceID: state.deviceID, projectID: project.id,
-                                               itemID: session.id.uuidString, taskID: session.taskID,
+                                               itemID: session.id.uuidString, ticketID: session.ticketID,
                                                title: session.title, snippet: "", rank: 0, date: session.updated))
             }
         }

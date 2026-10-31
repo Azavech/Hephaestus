@@ -7,7 +7,7 @@ import SwiftUI
 struct SessionHeaderView: View {
     let model: SessionModel
     let store: ProjectStore
-    let showsTaskLink: Bool
+    let showsTicketLink: Bool
 
     @Environment(WindowContext.self) private var context
 
@@ -40,22 +40,22 @@ struct SessionHeaderView: View {
         .padding(.vertical, 10)
     }
 
-    /// Task session "<task id> · <mode>", followed by " · <bundle id>" for a task session of a bundle; feedback
-    /// "Feedback · <task id>"; regeneration "Regeneration"; bundle "Bundle · <bundle id>".
+    /// Ticket session "<ticket id> · <mode>", followed by " · <bundle id>" for a ticket session of a bundle; feedback
+    /// "Feedback · <ticket id>"; regeneration "Regeneration"; bundle "Bundle · <bundle id>".
     @ViewBuilder private func contextLine(_ info: SessionInfo) -> some View {
         switch info.kind {
         case .project:
             EmptyView()
-        case .task:
+        case .ticket:
             HStack(spacing: 0) {
-                if let taskID = info.taskID {
-                    taskLink(taskID)
+                if let ticketID = info.ticketID {
+                    ticketLink(ticketID)
                 }
                 if let mode = info.mode {
-                    Text(info.taskID == nil ? mode.displayName : " · \(mode.displayName)")
+                    Text(info.ticketID == nil ? mode.displayName : " · \(mode.displayName)")
                 }
                 if let bundleID = info.bundleID {
-                    Text(info.taskID == nil && info.mode == nil ? bundleID : " · \(bundleID)")
+                    Text(info.ticketID == nil && info.mode == nil ? bundleID : " · \(bundleID)")
                 }
             }
             .font(.subheadline)
@@ -63,9 +63,9 @@ struct SessionHeaderView: View {
             .lineLimit(1)
         case .feedback:
             HStack(spacing: 0) {
-                Text(info.taskID == nil ? "Feedback" : "Feedback · ")
-                if let taskID = info.taskID {
-                    taskLink(taskID)
+                Text(info.ticketID == nil ? "Feedback" : "Feedback · ")
+                if let ticketID = info.ticketID {
+                    ticketLink(ticketID)
                 }
             }
             .font(.subheadline)
@@ -84,12 +84,12 @@ struct SessionHeaderView: View {
         }
     }
 
-    /// The task id; with `showsTaskLink`, a link that shows the task.
-    @ViewBuilder private func taskLink(_ taskID: String) -> some View {
-        if showsTaskLink {
-            Button(taskID) {
-                context.navigate(mainDeviceID: store.mainDeviceID, projectID: store.projectID, section: .tasks,
-                                 item: taskID)
+    /// The ticket id; with `showsTicketLink`, a link that shows the ticket.
+    @ViewBuilder private func ticketLink(_ ticketID: String) -> some View {
+        if showsTicketLink {
+            Button(ticketID) {
+                context.navigate(mainDeviceID: store.mainDeviceID, projectID: store.projectID, section: .tickets,
+                                 item: ticketID)
             }
             #if os(macOS)
             .buttonStyle(.link)
@@ -97,7 +97,7 @@ struct SessionHeaderView: View {
             .buttonStyle(.borderless)
             #endif
         } else {
-            Text(taskID)
+            Text(ticketID)
         }
     }
 }

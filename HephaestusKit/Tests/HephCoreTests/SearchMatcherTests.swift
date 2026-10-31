@@ -34,14 +34,14 @@ final class SearchMatcherTests: XCTestCase {
         XCTAssertEqual(SearchMatcher.rank(query, id: "HEPH-30", title: "Follow-up of heph-12", fields: []), 1)
         XCTAssertEqual(SearchMatcher.rank(query, id: "HEPH-31", title: "Other", fields: ["Related to HEPH-12."]), 2)
         XCTAssertNil(SearchMatcher.rank(query, id: "HEPH-32", title: "Other", fields: ["Unrelated."]))
-        // The id is searched as content: "HEPH" matches every task of HEPH.
+        // The id is searched as content: "HEPH" matches every ticket of HEPH.
         XCTAssertEqual(SearchMatcher.rank(SearchQuery("HEPH"), id: "HEPH-32", title: "Other", fields: []), 2)
 
         let device = UUID()
         let older = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-10-28T10:00:00Z"))
         let newer = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-10-29T10:00:00Z"))
         func result(_ itemID: String, rank: Int, date: Date?, title: String = "Title") -> SearchResult {
-            SearchResult(kind: .tasks, deviceID: device, projectID: "HEPH", itemID: itemID, taskID: itemID, title: title,
+            SearchResult(kind: .tickets, deviceID: device, projectID: "HEPH", itemID: itemID, ticketID: itemID, title: title,
                          snippet: "", rank: rank, date: date)
         }
         let idMatch = result("HEPH-12", rank: 0, date: older)
@@ -54,8 +54,8 @@ final class SearchMatcherTests: XCTestCase {
         XCTAssertEqual(sorted.map(\.itemID), ["HEPH-12", "HEPH-30", "HEPH-33", "HEPH-31", "HEPH-34"])
 
         // Equal rank and date: title with localizedStandardCompare, then the item id.
-        let titled2 = result("A", rank: 2, date: nil, title: "Task 2")
-        let titled10 = result("B", rank: 2, date: nil, title: "Task 10")
+        let titled2 = result("A", rank: 2, date: nil, title: "Ticket 2")
+        let titled10 = result("B", rank: 2, date: nil, title: "Ticket 10")
         XCTAssertTrue(SearchMatcher.precedes(titled2, titled10))
         XCTAssertFalse(SearchMatcher.precedes(titled10, titled2))
         XCTAssertFalse(SearchMatcher.precedes(titled2, titled2))

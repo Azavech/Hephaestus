@@ -173,7 +173,7 @@ extension ForgeService {
     func startCycle(trigger: ForgeTrigger) async {
         let now = Date()
         cycle = ForgeCycle(id: UUID(), trigger: trigger, state: .regenerating, started: now, updated: now,
-                           targetCommit: head?.commit ?? "", attempts: 0, itemTaskIDs: [])
+                           targetCommit: head?.commit ?? "", attempts: 0, itemTicketIDs: [])
         saveStore()
         await broadcastIfChanged()
         Log.host.notice("A Forge cycle started (\(trigger.rawValue, privacy: .public))")

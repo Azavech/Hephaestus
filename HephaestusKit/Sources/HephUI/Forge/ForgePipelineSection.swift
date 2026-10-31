@@ -12,7 +12,7 @@ struct ForgePipelineSection: View {
     @Environment(WindowContext.self) private var context
     @Environment(WindowBanners.self) private var banners
     @State private var isRegenerating = false
-    @State private var retryingTaskIDs: Set<String> = []
+    @State private var retryingTicketIDs: Set<String> = []
 
     init(state: ForgeState, hostID: UUID) {
         self.state = state
@@ -103,7 +103,7 @@ struct ForgePipelineSection: View {
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
-                    Text(item.taskID)
+                    Text(item.ticketID)
                         .monospaced()
                     Text(item.title)
                     Spacer(minLength: 0)
@@ -121,9 +121,9 @@ struct ForgePipelineSection: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            context.selection.item = item.taskID
+            context.selection.item = item.ticketID
         }
-        .listRowBackground(context.selection.item == item.taskID ? Color.accentColor.opacity(0.2) : nil)
+        .listRowBackground(context.selection.item == item.ticketID ? Color.accentColor.opacity(0.2) : nil)
     }
 
     /// "docs <sha8>" when the item has a docs commit, then "updated <relative>".
@@ -157,8 +157,8 @@ struct ForgePipelineSection: View {
 
     @ViewBuilder
     private func itemActionButtons(_ item: ForgeItem) -> some View {
-        Button("Open Task") {
-            context.navigate(mainDeviceID: hostID, projectID: item.projectID, section: .tasks, item: item.taskID)
+        Button("Open Ticket") {
+            context.navigate(mainDeviceID: hostID, projectID: item.projectID, section: .tickets, item: item.ticketID)
         }
         Button("Open Discussion") {
             context.navigate(mainDeviceID: hostID, projectID: item.projectID, section: .claude,
@@ -166,9 +166,9 @@ struct ForgePipelineSection: View {
         }
         if item.state == .failed {
             Button("Retry") {
-                retry(item.taskID)
+                retry(item.ticketID)
             }
-            .disabled(retryingTaskIDs.contains(item.taskID))
+            .disabled(retryingTicketIDs.contains(item.ticketID))
         }
     }
 
@@ -198,14 +198,14 @@ struct ForgePipelineSection: View {
         }
     }
 
-    private func retry(_ taskID: String) {
-        retryingTaskIDs.insert(taskID)
+    private func retry(_ ticketID: String) {
+        retryingTicketIDs.insert(ticketID)
         let forge = forge
         Task {
             await banners.perform {
-                try await forge.retry(itemTaskID: taskID)
+                try await forge.retry(itemTicketID: ticketID)
             }
-            retryingTaskIDs.remove(taskID)
+            retryingTicketIDs.remove(ticketID)
         }
     }
 

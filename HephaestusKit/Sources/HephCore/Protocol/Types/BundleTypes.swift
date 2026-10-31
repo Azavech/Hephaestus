@@ -2,13 +2,13 @@ import Foundation
 
 // Bundles: the wire types of docs/protocol/types.md, section "Bundles" (docs/services/bundles.md).
 
-/// The status of a task bundle.
+/// The status of a ticket bundle.
 public enum BundleStatus: String, Codable, Sendable, Hashable, CaseIterable {
     /// Not being worked on.
     case draft
-    /// Its coordinator and task sessions work on it.
+    /// Its coordinator and ticket sessions work on it.
     case running
-    /// Every task is done; the coordinator waits for the user's OK.
+    /// Every ticket is done; the coordinator waits for the user's OK.
     case review
     /// Its work was brought in and its worktrees removed.
     case done
@@ -24,21 +24,21 @@ public enum BundleStatus: String, Codable, Sendable, Hashable, CaseIterable {
     }
 }
 
-/// A task of a bundle.
-public struct BundleTask: Codable, Sendable, Hashable, Identifiable {
-    public var taskID: String
-    /// The last task session the bundle started for this task.
+/// A ticket of a bundle.
+public struct BundleTicket: Codable, Sendable, Hashable, Identifiable {
+    public var ticketID: String
+    /// The last ticket session the bundle started for this ticket.
     public var sessionID: UUID?
 
-    public var id: String { taskID }
+    public var id: String { ticketID }
 
-    public init(taskID: String, sessionID: UUID? = nil) {
-        self.taskID = taskID
+    public init(ticketID: String, sessionID: UUID? = nil) {
+        self.ticketID = ticketID
         self.sessionID = sessionID
     }
 }
 
-/// A bundle: a named, ordered group of tasks of one project that Claude works on in parallel.
+/// A bundle: a named, ordered group of tickets of one project that Claude works on in parallel.
 public struct BundleItem: Codable, Sendable, Hashable, Identifiable {
     /// Bundle id, `<projectID>-B<n>`.
     public var id: String
@@ -46,12 +46,12 @@ public struct BundleItem: Codable, Sendable, Hashable, Identifiable {
     public var status: BundleStatus
     public var created: Date
     public var updated: Date
-    /// Branch the task branches start from; set when first started.
+    /// Branch the ticket branches start from; set when first started.
     public var base: String?
     /// The coordinator session; set when first started.
     public var coordinatorSessionID: UUID?
-    /// Its tasks, in order.
-    public var tasks: [BundleTask]
+    /// Its tickets, in order.
+    public var tickets: [BundleTicket]
 
     public init(
         id: String,
@@ -61,7 +61,7 @@ public struct BundleItem: Codable, Sendable, Hashable, Identifiable {
         updated: Date,
         base: String? = nil,
         coordinatorSessionID: UUID? = nil,
-        tasks: [BundleTask]
+        tickets: [BundleTicket]
     ) {
         self.id = id
         self.name = name
@@ -70,7 +70,7 @@ public struct BundleItem: Codable, Sendable, Hashable, Identifiable {
         self.updated = updated
         self.base = base
         self.coordinatorSessionID = coordinatorSessionID
-        self.tasks = tasks
+        self.tickets = tickets
     }
 }
 
@@ -78,11 +78,11 @@ public struct BundleItem: Codable, Sendable, Hashable, Identifiable {
 public struct BundlePatch: Codable, Sendable, Hashable {
     /// New name, trimmed: not empty, on one line.
     public var name: String?
-    /// Replaces the tasks, in order (`draft` and `done` only).
-    public var taskIDs: [String]?
+    /// Replaces the tickets, in order (`draft` and `done` only).
+    public var ticketIDs: [String]?
 
-    public init(name: String? = nil, taskIDs: [String]? = nil) {
+    public init(name: String? = nil, ticketIDs: [String]? = nil) {
         self.name = name
-        self.taskIDs = taskIDs
+        self.ticketIDs = ticketIDs
     }
 }

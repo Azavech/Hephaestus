@@ -102,18 +102,50 @@ final class TransferTests: XCTestCase {
             self.answerReads(fakeMain, content)
         }
         let connection = try XCTUnwrap(workspace.connection(fakeMain.device.id))
-        let url = try await connection.downloadAttachment(projectID: "HEPH", taskID: "HEPH-1", fileName: "big.bin",
+        let url = try await connection.downloadAttachment(projectID: "HEPH", ticketID: "HEPH-1", fileName: "big.bin",
                                                           size: size9MiB) { _ in }
 
         let reads = fakeMain.requests("attachments.read")
         XCTAssertEqual(reads.map { $0.json["offset"] as? Int }, [0, mebibytes4, 2 * mebibytes4])
         let expected = environment.cacheRoot
-            .appending(path: "\(fakeMain.device.id.uuidString)/HEPH/tasks/HEPH-1/big.bin",
+            .appending(path: "\(fakeMain.device.id.uuidString)/HEPH/tickets/HEPH-1/big.bin",
                        directoryHint: .notDirectory)
         XCTAssertEqual(url.standardizedFileURL.path(percentEncoded: false),
                        expected.standardizedFileURL.path(percentEncoded: false))
         XCTAssertEqual(try Data(contentsOf: url), content)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path(percentEncoded: false) + ".download"))
+    }
+
+    func testCacheMigration() throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory.appending(path: "CacheMigration-\(UUID().uuidString)",
+                                                            directoryHint: .isDirectory)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let main = root.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let image = pattern(1024)
+        let kept = Data("kept".utf8)
+        try write(image, to: main.appending(path: "HEPH/tasks/HEPH-1/a.png", directoryHint: .notDirectory))
+        try write(Data("old".utf8), to: main.appending(path: "API/tasks/API-1/b.png", directoryHint: .notDirectory))
+        try write(kept, to: main.appending(path: "API/tickets/API-1/b.png", directoryHint: .notDirectory))
+
+        AttachmentCache(root: root).migrateFromTasks()
+
+        XCTAssertEqual(try Data(contentsOf: main.appending(path: "HEPH/tickets/HEPH-1/a.png",
+                                                           directoryHint: .notDirectory)), image)
+        XCTAssertFalse(fileManager.fileExists(atPath: main.appending(path: "HEPH/tasks").path(percentEncoded: false)))
+        XCTAssertFalse(fileManager.fileExists(atPath: main.appending(path: "API/tasks").path(percentEncoded: false)))
+        XCTAssertEqual(try fileManager.contentsOfDirectory(atPath: main.appending(path: "API/tickets")
+            .path(percentEncoded: false)), ["API-1"])
+        XCTAssertEqual(try fileManager.contentsOfDirectory(atPath: main.appending(path: "API/tickets/API-1")
+            .path(percentEncoded: false)), ["b.png"])
+        XCTAssertEqual(try Data(contentsOf: main.appending(path: "API/tickets/API-1/b.png",
+                                                           directoryHint: .notDirectory)), kept)
+    }
+
+    /// Writes `data` to `url`, creating its folders.
+    private func write(_ data: Data, to url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url)
     }
 
     func testDownloadReuse() async throws {
@@ -122,19 +154,19 @@ final class TransferTests: XCTestCase {
             self.answerReads(fakeMain, content)
         }
         let connection = try XCTUnwrap(workspace.connection(fakeMain.device.id))
-        let first = try await connection.downloadAttachment(projectID: "HEPH", taskID: "HEPH-1", fileName: "big.bin",
+        let first = try await connection.downloadAttachment(projectID: "HEPH", ticketID: "HEPH-1", fileName: "big.bin",
                                                             size: size9MiB) { _ in }
         XCTAssertEqual(fakeMain.requests("attachments.read").count, 3)
 
         let progress = ProgressLog()
-        let second = try await connection.downloadAttachment(projectID: "HEPH", taskID: "HEPH-1", fileName: "big.bin",
+        let second = try await connection.downloadAttachment(projectID: "HEPH", ticketID: "HEPH-1", fileName: "big.bin",
                                                              size: size9MiB) { progress.reports.append($0) }
         XCTAssertEqual(second, first)
         XCTAssertEqual(fakeMain.requests("attachments.read").count, 3)
         XCTAssertEqual(progress.reports, [TransferProgress(completed: size9MiB, total: size9MiB)])
 
         answerReads(fakeMain, content)
-        let third = try await connection.downloadAttachment(projectID: "HEPH", taskID: "HEPH-1", fileName: "big.bin",
+        let third = try await connection.downloadAttachment(projectID: "HEPH", ticketID: "HEPH-1", fileName: "big.bin",
                                                             size: 1_000) { _ in }
         XCTAssertEqual(third, first)
         XCTAssertEqual(fakeMain.requests("attachments.read").count, 6)
@@ -154,7 +186,7 @@ final class TransferTests: XCTestCase {
         }
         let connection = try XCTUnwrap(workspace.connection(fakeMain.device.id))
         do {
-            _ = try await connection.downloadAttachment(projectID: "HEPH", taskID: "HEPH-1", fileName: "big.bin",
+            _ = try await connection.downloadAttachment(projectID: "HEPH", ticketID: "HEPH-1", fileName: "big.bin",
                                                         size: size9MiB) { _ in }
             XCTFail("The download succeeded")
         } catch let error as ProtocolError {
@@ -162,7 +194,7 @@ final class TransferTests: XCTestCase {
             XCTAssertEqual(error.message, "big.bin changed during the download.")
         }
         let destination = environment.cacheRoot
-            .appending(path: "\(fakeMain.device.id.uuidString)/HEPH/tasks/HEPH-1/big.bin",
+            .appending(path: "\(fakeMain.device.id.uuidString)/HEPH/tickets/HEPH-1/big.bin",
                        directoryHint: .notDirectory)
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)))
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path(percentEncoded: false) + ".download"))

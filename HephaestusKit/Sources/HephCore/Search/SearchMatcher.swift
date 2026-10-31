@@ -132,8 +132,8 @@ public enum SearchMatcher {
         if titleOrder != .orderedSame {
             return titleOrder == .orderedAscending
         }
-        let keysA = [a.deviceID.uuidString, a.kind.rawValue, a.projectID ?? "", a.itemID, a.taskID ?? "", a.path ?? ""]
-        let keysB = [b.deviceID.uuidString, b.kind.rawValue, b.projectID ?? "", b.itemID, b.taskID ?? "", b.path ?? ""]
+        let keysA = [a.deviceID.uuidString, a.kind.rawValue, a.projectID ?? "", a.itemID, a.ticketID ?? "", a.path ?? ""]
+        let keysB = [b.deviceID.uuidString, b.kind.rawValue, b.projectID ?? "", b.itemID, b.ticketID ?? "", b.path ?? ""]
         for (keyA, keyB) in zip(keysA, keysB) where keyA != keyB {
             return keyA < keyB
         }

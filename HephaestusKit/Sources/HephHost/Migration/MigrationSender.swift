@@ -184,7 +184,7 @@ struct MigrationSender: Sendable {
 
     // MARK: - After the commit
 
-    /// The entry becomes `committed`; the project leaves the registry; its sessions and runs are forgotten; its folder
+    /// The entry becomes `committed`; the project leaves the registry; its sessions are forgotten; its folder
     /// and its transcript folders go to the Trash; the entry is removed once the folder is gone; progress `completed`.
     private func afterCommit(_ context: Context) async {
         try? await service.setEntryState(migrationID, .committed, required: false)
@@ -195,7 +195,6 @@ struct MigrationSender: Sendable {
         // 2.
         for id in tree {
             await host.sessions.stopAll(projectID: id)
-            await host.runs.stopAll(projectID: id)
         }
         // 3.
         var projectFolderGone = true

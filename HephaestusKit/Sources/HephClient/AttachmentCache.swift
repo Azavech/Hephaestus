@@ -1,7 +1,7 @@
 import Foundation
 
-/// The device's cache of the files downloaded from the Mains: task attachments, files attached to session messages and
-/// large project files (docs/client/workspace.md, "Cache paths"; docs/data/app-storage.md, "Caches").
+/// The device's cache of the files downloaded from the Mains: ticket attachments, files attached to session messages
+/// and large project files (docs/client/workspace.md, "Cache paths"; docs/data/app-storage.md, "Caches").
 public struct AttachmentCache: Sendable {
     public let root: URL
 
@@ -17,11 +17,11 @@ public struct AttachmentCache: Sendable {
             .appending(path: "Attachments", directoryHint: .isDirectory))
     }
 
-    /// `<mainDeviceID>/<projectID>/tasks/<taskID>/<fileName>`
-    public func taskAttachment(mainDeviceID: UUID, projectID: String, taskID: String, fileName: String) -> URL {
+    /// `<mainDeviceID>/<projectID>/tickets/<ticketID>/<fileName>`
+    public func ticketAttachment(mainDeviceID: UUID, projectID: String, ticketID: String, fileName: String) -> URL {
         projectFolder(mainDeviceID: mainDeviceID, projectID: projectID)
-            .appending(path: "tasks", directoryHint: .isDirectory)
-            .appending(component: taskID, directoryHint: .isDirectory)
+            .appending(path: "tickets", directoryHint: .isDirectory)
+            .appending(component: ticketID, directoryHint: .isDirectory)
             .appending(component: fileName, directoryHint: .notDirectory)
     }
 
@@ -41,6 +41,34 @@ public struct AttachmentCache: Sendable {
             url = url.appending(component: String(component), directoryHint: .inferFromPath)
         }
         return url
+    }
+
+    /// Cache paths: moves the folders of earlier versions to their new name. Earlier versions, which called tickets
+    /// tasks, kept ticket attachments in `<mainDeviceID>/<projectID>/tasks/`: each such folder is renamed `tickets`
+    /// when the project's folder has no `tickets`, and else deleted (its files are downloaded again when they are
+    /// opened). Failures are ignored.
+    public func migrateFromTasks() {
+        let fileManager = FileManager.default
+        guard let mains = try? fileManager.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else {
+            return
+        }
+        for main in mains {
+            guard let projects = try? fileManager.contentsOfDirectory(at: main, includingPropertiesForKeys: nil) else {
+                continue
+            }
+            for project in projects {
+                let tasks = project.appending(path: "tasks", directoryHint: .isDirectory)
+                var isDirectory: ObjCBool = false
+                guard fileManager.fileExists(atPath: tasks.path, isDirectory: &isDirectory), isDirectory.boolValue
+                else { continue }
+                let tickets = project.appending(path: "tickets", directoryHint: .isDirectory)
+                if fileManager.fileExists(atPath: tickets.path) {
+                    try? fileManager.removeItem(at: tasks)
+                } else {
+                    try? fileManager.moveItem(at: tasks, to: tickets)
+                }
+            }
+        }
     }
 
     /// `<root>/<mainDeviceID in canonical uppercase form>/<projectID>`

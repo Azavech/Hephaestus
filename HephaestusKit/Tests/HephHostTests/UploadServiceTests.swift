@@ -5,7 +5,7 @@ import XCTest
 @testable import HephHost
 
 /// Uploads and ranged reads (docs/services/files.md §7, docs/protocol/methods.md "Uploads"): a TestHost with a
-/// project HEPH and a task HEPH-1, every request through `host.perform(_:params:context: deviceContext)`.
+/// project HEPH and a ticket HEPH-1, every request through `host.perform(_:params:context: deviceContext)`.
 @MainActor
 final class UploadServiceTests: XCTestCase {
     private static let mebibytes4 = 4_194_304
@@ -18,10 +18,10 @@ final class UploadServiceTests: XCTestCase {
         testHost = try await startTestHost()
         _ = try await testHost.perform(.projectsCreate, ProjectsCreateParams(name: "Hephaestus", identifier: "HEPH"),
                                        as: ProjectSummary.self)
-        let task = try await testHost.perform(.tasksCreate,
-                                              TasksCreateParams(projectID: "HEPH", name: "Sidebar breaks on iPad"),
-                                              as: TaskItem.self)
-        XCTAssertEqual(task.id, "HEPH-1")
+        let ticket = try await testHost.perform(.ticketsCreate,
+                                                TicketsCreateParams(projectID: "HEPH", name: "Sidebar breaks on iPad"),
+                                                as: TicketItem.self)
+        XCTAssertEqual(ticket.id, "HEPH-1")
     }
 
     override func tearDown() async throws {
@@ -70,8 +70,8 @@ final class UploadServiceTests: XCTestCase {
     func testAttachToComment() async throws {
         let bytes = Self.bytes(Self.bigSize)
         let id = try await upload(bytes, fileName: "big.zip")
-        let task = try await addComment(UploadRef(uploadID: id, fileName: "big.zip"))
-        let attachment = try XCTUnwrap(task.comments.last?.attachments.first)
+        let ticket = try await addComment(UploadRef(uploadID: id, fileName: "big.zip"))
+        let attachment = try XCTUnwrap(ticket.comments.last?.attachments.first)
         XCTAssertEqual(attachment.file, "big.zip")
         XCTAssertEqual(attachment.size, Self.bigSize)
         XCTAssertEqual(attachment.type, "application/zip")
@@ -90,8 +90,8 @@ final class UploadServiceTests: XCTestCase {
         await assertProtocolError(.badRequest, "Upload \(id.uuidString) is incomplete.") {
             try await self.addComment(UploadRef(uploadID: id, fileName: "part.bin"))
         }
-        let task = try await testHost.host.tasks.task(projectID: "HEPH", taskID: "HEPH-1")
-        XCTAssertTrue(task.comments.isEmpty)
+        let ticket = try await testHost.host.tickets.ticket(projectID: "HEPH", ticketID: "HEPH-1")
+        XCTAssertTrue(ticket.comments.isEmpty)
     }
 
     func testFailedRequestKeepsUpload() async throws {
@@ -99,10 +99,10 @@ final class UploadServiceTests: XCTestCase {
         let id = try await upload(bytes, fileName: "notes.txt")
         let ref = UploadRef(uploadID: id, fileName: "notes.txt")
         await assertProtocolError(.notFound) {
-            try await self.addComment(ref, taskID: "HEPH-99")
+            try await self.addComment(ref, ticketID: "HEPH-99")
         }
-        let task = try await addComment(ref)
-        XCTAssertEqual(task.comments.last?.attachments.first?.file, "notes.txt")
+        let ticket = try await addComment(ref)
+        XCTAssertEqual(ticket.comments.last?.attachments.first?.file, "notes.txt")
         let root = try await testHost.host.registry.hosted("HEPH").root
         let stored = root.appendingPathComponent(".hephaestus/attachments/HEPH-1/notes.txt", isDirectory: false)
         XCTAssertEqual(try Data(contentsOf: stored), bytes)
@@ -111,15 +111,15 @@ final class UploadServiceTests: XCTestCase {
     func testOtherProject() async throws {
         _ = try await testHost.perform(.projectsCreate, ProjectsCreateParams(name: "Atlas", identifier: "ATLAS"),
                                        as: ProjectSummary.self)
-        _ = try await testHost.perform(.tasksCreate, TasksCreateParams(projectID: "ATLAS", name: "Map"),
-                                       as: TaskItem.self)
+        _ = try await testHost.perform(.ticketsCreate, TicketsCreateParams(projectID: "ATLAS", name: "Map"),
+                                       as: TicketItem.self)
         let id = try await upload(Self.bytes(100), fileName: "map.png")
         await assertProtocolError(.badRequest, "Upload \(id.uuidString) belongs to another project.") {
-            try await self.testHost.perform(.tasksAddComment,
-                                            TasksAddCommentParams(projectID: "ATLAS", taskID: "ATLAS-1", body: "Map",
-                                                                  attachments: [UploadRef(uploadID: id,
-                                                                                          fileName: "map.png")]),
-                                            as: TaskItem.self)
+            try await self.testHost.perform(.ticketsAddComment,
+                                            TicketsAddCommentParams(projectID: "ATLAS", ticketID: "ATLAS-1", body: "Map",
+                                                                    attachments: [UploadRef(uploadID: id,
+                                                                                            fileName: "map.png")]),
+                                            as: TicketItem.self)
         }
     }
 
@@ -257,16 +257,16 @@ final class UploadServiceTests: XCTestCase {
     }
 
     @discardableResult
-    private func addComment(_ ref: UploadRef, taskID: String = "HEPH-1") async throws -> TaskItem {
-        try await testHost.perform(.tasksAddComment,
-                                   TasksAddCommentParams(projectID: "HEPH", taskID: taskID, body: "Attachment",
-                                                         attachments: [ref]),
-                                   as: TaskItem.self)
+    private func addComment(_ ref: UploadRef, ticketID: String = "HEPH-1") async throws -> TicketItem {
+        try await testHost.perform(.ticketsAddComment,
+                                   TicketsAddCommentParams(projectID: "HEPH", ticketID: ticketID, body: "Attachment",
+                                                           attachments: [ref]),
+                                   as: TicketItem.self)
     }
 
     private func readAttachment(offset: Int, length: Int?) async throws -> AttachmentsReadResult {
         try await testHost.perform(.attachmentsRead,
-                                   AttachmentsReadParams(projectID: "HEPH", taskID: "HEPH-1", fileName: "big.zip",
+                                   AttachmentsReadParams(projectID: "HEPH", ticketID: "HEPH-1", fileName: "big.zip",
                                                          offset: offset, length: length),
                                    as: AttachmentsReadResult.self)
     }

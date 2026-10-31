@@ -7,7 +7,7 @@ import XCTest
 final class PreviewDataTests: XCTestCase {
     private let studioID = UUID(uuidString: "00000000-0000-4000-8000-000000000001")!
     private let macBookProID = UUID(uuidString: "00000000-0000-4000-8000-000000000002")!
-    private let taskSessionID = UUID(uuidString: "00000000-0000-4000-8000-000000000302")!
+    private let ticketSessionID = UUID(uuidString: "00000000-0000-4000-8000-000000000302")!
 
     func testPreviewState() throws {
         let workspace = Workspace.preview()
@@ -27,12 +27,11 @@ final class PreviewDataTests: XCTestCase {
 
         let store = workspace.projectStore(mainDeviceID: studioID, projectID: "HEPH")
         XCTAssertEqual(store.phase, .loaded)
-        XCTAssertEqual(store.tasks.map(\.id), ["HEPH-1", "HEPH-2", "HEPH-3", "HEPH-4"])
-        XCTAssertEqual(Set(store.tasks.map(\.status)), Set(TaskStatus.allCases))
+        XCTAssertEqual(store.tickets.map(\.id), ["HEPH-1", "HEPH-2", "HEPH-3", "HEPH-4"])
+        XCTAssertEqual(Set(store.tickets.map(\.status)), Set(TicketStatus.allCases))
         XCTAssertEqual(store.sessions.count, 2)
-        let taskSession = try XCTUnwrap(store.session(taskSessionID))
-        XCTAssertEqual(taskSession.pendingPermissions.map(\.requestID), ["perm-1"])
-        XCTAssertEqual(store.runs.count, 2)
+        let ticketSession = try XCTUnwrap(store.session(ticketSessionID))
+        XCTAssertEqual(ticketSession.pendingPermissions.map(\.requestID), ["perm-1"])
         XCTAssertEqual(workspace.projectStore(mainDeviceID: studioID, projectID: "API").phase, .loaded)
         XCTAssertEqual(workspace.forge.forgeHostID, studioID)
     }
@@ -41,7 +40,7 @@ final class PreviewDataTests: XCTestCase {
         let workspace = Workspace.preview()
         let connection = try XCTUnwrap(workspace.connection(studioID))
 
-        let history = try await connection.sessionHistory(projectID: "HEPH", sessionID: taskSessionID)
+        let history = try await connection.sessionHistory(projectID: "HEPH", sessionID: ticketSessionID)
         XCTAssertEqual(history.events.count, 5)
         XCTAssertEqual(history.firstIndex, 0)
         XCTAssertEqual(history.total, 5)
@@ -61,8 +60,8 @@ final class PreviewDataTests: XCTestCase {
         let workspace = Workspace.preview()
         let connection = try XCTUnwrap(workspace.connection(studioID))
         do {
-            _ = try await connection.createTask(projectID: "HEPH", name: "New task")
-            XCTFail("createTask succeeded in a preview")
+            _ = try await connection.createTicket(projectID: "HEPH", name: "New ticket")
+            XCTFail("createTicket succeeded in a preview")
         } catch let error as ProtocolError {
             XCTAssertEqual(error.code, .unavailable)
         }

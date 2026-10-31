@@ -6,28 +6,34 @@ import HephCore
 enum MCPToolKinds {
     static func kinds(for toolName: String) -> Set<SessionKind> {
         switch toolName {
-        // 6.1–6.6, 6.8, 6.10, 6.13, 6.16–6.22
+        // 6.1–6.6, 6.8, 6.10, 6.13–6.18
         case "list_devices", "list_projects", "get_project",
-             "create_project", "update_project", "list_tasks",
-             "create_task", "delete_task", "list_runs",
-             "get_run_output", "list_web_tabs", "open_web_tab",
-             "search", "list_skills", "get_skill", "save_skill":
-            return [.project, .task, .bundle]
-        // 6.7, 6.9, 6.11, in a feedback session for its own task only
-        case "get_task", "update_task", "comment_task":
-            return [.project, .task, .bundle, .feedback]
-        // 6.12, 6.14, 6.15
-        case "start_task_session", "start_run", "stop_run":
-            return [.project, .task]
-        // 6.23
+             "create_project", "update_project", "list_tickets",
+             "create_ticket", "delete_ticket", "list_web_tabs",
+             "open_web_tab", "search", "list_skills",
+             "get_skill", "save_skill":
+            return [.project, .ticket, .bundle]
+        // 6.7, 6.9, 6.11, in a feedback session for its own ticket only
+        case "get_ticket", "update_ticket", "comment_ticket":
+            return [.project, .ticket, .bundle, .feedback]
+        // 6.12
+        case "start_ticket_session":
+            return [.project, .ticket]
+        // 6.19
         case "forge_push_docs":
-            return [.feedback, .bundle]
-        // 6.24
+            return [.ticket, .bundle]
+        // 6.20
         case "forge_push_regen":
             return [.regeneration]
-        // 6.25–6.28
-        case "get_bundle", "start_bundle_task", "update_bundle", "finish_bundle":
+        // 6.21–6.24
+        case "get_bundle", "start_bundle_ticket", "update_bundle", "finish_bundle":
             return [.bundle]
+        // 6.25
+        case "rename_session":
+            return [.project, .ticket, .bundle, .feedback, .regeneration]
+        // 6.26
+        case "close_session":
+            return [.project, .ticket, .bundle, .feedback]
         default:
             return []
         }

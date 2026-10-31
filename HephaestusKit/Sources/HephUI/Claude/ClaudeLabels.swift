@@ -29,7 +29,7 @@ public enum ClaudeLabels {
     public static func title(_ kind: SessionKind) -> String {
         switch kind {
         case .project: return "Chat"
-        case .task: return "Task"
+        case .ticket: return "Ticket"
         case .feedback: return "Feedback"
         case .regeneration: return "Regeneration"
         case .bundle: return "Bundle"
@@ -53,7 +53,7 @@ public enum ClaudeLabels {
 
 /// The indicator of a session status: green dot, small progress view, orange hand, gray dot or red octagon; the dots
 /// are circles 8 pt wide and the accessibility label is the title (docs/ui/sessions.md, "Labels"). The session list and
-/// the session tabs of a task use it.
+/// the session tabs of a ticket use it.
 struct SessionStatusIndicator: View {
     let status: SessionStatus
 

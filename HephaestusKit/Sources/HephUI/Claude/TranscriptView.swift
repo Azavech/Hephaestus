@@ -3,12 +3,14 @@ import HephCore
 import SwiftUI
 
 /// The transcript of a session: `model.items` in a lazy stack that opens at the bottom, follows new items while at
-/// the bottom, and loads the earlier pages as the user scrolls up (docs/ui/sessions.md, "Transcript").
-struct TranscriptView: View {
+/// the bottom, and loads the earlier pages as the user scrolls up (docs/ui/sessions.md, "Transcript"). `header` is
+/// pinned in the top safe area inset of the transcript and of its states without items (macOS: the session header).
+struct TranscriptView<Header: View>: View {
     let model: SessionModel
     let store: ProjectStore
     /// The id of an item to scroll to (the status line's Review); set back to nil once done.
     @Binding var scrollRequest: String?
+    @ViewBuilder let header: () -> Header
 
     @Environment(Workspace.self) private var workspace
     @Environment(WindowBanners.self) private var banners
@@ -24,9 +26,9 @@ struct TranscriptView: View {
     @State private var topItemID: String?
 
     /// How close to the bottom edge counts as "at the bottom".
-    private static let bottomTolerance: CGFloat = 40
+    private static var bottomTolerance: CGFloat { 40 }
     /// The id of the spinner row shown while an earlier page loads.
-    private static let spinnerID = "transcript:loading-earlier"
+    private static var spinnerID: String { "transcript:loading-earlier" }
 
     var body: some View {
         Group {
@@ -45,6 +47,9 @@ struct TranscriptView: View {
             default:
                 transcript
             }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            header()
         }
         .onChange(of: revealRequestID, initial: true) {
             revealIfNeeded()

@@ -10,7 +10,7 @@ import AppKit
 public struct HephaestusCommands: Commands {
     private let appModel: AppModel
     @FocusedValue(\.windowContext) private var windowContext
-    @FocusedValue(\.newTaskAction) private var newTaskAction
+    @FocusedValue(\.newTicketAction) private var newTicketAction
     @FocusedValue(\.newWebTabAction) private var newWebTabAction
     @FocusedValue(\.saveDocumentAction) private var saveDocumentAction
     @FocusedValue(\.closeTabAction) private var closeTabAction
@@ -35,11 +35,11 @@ public struct HephaestusCommands: Commands {
             }
             .keyboardShortcut("n", modifiers: [.option, .command])
             #endif
-            Button("New Task") {
-                newTaskAction?()
+            Button("New Ticket") {
+                newTicketAction?()
             }
             .keyboardShortcut("n", modifiers: .command)
-            .disabled(newTaskAction == nil)
+            .disabled(newTicketAction == nil)
             Button("New Web Tab") {
                 newWebTabAction?()
             }

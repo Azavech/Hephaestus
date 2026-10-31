@@ -553,7 +553,7 @@ public struct UserMessageItem: Equatable, Sendable {
     public let at: Date
     public let text: String
     /// Files of .hephaestus/sessions/<session id>/.
-    public let attachments: [TaskAttachment]
+    public let attachments: [TicketAttachment]
     public let deviceID: UUID?
 }
 

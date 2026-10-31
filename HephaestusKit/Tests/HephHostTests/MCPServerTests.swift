@@ -185,16 +185,19 @@ final class MCPServerTests: XCTestCase {
 
     func testToolsList() async throws {
         let dispatcher = MCPDispatcher(tools: MCPToolHandler(host: TestMCPHost()))
-        let projectTools = ["list_devices", "list_projects", "get_project", "create_project", "update_project",
-                            "list_tasks", "get_task", "create_task", "update_task", "delete_task", "comment_task",
-                            "start_task_session", "list_runs", "start_run", "stop_run", "get_run_output",
-                            "list_web_tabs", "open_web_tab", "search", "list_skills", "get_skill", "save_skill"]
-        let bundleTools = projectTools.filter { !["start_task_session", "start_run", "stop_run"].contains($0) }
-            + ["forge_push_docs", "get_bundle", "start_bundle_task", "update_bundle", "finish_bundle"]
-        let feedbackTools = ["get_task", "update_task", "comment_task", "forge_push_docs"]
+        let catalogTools = ["list_devices", "list_projects", "get_project", "create_project", "update_project",
+                            "list_tickets", "get_ticket", "create_ticket", "update_ticket", "delete_ticket", "comment_ticket",
+                            "start_ticket_session", "list_web_tabs", "open_web_tab", "search", "list_skills", "get_skill",
+                            "save_skill"]
+        let projectTools = catalogTools + ["rename_session", "close_session"]
+        let ticketTools = catalogTools + ["forge_push_docs", "rename_session", "close_session"]
+        let bundleTools = catalogTools.filter { $0 != "start_ticket_session" }
+            + ["forge_push_docs", "get_bundle", "start_bundle_ticket", "update_bundle", "finish_bundle",
+               "rename_session", "close_session"]
+        let feedbackTools = ["get_ticket", "update_ticket", "comment_ticket", "rename_session", "close_session"]
         let list = #"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#
-        for (kind, expected) in [(SessionKind.project, projectTools), (.task, projectTools), (.bundle, bundleTools),
-                                 (.feedback, feedbackTools), (.regeneration, ["forge_push_regen"])] {
+        for (kind, expected) in [(SessionKind.project, projectTools), (.ticket, ticketTools), (.bundle, bundleTools),
+                                 (.feedback, feedbackTools), (.regeneration, ["forge_push_regen", "rename_session"])] {
             let response = await dispatcher.handle(body: Data(list.utf8), context: context(kind))
             XCTAssertEqual(response.status, 200)
             let tools = try XCTUnwrap((try object(response.body)["result"] as? NSDictionary)?["tools"] as? [NSDictionary])
@@ -205,37 +208,76 @@ final class MCPServerTests: XCTestCase {
             }
         }
 
-        // start_run with the token of a feedback session: not one of its tools.
+        // start_ticket_session with the token of a feedback session: not one of its tools.
         let server = MCPServer(host: TestMCPHost())
         let port = try await server.start()
         addTeardownBlock { await server.stop() }
-        let feedback = await server.register(context(.feedback, taskID: "HEPH-7"))
-        let call = #"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"start_run","arguments":{"project":"HEPH","name":"Build"}}}"#
+        let feedback = await server.register(context(.feedback, ticketID: "HEPH-7"))
+        let call = #"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"start_ticket_session","arguments":{"ticket":"HEPH-7"}}}"#
         let refused = try await exchange(port, postRequest(call, token: feedback))
         XCTAssertEqual(refused.status, 200)
         let error = try XCTUnwrap(try object(refused.body)["error"] as? NSDictionary)
         XCTAssertEqual(error["code"] as? Int, -32_602)
-        XCTAssertEqual(error["message"] as? String, "Unknown tool: start_run")
+        XCTAssertEqual(error["message"] as? String, "Unknown tool: start_ticket_session")
 
-        // get_task, update_task and comment_task of another task in a feedback session: a tool error.
+        // get_ticket, update_ticket and comment_ticket of another ticket in a feedback session: a tool error.
         let calls = [
-            (#"{"name":"get_task","arguments":{"task":"heph-8"}}"#,
-             "Forge sessions can only read their own feedback task."),
-            (#"{"name":"update_task","arguments":{"task":"heph-8","name":"Sidebar"}}"#,
-             "Forge sessions can only change their own feedback task."),
-            (#"{"name":"comment_task","arguments":{"task":"heph-8","body":"Done."}}"#,
-             "Forge sessions can only change their own feedback task."),
+            (#"{"name":"get_ticket","arguments":{"ticket":"heph-8"}}"#,
+             "Forge sessions can only read their own feedback ticket."),
+            (#"{"name":"update_ticket","arguments":{"ticket":"heph-8","name":"Sidebar"}}"#,
+             "Forge sessions can only change their own feedback ticket."),
+            (#"{"name":"comment_ticket","arguments":{"ticket":"heph-8","body":"Done."}}"#,
+             "Forge sessions can only change their own feedback ticket."),
         ]
         for (index, (params, expected)) in calls.enumerated() {
             let other = #"{"jsonrpc":"2.0","id":\#(5 + index),"method":"tools/call","params":\#(params)}"#
-            let response = try await exchange(port, postRequest(other, token: feedback))
-            XCTAssertEqual(response.status, 200)
-            let result = try XCTUnwrap(try object(response.body)["result"] as? NSDictionary)
-            XCTAssertEqual(result["isError"] as? Bool, true, params)
-            let content = try XCTUnwrap(result["content"] as? [NSDictionary])
-            XCTAssertEqual(content.first?["type"] as? String, "text")
-            XCTAssertEqual(content.first?["text"] as? String, expected, params)
+            let result = try await toolResult(port, other, token: feedback)
+            XCTAssertEqual(result.isError, true, params)
+            XCTAssertEqual(result.text, expected, params)
         }
+    }
+
+    func testRenameSession() async throws {
+        let host = RecordingMCPHost()
+        let server = MCPServer(host: host)
+        let port = try await server.start()
+        addTeardownBlock { await server.stop() }
+
+        let project = context(.project)
+        let projectToken = await server.register(project)
+        let rename = #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"rename_session","arguments":{"title":"  Release notes \n"}}}"#
+        let renamed = try await toolResult(port, rename, token: projectToken)
+        XCTAssertEqual(renamed.isError, false, renamed.text ?? "")
+        var calls = await host.calls
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertEqual(calls.first?.method, "sessions.update")
+        XCTAssertEqual(calls.first?.deviceID, host.mainID)
+        let params = try object(try XCTUnwrap(calls.first?.params))
+        XCTAssertEqual(params["projectID"] as? String, "HEPH")
+        XCTAssertEqual(UUID(uuidString: params["sessionID"] as? String ?? ""), project.sessionID)
+        XCTAssertEqual(params["patch"] as? NSDictionary, ["title": "Release notes"] as NSDictionary)
+
+        for (index, title) in [#"a\nb"#, " "].enumerated() {
+            let body = #"{"jsonrpc":"2.0","id":\#(2 + index),"method":"tools/call","params":{"name":"rename_session","arguments":{"title":"\#(title)"}}}"#
+            let refused = try await toolResult(port, body, token: projectToken)
+            XCTAssertEqual(refused.isError, true, title)
+            XCTAssertEqual(refused.text, "The title must not be empty and must be on one line.", title)
+        }
+        calls = await host.calls
+        XCTAssertEqual(calls.count, 1)
+
+        let feedback = context(.feedback, ticketID: "HEPH-F1")
+        let feedbackToken = await server.register(feedback)
+        let fromFeedback = try await toolResult(port, rename, token: feedbackToken)
+        XCTAssertEqual(fromFeedback.isError, false, fromFeedback.text ?? "")
+        calls = await host.calls
+        XCTAssertEqual(calls.count, 2)
+        XCTAssertEqual(calls.last?.method, "sessions.update")
+        XCTAssertEqual(calls.last?.deviceID, host.mainID)
+        let feedbackParams = try object(try XCTUnwrap(calls.last?.params))
+        XCTAssertEqual(feedbackParams["projectID"] as? String, "HEPH")
+        XCTAssertEqual(UUID(uuidString: feedbackParams["sessionID"] as? String ?? ""), feedback.sessionID)
+        XCTAssertEqual(feedbackParams["patch"] as? NSDictionary, ["title": "Release notes"] as NSDictionary)
     }
 
     func testJSONRPCErrors() async throws {
@@ -248,7 +290,7 @@ final class MCPServerTests: XCTestCase {
             (#"{"jsonrpc":"2.0","id":1}"#, 400, -32_600),
             (#"{"jsonrpc":"2.0","id":1,"method":"resources/list"}"#, 200, -32_601),
             (#"{"jsonrpc":"2.0","id":1,"method":"ping","params":[1]}"#, 200, -32_602),
-            (#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_tasks","arguments":[]}}"#, 200,
+            (#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_tickets","arguments":[]}}"#, 200,
              -32_602),
         ]
         for testCase in cases {
@@ -266,9 +308,9 @@ final class MCPServerTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func context(_ kind: SessionKind, taskID: String? = nil) -> MCPSessionContext {
+    private func context(_ kind: SessionKind, ticketID: String? = nil) -> MCPSessionContext {
         MCPSessionContext(sessionID: UUID(), projectID: "HEPH", kind: kind,
-                          taskID: taskID ?? (kind == .task ? "HEPH-1" : nil),
+                          ticketID: ticketID ?? (kind == .ticket ? "HEPH-1" : nil),
                           bundleID: kind == .bundle ? "HEPH-B1" : nil)
     }
 
@@ -283,6 +325,16 @@ final class MCPServerTests: XCTestCase {
             head += "Authorization: Bearer \(token)\r\n"
         }
         return head + "Content-Length: \(body.utf8.count)\r\n\r\n" + body
+    }
+
+    /// Sends a `tools/call` and returns the `isError` and the first text of its result.
+    private func toolResult(_ port: UInt16, _ body: String, token: String) async throws -> (isError: Bool?, text: String?) {
+        let response = try await exchange(port, postRequest(body, token: token))
+        XCTAssertEqual(response.status, 200)
+        let result = try XCTUnwrap(try object(response.body)["result"] as? NSDictionary)
+        let content = try XCTUnwrap(result["content"] as? [NSDictionary])
+        XCTAssertEqual(content.first?["type"] as? String, "text")
+        return (result["isError"] as? Bool, content.first?["text"] as? String)
     }
 
     private func object(_ data: Data) throws -> NSDictionary {
@@ -388,6 +440,63 @@ private struct TestMCPHost: MCPHost {
 
     func forgePushRegen(sessionID: UUID) async throws -> String {
         throw ProtocolError(.conflict, "Nothing to push: commit your change first.")
+    }
+
+    func closeSession(projectID: String, sessionID: UUID) async throws {
+        throw ProtocolError(.notFound, "Session \(sessionID.uuidString.lowercased()) does not exist.")
+    }
+
+    func bundleTool(_ name: String, projectID: String, bundleID: String, arguments: Data) async throws -> String {
+        throw ProtocolError(.notFound, "Bundle \(bundleID) does not exist.")
+    }
+}
+
+/// An MCPHost that records its `perform` calls and answers `sessions.update` with a `SessionInfo`.
+private actor RecordingMCPHost: MCPHost {
+    struct Call {
+        var method: String
+        var params: Data
+        var deviceID: UUID
+    }
+
+    nonisolated let mainID = UUID()
+    private(set) var calls: [Call] = []
+
+    func localMain() async -> MCPMain {
+        MCPMain(id: mainID, name: "Studio", online: true)
+    }
+
+    func otherMains() async -> [MCPMain] {
+        []
+    }
+
+    func perform(_ method: String, params: Data, on deviceID: UUID) async throws -> Data {
+        calls.append(Call(method: method, params: params, deviceID: deviceID))
+        guard method == "sessions.update" else {
+            throw ProtocolError(.unavailable, "No method is served in this test.")
+        }
+        let update = try WireCoding.makeDecoder().decode(SessionsUpdateParams.self, from: params)
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let session = SessionInfo(id: update.sessionID, kind: .project, title: update.patch.title ?? "Chat 1",
+                                  created: date, updated: date, permissionMode: .manual, allowsAllTools: false,
+                                  status: .idle, pendingPermissions: [])
+        return try WireCoding.makeEncoder().encode(session)
+    }
+
+    func localProjectRoot(_ projectID: String) async -> URL? {
+        nil
+    }
+
+    func forgePushDocs(sessionID: UUID) async throws -> String {
+        throw ProtocolError(.conflict, "Nothing to push: commit your change first.")
+    }
+
+    func forgePushRegen(sessionID: UUID) async throws -> String {
+        throw ProtocolError(.conflict, "Nothing to push: commit your change first.")
+    }
+
+    func closeSession(projectID: String, sessionID: UUID) async throws {
+        throw ProtocolError(.unavailable, "No session is closed in this test.")
     }
 
     func bundleTool(_ name: String, projectID: String, bundleID: String, arguments: Data) async throws -> String {

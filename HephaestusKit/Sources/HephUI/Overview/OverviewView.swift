@@ -3,7 +3,7 @@ import HephCore
 import SwiftUI
 
 /// The Overview section of the project held by `store` (docs/ui/overview.md): the project's fields, its location, its
-/// task counts, its sub projects, its skills and Claude defaults, and Move to… and Remove Project….
+/// ticket counts, its sub projects, its skills and Claude defaults, and Move to… and Remove Project….
 ///
 /// While the project's Main is not connected or the project is migrating, every control that sends a request is
 /// disabled; while `project.parseError` is set, so are the Name, Description, Skills and Claude controls, New Sub
@@ -50,7 +50,7 @@ public struct OverviewView: View {
         return Form {
             projectSection(project, canEdit: canEdit)
             locationSection(project)
-            tasksSection
+            ticketsSection
             SubProjectsSection(store: store, project: project, isNewSubProjectDisabled: !canEdit)
             OverviewSkillsSection(store: store, project: project, library: skillsLibrary, isDisabled: !canEdit)
             OverviewClaudeSection(store: store, project: project, isDisabled: !canEdit)
@@ -228,18 +228,18 @@ public struct OverviewView: View {
         }
     }
 
-    // MARK: - 3. Tasks
+    // MARK: - 3. Tickets
 
-    /// One cell per status, then Broken when the project has broken tasks (counted apart from the statuses).
-    private var tasksSection: some View {
-        let tasks = store.tasks
-        let brokenCount = tasks.filter { $0.parseError != nil }.count
-        return Section("Tasks") {
-            ForEach(TaskStatus.allCases, id: \.self) { status in
+    /// One cell per status, then Broken when the project has broken tickets (counted apart from the statuses).
+    private var ticketsSection: some View {
+        let tickets = store.tickets
+        let brokenCount = tickets.filter { $0.parseError != nil }.count
+        return Section("Tickets") {
+            ForEach(TicketStatus.allCases, id: \.self) { status in
                 LabeledContent {
-                    Text("\(tasks.filter { $0.parseError == nil && $0.status == status }.count)")
+                    Text("\(tickets.filter { $0.parseError == nil && $0.status == status }.count)")
                 } label: {
-                    TaskStatusBadge(status: status)
+                    TicketStatusBadge(status: status)
                 }
             }
             if brokenCount > 0 {
@@ -275,7 +275,7 @@ public struct OverviewView: View {
     private func removeMessage(_ project: Project) -> String {
         let mainName = OverviewScreen.mainName(store.mainDeviceID, workspace: workspace)
         var message = "The project is removed from Hephaestus. Its folder \(project.rootPath) stays on \(mainName), "
-            + "with its tasks and sessions, unless you move it to the Trash."
+            + "with its tickets and sessions, unless you move it to the Trash."
         let children = workspace.summary(of: store.projectID, on: store.mainDeviceID)?.children ?? []
         if !children.isEmpty {
             message += " Its sub projects are removed with it."

@@ -117,8 +117,8 @@ actor ProjectRegistry {
     /// The wire Project (§6.1).
     func project(_ projectID: String) async throws -> Project {
         _ = try hosted(projectID)
-        let highest = await host.tasks.highestNumber(projectID: projectID)
-        return wireProject(try hosted(projectID), highestTaskNumber: highest)
+        let highest = await highestNumbers(projectID)
+        return wireProject(try hosted(projectID), highest: highest)
     }
 
     /// Every registered project whose realRoot contains `absolutePath`, deepest first, with the relative path.
@@ -165,9 +165,9 @@ actor ProjectRegistry {
     /// project.yml was read or written (§6.6).
     func reloaded(_ projectID: String, file: ProjectFile, modified: Date) async {
         guard projects[projectID] != nil else { return }
-        let highest = await host.tasks.highestNumber(projectID: projectID)
+        let highest = await highestNumbers(projectID)
         guard var project = projects[projectID] else { return }
-        let previous = wireProject(project, highestTaskNumber: highest)
+        let previous = wireProject(project, highest: highest)
         let previousSummary = SummaryFields(project)
         let previousEntries = Self.normalizedEntries(project.file.subprojects)
 
@@ -176,7 +176,7 @@ actor ProjectRegistry {
         project.parseError = nil
         projects[projectID] = project
 
-        let current = wireProject(project, highestTaskNumber: highest)
+        let current = wireProject(project, highest: highest)
         if current != previous {
             await host.emit(.projectChanged(ProjectChangedPayload(project: current)))
         }
@@ -337,6 +337,7 @@ actor ProjectRegistry {
     /// §6.4; `announce` false (load and sub projects): no event, no projects.json write, no watch.
     private func register(root rawRoot: URL, parentID: String?, announce: Bool) async throws -> HostedProject {
         let root = rawRoot.standardizedFileURL
+        TicketFile.migrateFromTasks(projectRoot: root)
         let file = try ProjectFile.load(projectRoot: root)
         let realRoot = URL(fileURLWithPath: ClaudePathEncoding.canonicalPath(root.path) ?? root.path, isDirectory: true)
         if projects.values.contains(where: { $0.realRoot.path == realRoot.path }) {
@@ -354,7 +355,7 @@ actor ProjectRegistry {
         projects[file.id] = project
         queues[file.id] = ProjectWriteQueue()
         Log.host.info("Registered the project \(file.id, privacy: .public)")
-        await host.tasks.load(projectID: file.id)
+        await host.tickets.load(projectID: file.id)
         await host.bundles.load(projectID: file.id)
         for entry in Self.normalizedEntries(file.subprojects) {
             await registerSubproject(entry: entry, parentID: file.id)
@@ -402,7 +403,7 @@ actor ProjectRegistry {
         Log.host.info("Unregistered the project \(projectID, privacy: .public)")
         // The worktrees are removed while BundleService still knows the code folder of each project.
         for id in removed {
-            await host.tasks.unload(projectID: id)
+            await host.tickets.unload(projectID: id)
             if forget {
                 await host.bundles.removeWorktrees(projectID: id)
             }
@@ -455,7 +456,14 @@ actor ProjectRegistry {
                        pendingPermissionCount: project.pendingPermissions.values.reduce(0, +))
     }
 
-    private func wireProject(_ project: HostedProject, highestTaskNumber: Int) -> Project {
+    /// The largest cached ticket and feedback ticket numbers of a project (§6.1).
+    private func highestNumbers(_ projectID: String) async -> (ticket: Int, feedback: Int) {
+        let tickets = host.tickets
+        return (await tickets.highestNumber(projectID: projectID, feedback: false),
+                await tickets.highestNumber(projectID: projectID, feedback: true))
+    }
+
+    private func wireProject(_ project: HostedProject, highest: (ticket: Int, feedback: Int)) -> Project {
         let file = project.file
         return Project(id: project.id,
                        name: file.name,
@@ -463,10 +471,10 @@ actor ProjectRegistry {
                        created: file.created,
                        code: file.code,
                        docs: file.docs,
-                       taskCounter: max(file.taskCounter, highestTaskNumber),
+                       ticketCounter: max(file.ticketCounter, highest.ticket),
+                       feedbackCounter: max(file.feedbackCounter, highest.feedback),
                        subprojects: file.subprojects,
                        webTabs: file.webTabValues,
-                       runs: file.runConfigs,
                        skills: file.skills,
                        claude: file.claudeDefaults,
                        deviceID: deviceID ?? Self.unknownDevice,
