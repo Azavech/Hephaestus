@@ -34,25 +34,25 @@ Details: [devices/roles.md](devices/roles.md), [devices/mesh.md](devices/mesh.md
 
 A project is a folder on a Main with a `.hephaestus/project.yml` file ([data/project-yml.md](data/project-yml.md)).
 
-| Part         | Content                                                                                    | Docs                                                             |
-|--------------|--------------------------------------------------------------------------------------------|------------------------------------------------------------------|
-| Identity     | Identifier of 2–8 letters set at creation (`HEPH`), name, description                      | [data/project-yml.md](data/project-yml.md)                       |
-| Sub projects | Normal projects inside the project folder; nesting can continue                            | [ui/overview.md](ui/overview.md)                                 |
-| Tasks        | Id `HEPH-12`, name, description, created date, status, comments with files, Claude section | [ui/tasks.md](ui/tasks.md), [data/task-yml.md](data/task-yml.md) |
-| Code         | File browser and code editor, with Swift and Go highlighting                               | [ui/code.md](ui/code.md), [ui/editor.md](ui/editor.md)           |
-| Docs         | Markdown files of the docs folder (default `docs/` in the code folder), viewed and edited  | [ui/docs.md](ui/docs.md)                                         |
-| Web tabs     | Integrated browser tabs shared by all devices; locked tabs cannot be closed                | [ui/web.md](ui/web.md)                                           |
-| Claude       | Project chat sessions; task sessions; Claude acts on Hephaestus through its tools          | [ui/sessions.md](ui/sessions.md), [claude/cli.md](claude/cli.md) |
-| Skills       | Which skills of the library the project's sessions get                                     | [claude/skills.md](claude/skills.md)                             |
+| Part         | Content                                                                                    | Docs                                                                     |
+|--------------|--------------------------------------------------------------------------------------------|--------------------------------------------------------------------------|
+| Identity     | Identifier of 2–8 letters set at creation (`HEPH`), name, description                      | [data/project-yml.md](data/project-yml.md)                               |
+| Sub projects | Normal projects inside the project folder; nesting can continue                            | [ui/overview.md](ui/overview.md)                                         |
+| Tickets      | Id `HEPH-12`, name, description, created date, status, comments with files, Claude section | [ui/tickets.md](ui/tickets.md), [data/ticket-yml.md](data/ticket-yml.md) |
+| Code         | File browser and code editor, with Swift and Go highlighting                               | [ui/code.md](ui/code.md), [ui/editor.md](ui/editor.md)                   |
+| Docs         | Markdown files of the docs folder (default `docs/` in the code folder), viewed and edited  | [ui/docs.md](ui/docs.md)                                                 |
+| Web tabs     | Integrated browser tabs shared by all devices; locked tabs cannot be closed                | [ui/web.md](ui/web.md)                                                   |
+| Claude       | Project chat sessions; ticket sessions; Claude acts on Hephaestus through its tools        | [ui/sessions.md](ui/sessions.md), [claude/cli.md](claude/cli.md)         |
+| Skills       | Which skills of the library the project's sessions get                                     | [claude/skills.md](claude/skills.md)                                     |
 
 Workspace features, not tied to a project: Devices, Skills (the skills library), Forge, Search, Feedback.
 
 ## User interface
 
 - A path bar at the top selects `{Main} ▸ {project} ▸ {sub project}`, like Xcode's; every segment is a menu.
-- A sidebar lists the project sections Overview, Tasks, Code, Docs, Web, Claude, and the workspace sections
+- A sidebar lists the project sections Overview, Tickets, Code, Docs, Web, Claude, and the workspace sections
   Devices, Skills, Forge.
-- Search (⌘K) covers projects, tasks, comments, docs, code, skills, web tabs, sessions and devices.
+- Search (⌘K) covers projects, tickets, comments, docs, code, skills, web tabs, sessions and devices.
 - Feedback (⌘⇧F, toolbar, Help menu, shake on iOS/iPadOS) can be started anywhere.
 
 | Device | Layout                                                                                                                                                                          |
@@ -89,13 +89,13 @@ and pushed, GitHub CI rebuilds the app, and every Mac updates and restarts itsel
 | project            | A folder on a Main with `.hephaestus/project.yml`                                                   |
 | project identifier | 2–8 uppercase letters set at creation, unique in the mesh, never changed (`HEPH`); the project's id |
 | sub project        | A normal project inside another project's folder                                                    |
-| task               | A unit of work of a project (the user also says ticket)                                             |
-| task id            | `<project identifier>-<number>` (`HEPH-12`); numbers are never reused                               |
-| comment            | A Markdown message on a task, with optional attached files                                          |
+| ticket             | A unit of work of a project; formerly called task, a name its data on disk keeps                    |
+| ticket id          | `<project identifier>-<number>` (`HEPH-12`); numbers are never reused                               |
+| comment            | A Markdown message on a ticket, with optional attached files                                        |
 | code folder        | The project's code root, relative to the project root (default: the project root)                   |
 | docs folder        | The project's documentation folder, relative to the code folder (default `docs`)                    |
 | web tab            | A browser tab stored in the project, shown on every device; a locked tab cannot be closed           |
-| session            | A Claude CLI conversation run on a Main: project chat, task session, feedback or regeneration       |
+| session            | A Claude CLI conversation run on a Main: project chat, ticket session, feedback or regeneration     |
 | permission mode    | How a session asks before acting: `manual`, `acceptEdits`, `auto`, `plan`, `bypassPermissions`      |
 | skill              | A Claude skill (folder with `SKILL.md`) of a Main's skills library, separate from `~/.claude`       |
 | Move to…           | Moving a project from one Main to another (migration)                                               |

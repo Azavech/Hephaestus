@@ -13,8 +13,8 @@ How a Main serves the `files.*` methods of [../protocol/methods.md](../protocol/
 projects, the `uploads.*` methods and the upload store (§7), and the helpers other areas share: path safety, revisions
 and the ignore rules. The file browser and editor that call these methods are in [../ui/code.md](../ui/code.md) and
 [../ui/docs.md](../ui/docs.md); the host that routes the requests is in [host.md](host.md). Atomic writes are
-`AtomicFile.write` of [../data/app-storage.md](../data/app-storage.md). Task attachments (naming, collisions, MIME
-types, storage) are defined in [../data/task-yml.md](../data/task-yml.md#attachments) and served by `TaskService`
+`AtomicFile.write` of [../data/app-storage.md](../data/app-storage.md). Ticket attachments (naming, collisions, MIME
+types, storage) are defined in [../data/ticket-yml.md](../data/ticket-yml.md#attachments) and served by `TicketService`
 ([host.md](host.md) §8).
 
 ## 1. FileService
@@ -37,13 +37,13 @@ actor FileService: HostMethodHandler {
 - `write`, `create`, `rename` and `delete` run inside `registry.write(<owner>)` ([host.md](host.md) §6.8). The owner is
   the first project of `registry.containing(<resolved absolute path>)`: the deepest registered project that contains
   the path (for `rename`, the owner of `from`). A sub project's files are thus serialized with that sub project's other
-  writers (tasks, tabs, project.yml), and the request is refused with `locked` while the owner or one of its ancestors
+  writers (tickets, tabs, project.yml), and the request is refused with `locked` while the owner or one of its ancestors
   migrates (`checkWritable`). `list` and `read` are not serialized and are served while the project migrates.
 - `FileService` emits no event: the file watcher reports every change with `files.changed`, plus `project.changed`,
-  `task.changed` or `task.removed` when the file is a project or task file ([host.md](host.md) §11). The caller receives
-  the `files.changed` of its own writes too.
+  `ticket.changed` or `ticket.removed` when the file is a project or ticket file ([host.md](host.md) §11). The caller
+  receives the `files.changed` of its own writes too.
 - Every path inside the project root can be read and written, `.hephaestus/` included (a hand edit of project.yml or a
-  task file is picked up by the watcher). Clients read task and session attachments with `attachments.read` and
+  ticket file is picked up by the watcher). Clients read ticket and session attachments with `attachments.read` and
   `sessions.readAttachment` ([../data/sessions.md](../data/sessions.md#attachments)).
 - Protected paths: `.hephaestus` and `.hephaestus/project.yml` (of the request's project) cannot be renamed or deleted
   (§5.5, §5.6). They are protected for `files.rename` and `files.delete` only.
@@ -290,15 +290,15 @@ id nothing changes. The result is `{}`.
 `claim(_:projectID:)` applies the checks of [../protocol/methods.md](../protocol/methods.md#using-uploads) to the refs,
 in order, and throws the first failure without reserving anything. When every check passes, each upload gets `inUse`
 true and the result lists them in the order of the refs, each with its ref's `fileName`. `check(_:projectID:)` runs the
-same checks and reserves nothing: the Forge calls it before it creates the feedback task
+same checks and reserves nothing: the Forge calls it before it creates the feedback ticket
 ([../forge/pipeline.md](../forge/pipeline.md#feedback-intake)).
 
-A request that attaches uploads (`TaskService` for `tasks.addComment` and the Forge's screenshot comment,
+A request that attaches uploads (`TicketService` for `tickets.addComment` and the Forge's screenshot comment,
 [host.md](host.md) §8; `SessionService` for `sessions.start` and `sessions.send`, [../claude/cli.md](../claude/cli.md)):
 
 1. runs its own checks, then `claim`, the last check before it changes anything;
-2. moves each claimed file into place, in order: `TaskFile.storeAttachment(fileAt:originalName:projectRoot:id:)`
-   ([../data/task-yml.md](../data/task-yml.md#storing-a-file)) or
+2. moves each claimed file into place, in order: `TicketFile.storeAttachment(fileAt:originalName:projectRoot:id:)`
+   ([../data/ticket-yml.md](../data/ticket-yml.md#storing-a-file)) or
    `SessionArchive.saveAttachment(fileAt:originalName:to:)` ([../data/sessions.md](../data/sessions.md#attachments)),
    with the claimed `fileName` as the original name;
 3. on success, calls `finish`;

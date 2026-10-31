@@ -57,7 +57,7 @@ Its Forge screen says what is missing.")`: `<Forge host name>` is the `name` of 
 | Function                                             | Connection call                                                                                                                                                                                                                                                                              | Method                        |
 |------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------|
 | `regenerate()`                                       | `regenerate()`, then `refresh()`                                                                                                                                                                                                                                                             | `forge.regenerate`            |
-| `retry(itemTaskID:)`                                 | `retryForge(itemTaskID:)`, then `refresh()`                                                                                                                                                                                                                                                  | `forge.retry`                 |
+| `retry(itemTicketID:)`                               | `retryForge(itemTicketID:)`, then `refresh()`                                                                                                                                                                                                                                                | `forge.retry`                 |
 | `sendFeedback(screenshot:comment:context:progress:)` | with a screenshot, `upload(fileName: "screenshot.png", projectID: <sourceProjectID of forgeConfigs[forgeHostID]>, source: .data(<PNG>), progress:)` ([../client/workspace.md](../client/workspace.md#transfers)); then `sendFeedback(screenshot: <its UploadRef, or nil>, comment:context:)` | `uploads.*`, `forge.feedback` |
 
 ## Screen
@@ -144,13 +144,13 @@ Without a Forge host, or before `state` arrives, only This app is shown.
    - `regenCommit`: the row `Built commit` with its link;
    - `failed`: `error` in red.
 3. The items (`state.items`, newest first), or `No feedback yet.`. Each row:
-   - line 1: the task id (monospaced) and `title`; trailing, the state badge;
+   - line 1: the ticket id (monospaced) and `title`; trailing, the state badge;
    - line 2 (caption, secondary): `docs <sha8>` when `docsCommit` is set, then `updated <relative>`, joined with
      " · ";
    - line 3, when `failed`: `error` in red;
-   - actions `Open Task`, `Open Discussion`, and `Retry` when `failed` (`retry(itemTaskID:)`): borderless buttons at
+   - actions `Open Ticket`, `Open Discussion`, and `Retry` when `failed` (`retry(itemTicketID:)`): borderless buttons at
      the trailing edge in regular width; in compact width a `Menu` (`ellipsis.circle`) holding them;
-   - clicking the row selects it: `context.selection.item` = its task id, the Forge section's item
+   - clicking the row selects it: `context.selection.item` = its ticket id, the Forge section's item
      ([../client/workspace.md](../client/workspace.md#selection)); the selected row's background
      (`listRowBackground`) is the accent color at 20 % opacity.
 
@@ -170,11 +170,11 @@ State badges: the text in white, caption font, padding 8 × 2 pt, on a capsule f
 Each action calls `context.navigate(mainDeviceID:projectID:section:item:)` of the window's `WindowContext`
 ([shell.md](shell.md#52-windowcontext)) with the values of the table:
 
-| Action          | Main          | Project                  | Section   | Item                                      |
-|-----------------|---------------|--------------------------|-----------|-------------------------------------------|
-| Open Session    | `forgeHostID` | `config.sourceProjectID` | `.claude` | `cycle.sessionID.uuidString`              |
-| Open Task       | `forgeHostID` | the item's `projectID`   | `.tasks`  | the item's `taskID`                       |
-| Open Discussion | `forgeHostID` | the item's `projectID`   | `.claude` | the item's `feedbackSessionID.uuidString` |
+| Action          | Main          | Project                  | Section    | Item                                      |
+|-----------------|---------------|--------------------------|------------|-------------------------------------------|
+| Open Session    | `forgeHostID` | `config.sourceProjectID` | `.claude`  | `cycle.sessionID.uuidString`              |
+| Open Ticket     | `forgeHostID` | the item's `projectID`   | `.tickets` | the item's `ticketID`                     |
+| Open Discussion | `forgeHostID` | the item's `projectID`   | `.claude`  | the item's `feedbackSessionID.uuidString` |
 
 ### CI Run
 
@@ -244,7 +244,7 @@ Settings ▸ Forge & Updates embeds it on macOS ([settings.md](settings.md)).
 
     public func refresh() async
     public func regenerate() async throws
-    public func retry(itemTaskID: String) async throws
+    public func retry(itemTicketID: String) async throws
     /// Uploads the screenshot (when there is one) to the Forge's source project, then sends forge.feedback. An upload
     /// that fails with notFound throws "The Forge on <Forge host name> has no source project <ID> yet. …" (Requests).
     public func sendFeedback(screenshot: Data?, comment: String, context: FeedbackContext,

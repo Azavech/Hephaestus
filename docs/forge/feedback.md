@@ -12,19 +12,19 @@ files:
 ---
 
 Feedback can be started from anywhere in the app. The window is captured before anything appears, the user writes a
-comment, and the feedback goes to the Forge host, which creates a task with the screenshot and starts a feedback
+comment, and the feedback goes to the Forge host, which creates a ticket with the screenshot and starts a feedback
 session on it ([pipeline.md](pipeline.md#feedback-intake)). The sending device then opens that session: the Claude
-discussion pops up. The feedback session only turns the feedback into a task
-([../claude/prompts.md](../claude/prompts.md#feedback-part)): it rewrites the task, comments on it, asks its open
-questions and records the answers in the task. It changes no file, and neither offers to implement the task nor
+discussion pops up. The feedback session only turns the feedback into a ticket
+([../claude/prompts.md](../claude/prompts.md#feedback-part)): it rewrites the ticket, comments on it, asks its open
+questions and records the answers in the ticket. It changes no file, and neither offers to implement the ticket nor
 implements it. Once no question is open, right after the rewrite when it has none, Claude closes the session
 ([../claude/cli.md](../claude/cli.md#511-closing-a-session)): its transcript stays, and "This conversation is over"
-replaces its composer ([../ui/sessions.md](../ui/sessions.md#composer)). The user implements the task later, from the
-task: a task session in mode implement, or a task bundle, whose `forge_push_docs` pushes the documentation it commits
-([pipeline.md](pipeline.md#mcp-tools)).
+replaces its composer ([../ui/sessions.md](../ui/sessions.md#composer)). The user implements the ticket later, from the
+ticket: a ticket session in mode implement, or a ticket bundle, whose `forge_push_docs` pushes the documentation it
+commits ([pipeline.md](pipeline.md#mcp-tools)).
 
 The screenshot, the comment and the context are personal data ([../general.md](../general.md#personal-data)).
-They stay in the feedback task, under the source project's `.hephaestus/` folder, which git ignores, and the prompt of
+They stay in the feedback ticket, under the source project's `.hephaestus/` folder, which git ignores, and the prompt of
 the feedback session forbids copying anything of them into the public repository
 ([../claude/prompts.md](../claude/prompts.md#forge-common-part)).
 
@@ -231,7 +231,7 @@ A `VStack(alignment: .leading, spacing: 12)` with 20 pt padding:
    [../ui/forge.md](../ui/forge.md#requests)). The Pipeline section of the Forge screen
    ([../ui/forge.md](../ui/forge.md#pipeline)) shows the Forge's `lastError`, which says what is missing
    ([pipeline.md](pipeline.md#registering-the-source-project)). Other upload errors show as they are.
-4. Success `{projectID, taskID, sessionID}`: the sheet closes and the session opens with
+4. Success `{projectID, ticketID, sessionID}`: the sheet closes and the session opens with
    `context.navigate(mainDeviceID: <the Forge host>, projectID: projectID, section: .claude, item:
    sessionID.uuidString)` on the controller's `WindowContext` ([../ui/shell.md](../ui/shell.md#52-windowcontext)),
    which also closes a search palette or search sheet that was open; the Claude section shows the session

@@ -66,7 +66,7 @@ A write failure is logged; the identity stays in memory and the write is retried
 
 - A name is trimmed of white space and line breaks and must not be empty (`DataError.invalid("Enter a device name.")`).
 - `Claude`, in any letter case, is a reserved name (`DataError.invalid("Claude is a reserved name.")`): it is the author of the comments
-  made through the MCP tools, which can be deleted but not edited ([../data/task-yml.md](../data/task-yml.md)).
+  made through the MCP tools, which can be deleted but not edited ([../data/ticket-yml.md](../data/ticket-yml.md)).
   Names do not need to be unique. The Bonjour service name is the name cut to 63 UTF-8 bytes ([mesh.md](mesh.md#advertising)).
 - Before the device belongs to a mesh (onboarding), the name is local: `setName(_:)` writes `device.json`.
 - In a mesh, the name lives in the device's registry record. `hello` never changes a record's name; only

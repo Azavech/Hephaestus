@@ -237,7 +237,7 @@ listener after a key change ([../devices/mesh.md](../devices/mesh.md#receiving-a
 | Case       | Group     | Title    | SF Symbol                                 | Shortcut |
 |------------|-----------|----------|-------------------------------------------|----------|
 | `overview` | project   | Overview | `info.circle`                             | ⌘1       |
-| `tasks`    | project   | Tasks    | `checklist`                               | ⌘2       |
+| `tickets`  | project   | Tickets  | `checklist`                               | ⌘2       |
 | `code`     | project   | Code     | `chevron.left.forwardslash.chevron.right` | ⌘3       |
 | `docs`     | project   | Docs     | `book.closed`                             | ⌘4       |
 | `web`      | project   | Web      | `globe`                                   | ⌘5       |
@@ -254,14 +254,14 @@ The detail of each section is a view of another doc. Project sections get the `P
 | Section    | View                        | `Selection.item`                                                               | Doc                        |
 |------------|-----------------------------|--------------------------------------------------------------------------------|----------------------------|
 | `overview` | `OverviewView(store:)`      | none                                                                           | [overview.md](overview.md) |
-| `tasks`    | `TasksView(store:)`         | task id                                                                        | [tasks.md](tasks.md)       |
+| `tickets`  | `TicketsView(store:)`       | ticket id                                                                      | [tickets.md](tickets.md)   |
 | `code`     | `CodeView(store:)`          | project-relative path of the active file, optionally followed by `#L<line>`    | [code.md](code.md)         |
 | `docs`     | `DocsView(store:)`          | project-relative path of the shown document, optionally followed by `#L<line>` | [docs.md](docs.md)         |
 | `web`      | `WebTabsView(store:)`       | web tab id                                                                     | [web.md](web.md)           |
 | `claude`   | `ClaudeView(store:)`        | session id                                                                     | [sessions.md](sessions.md) |
 | `devices`  | `DevicesView()`             | device id                                                                      | [devices.md](devices.md)   |
 | `skills`   | `SkillsView(mainDeviceID:)` | `<skill name>` or `<skill name>/<file path>`                                   | [skills.md](skills.md)     |
-| `forge`    | `ForgeView()`               | task id of the pipeline item                                                   | [forge.md](forge.md)       |
+| `forge`    | `ForgeView()`               | ticket id of the pipeline item                                                 | [forge.md](forge.md)       |
 
 UUIDs are written as `uuidString`. A section view that finds an item set from elsewhere (search, a link) opens that
 item. `#L<line>` is set by search results ([search.md](search.md#opening-a-result)) and parsed by the Code and Docs
@@ -334,10 +334,11 @@ The window stores its selection with `@SceneStorage`, under the keys of `WindowS
 ([../data/app-storage.md](../data/app-storage.md#per-window-state)); values are strings, `""` meaning nil.
 
 - Restore, once, when the context is created: `mainDeviceID` = `UUID(uuidString:)` of the stored string; `projectID`
-  and `item` = the stored strings; `section` = `SidebarSection(rawValue:)` of the stored string, nil for a section
-  this version does not have (`runs` of earlier versions). A restored Main that is no longer a Main is cleared by rule
-  1 of the Workspace's selection rules at the next registry change
-  ([../client/workspace.md](../client/workspace.md#selection-rules)); a restored project by the check below.
+  and `item` = the stored strings; `section` = `SidebarSection(rawValue:)` of the stored string, `.tickets` for
+  `tasks` (its raw value before tasks were renamed tickets), nil for a section this version does not have (`runs` of
+  earlier versions). A restored Main that is no longer a Main is cleared by rule 1 of the Workspace's selection rules
+  at the next registry change ([../client/workspace.md](../client/workspace.md#selection-rules)); a restored project
+  by the check below.
 - Restored project check, made by `RootView` in a window that restored a `projectID`: the first time the defaults
   run (below) while the selection's Main is connected with `projectsLoaded`, the check runs before them: when
   `projectID` is set and `workspace.summary(of: projectID, on: mainDeviceID)` is nil, `projectID` and `item` become
@@ -395,8 +396,8 @@ has its preview inside the same `#if`. The screens: the views of [Sections](#sec
 #Preview {
     let appModel = AppModel.preview()
     let studio = UUID(uuidString: "00000000-0000-4000-8000-000000000001")!
-    TasksView(store: appModel.workspace.projectStore(mainDeviceID: studio, projectID: "HEPH"))
-        .previewWindow(appModel, selection: Selection(mainDeviceID: studio, projectID: "HEPH", section: .tasks))
+    TicketsView(store: appModel.workspace.projectStore(mainDeviceID: studio, projectID: "HEPH"))
+        .previewWindow(appModel, selection: Selection(mainDeviceID: studio, projectID: "HEPH", section: .tickets))
 }
 ```
 
@@ -716,21 +717,21 @@ it: it reaches its own host ([../devices/roles.md](../devices/roles.md#what-the-
 
 ### 11.1 Shortcuts
 
-| Shortcut | Command                | Menu (macOS) | Enabled when                                                     | Action                                                |
-|----------|------------------------|--------------|------------------------------------------------------------------|-------------------------------------------------------|
-| ⌘K       | Search…                | Navigate     | the key window shows the shell                                   | `context.openSearch()`                                |
-| ⇧⌘F      | Send Feedback…         | Help         | see [../forge/feedback.md](../forge/feedback.md)                 | `FeedbackCommands`                                    |
-| ⌘1–⌘6    | Overview … Claude      | Navigate     | the key window shows the shell and a project is selected         | `context.select(<section>)` ([§4](#4-sections))       |
-|          | Devices, Skills, Forge | Navigate     | the key window shows the shell                                   | `context.select(<section>)`                           |
-| ⌘N       | New Task               | File         | `newTaskAction` is set (Tasks section shown, its Main connected) | calls it ([tasks.md](tasks.md))                       |
-| ⌥⌘N      | New Window             | File         | macOS only                                                       | `openWindow(id: AppModel.mainWindowID)`               |
-| ⌘T       | New Web Tab            | File         | `newWebTabAction` is set (Web section shown, its Main connected) | calls it ([web.md](web.md))                           |
-| ⌘S       | Save                   | File         | `saveDocumentAction` is set (a document is shown)                | calls it ([code.md](code.md#swift-api))               |
-| ⌘W       | Close Tab              | File         | `closeTabAction` is set                                          | calls it: closes the current editor tab or web tab    |
-| ⌘W       | Close                  | File         | macOS, `closeTabAction` is nil                                   | `NSApp.keyWindow?.performClose(nil)`                  |
-| ⌘↩       | Send                   | none         | a message composer has focus                                     | sends ([sessions.md](sessions.md#message-composer))   |
-| ⌘,       | Settings…              | Hephaestus   | macOS                                                            | opens the Settings scene ([settings.md](settings.md)) |
-| ⌃⌘S      | Show/Hide Sidebar      | View         | macOS                                                            | `SidebarCommands`                                     |
+| Shortcut | Command                | Menu (macOS) | Enabled when                                                         | Action                                                |
+|----------|------------------------|--------------|----------------------------------------------------------------------|-------------------------------------------------------|
+| ⌘K       | Search…                | Navigate     | the key window shows the shell                                       | `context.openSearch()`                                |
+| ⇧⌘F      | Send Feedback…         | Help         | see [../forge/feedback.md](../forge/feedback.md)                     | `FeedbackCommands`                                    |
+| ⌘1–⌘6    | Overview … Claude      | Navigate     | the key window shows the shell and a project is selected             | `context.select(<section>)` ([§4](#4-sections))       |
+|          | Devices, Skills, Forge | Navigate     | the key window shows the shell                                       | `context.select(<section>)`                           |
+| ⌘N       | New Ticket             | File         | `newTicketAction` is set (Tickets section shown, its Main connected) | calls it ([tickets.md](tickets.md))                   |
+| ⌥⌘N      | New Window             | File         | macOS only                                                           | `openWindow(id: AppModel.mainWindowID)`               |
+| ⌘T       | New Web Tab            | File         | `newWebTabAction` is set (Web section shown, its Main connected)     | calls it ([web.md](web.md))                           |
+| ⌘S       | Save                   | File         | `saveDocumentAction` is set (a document is shown)                    | calls it ([code.md](code.md#swift-api))               |
+| ⌘W       | Close Tab              | File         | `closeTabAction` is set                                              | calls it: closes the current editor tab or web tab    |
+| ⌘W       | Close                  | File         | macOS, `closeTabAction` is nil                                       | `NSApp.keyWindow?.performClose(nil)`                  |
+| ⌘↩       | Send                   | none         | a message composer has focus                                         | sends ([sessions.md](sessions.md#message-composer))   |
+| ⌘,       | Settings…              | Hephaestus   | macOS                                                                | opens the Settings scene ([settings.md](settings.md)) |
+| ⌃⌘S      | Show/Hide Sidebar      | View         | macOS                                                                | `SidebarCommands`                                     |
 
 - The key window shows the shell when `windowContext` is set (a main window in phase `.ready`) and the window is not in
   the "No Main online" state ([§10](#10-no-main-online)).
@@ -748,7 +749,7 @@ it: it reaches its own host ([../devices/roles.md](../devices/roles.md#what-the-
 | Group                                | Items                                                                    |
 |--------------------------------------|--------------------------------------------------------------------------|
 | `CommandGroup(replacing: .appInfo)`  | macOS only: "About Hephaestus" ([About](#about))                         |
-| `CommandGroup(replacing: .newItem)`  | New Window (macOS only), New Task, New Web Tab                           |
+| `CommandGroup(replacing: .newItem)`  | New Window (macOS only), New Ticket, New Web Tab                         |
 | `CommandGroup(replacing: .saveItem)` | Close Tab / Close, Save                                                  |
 | `SidebarCommands()`                  | View ▸ Show Sidebar / Hide Sidebar                                       |
 | `TextEditingCommands()`              | Edit ▸ Find and the other text editing items                             |
@@ -767,8 +768,8 @@ panel shows the name, the version and the build from the bundle. iOS and iPadOS 
 
 ### 11.3 Focused values
 
-`ShellFocusedValues.swift` declares the focused values of the shell; `newTaskAction` and `saveDocumentAction` are
-declared by [tasks.md](tasks.md) and [code.md](code.md):
+`ShellFocusedValues.swift` declares the focused values of the shell; `newTicketAction` and `saveDocumentAction` are
+declared by [tickets.md](tickets.md) and [code.md](code.md):
 
 ```swift
 extension FocusedValues {
@@ -788,12 +789,12 @@ are declared without `@Entry`: each has a private `FocusedValueKey` and a comput
 A view publishes an action with `.focusedSceneValue(\.<name>, <action>)` only while it is shown and the action is
 possible; elsewhere the value is nil and the menu item is disabled.
 
-| Value                | Declared in          | Published by                                                                                                                            | Doc                                                            |
-|----------------------|----------------------|-----------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------|
-| `newTaskAction`      | [tasks.md](tasks.md) | `TasksView`                                                                                                                             | [tasks.md](tasks.md)                                           |
-| `saveDocumentAction` | [code.md](code.md)   | the Code and Docs sections, the skill file view                                                                                         | [code.md](code.md), [docs.md](docs.md), [skills.md](skills.md) |
-| `closeTabAction`     | this doc             | the Code section (active tab), the Docs section (shown document), the Web section (active tab; a locked tab shows "This tab is locked") | [code.md](code.md), [docs.md](docs.md), [web.md](web.md)       |
-| `newWebTabAction`    | this doc             | the Web section                                                                                                                         | [web.md](web.md)                                               |
+| Value                | Declared in              | Published by                                                                                                                            | Doc                                                            |
+|----------------------|--------------------------|-----------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------|
+| `newTicketAction`    | [tickets.md](tickets.md) | `TicketsView`                                                                                                                           | [tickets.md](tickets.md)                                       |
+| `saveDocumentAction` | [code.md](code.md)       | the Code and Docs sections, the skill file view                                                                                         | [code.md](code.md), [docs.md](docs.md), [skills.md](skills.md) |
+| `closeTabAction`     | this doc                 | the Code section (active tab), the Docs section (shown document), the Web section (active tab; a locked tab shows "This tab is locked") | [code.md](code.md), [docs.md](docs.md), [web.md](web.md)       |
+| `newWebTabAction`    | this doc                 | the Web section                                                                                                                         | [web.md](web.md)                                               |
 
 ## 12. Shared components
 
@@ -959,7 +960,7 @@ public struct ChipToggle: View { public init(title: String, isOn: Bool, action: 
 | `DeviceRecord`, `DevicePlatform`, `MeshSnapshot`, `Presence`, `ProjectSummary`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | [../protocol/types.md](../protocol/types.md)                                                                                             |
 | `ProtocolError`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | [../protocol/envelope.md](../protocol/envelope.md)                                                                                       |
 | `OverviewView`, `NewProjectSheet`, `AddExistingFolderSheet`, `.migrationProgressPresenter()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | [overview.md](overview.md)                                                                                                               |
-| `TasksView`, `newTaskAction`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | [tasks.md](tasks.md)                                                                                                                     |
+| `TicketsView`, `newTicketAction`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | [tickets.md](tickets.md)                                                                                                                 |
 | `CodeView`, `saveDocumentAction`, `DocsView`, `WebTabsView`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | [code.md](code.md), [docs.md](docs.md), [web.md](web.md)                                                                                 |
 | `ClaudeView`, `PermissionIndicator`, `.permissionBanner()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | [sessions.md](sessions.md)                                                                                                               |
 | `SkillsView`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | [skills.md](skills.md)                                                                                                                   |

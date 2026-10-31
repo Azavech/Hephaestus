@@ -77,16 +77,16 @@ hold. Which doc governs each file is given by the `files:` lists of the docs ([R
 
 ## Modules
 
-| Module                  | Platforms           | Depends on                                                                    | Responsibility                                                                                                                                                                                    |
-|-------------------------|---------------------|-------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `HephCore`              | all                 | Yams                                                                          | Models and YAML files, identifiers and validation, skill names and SKILL.md front matter, wire protocol types (envelope, methods, events, errors), hashing, search matcher, `Log`                 |
-| `HephNet`               | all                 | `HephCore`                                                                    | Mesh crypto, TLS-PSK WebSocket channel and listener, Bonjour advertising and browsing, pairing, `RPCPeer`, `MessageChannel`, `LoopbackChannel`                                                    |
-| `HephHost`              | macOS; empty on iOS | `HephCore`, `HephNet`                                                         | The Main side: `HostService` (listener, routing, projects, tasks, files, tabs, file watching, peer links), Claude CLI sessions, MCP server, search, skills library, migration, Forge, self-update |
-| `HephClient`            | all                 | `HephCore`, `HephNet`                                                         | Client state mirrored from the Mains: `Workspace`, `MainConnection`, `ProjectStore`, `Selection`, device identity, session, Forge, file and search models                                         |
-| `HephEditor`            | all                 | `HephCore`                                                                    | Code editor view (TextKit 1) and syntax highlighting                                                                                                                                              |
-| `HephMarkdown`          | all                 | `HephCore`, `HephEditor`, swift-markdown (`Markdown`)                         | Markdown rendering view; fenced code uses the highlighter of `HephEditor`                                                                                                                         |
-| `HephUI`                | all                 | `HephCore`, `HephNet`, `HephHost`, `HephClient`, `HephEditor`, `HephMarkdown` | All SwiftUI screens and the app wiring (`AppModel`, `RootView`, [ui/shell.md](ui/shell.md))                                                                                                       |
-| App target `Hephaestus` | macOS, iPadOS, iOS  | `HephUI`, `HephHost`                                                          | The `@main` entry point `App/HephaestusApp.swift` ([ui/shell.md](ui/shell.md))                                                                                                                    |
+| Module                  | Platforms           | Depends on                                                                    | Responsibility                                                                                                                                                                                      |
+|-------------------------|---------------------|-------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `HephCore`              | all                 | Yams                                                                          | Models and YAML files, identifiers and validation, skill names and SKILL.md front matter, wire protocol types (envelope, methods, events, errors), hashing, search matcher, `Log`                   |
+| `HephNet`               | all                 | `HephCore`                                                                    | Mesh crypto, TLS-PSK WebSocket channel and listener, Bonjour advertising and browsing, pairing, `RPCPeer`, `MessageChannel`, `LoopbackChannel`                                                      |
+| `HephHost`              | macOS; empty on iOS | `HephCore`, `HephNet`                                                         | The Main side: `HostService` (listener, routing, projects, tickets, files, tabs, file watching, peer links), Claude CLI sessions, MCP server, search, skills library, migration, Forge, self-update |
+| `HephClient`            | all                 | `HephCore`, `HephNet`                                                         | Client state mirrored from the Mains: `Workspace`, `MainConnection`, `ProjectStore`, `Selection`, device identity, session, Forge, file and search models                                           |
+| `HephEditor`            | all                 | `HephCore`                                                                    | Code editor view (TextKit 1) and syntax highlighting                                                                                                                                                |
+| `HephMarkdown`          | all                 | `HephCore`, `HephEditor`, swift-markdown (`Markdown`)                         | Markdown rendering view; fenced code uses the highlighter of `HephEditor`                                                                                                                           |
+| `HephUI`                | all                 | `HephCore`, `HephNet`, `HephHost`, `HephClient`, `HephEditor`, `HephMarkdown` | All SwiftUI screens and the app wiring (`AppModel`, `RootView`, [ui/shell.md](ui/shell.md))                                                                                                         |
+| App target `Hephaestus` | macOS, iPadOS, iOS  | `HephUI`, `HephHost`                                                          | The `@main` entry point `App/HephaestusApp.swift` ([ui/shell.md](ui/shell.md))                                                                                                                      |
 
 Rules:
 
@@ -924,25 +924,25 @@ iPad, iPhone, or a Mac that is not a Main (one process)
 
 ## Data flow
 
-### A task edit on an iPad reaching the Mac
+### A ticket edit on an iPad reaching the Mac
 
-The iPad shows task `HEPH-12` of project `HEPH`, hosted by the Mac; a window on the Mac shows the same task.
+The iPad shows ticket `HEPH-12` of project `HEPH`, hosted by the Mac; a window on the Mac shows the same ticket.
 
-1. On the iPad, the status picker of the task detail ([ui/tasks.md](ui/tasks.md)) calls
-   `MainConnection.updateTask(projectID: "HEPH", taskID: "HEPH-12", patch:)` with status `review`
+1. On the iPad, the status picker of the ticket detail ([ui/tickets.md](ui/tickets.md)) calls
+   `MainConnection.updateTicket(projectID: "HEPH", ticketID: "HEPH-12", patch:)` with status `review`
    ([client/workspace.md](client/workspace.md#request-api)); a failure shows in the window's error banner.
 2. The `MainConnection` of the Mac sends the request through its `RPCPeer` as a text frame over the TLS-PSK WebSocket:
-   `{"id":57,"kind":"request","method":"tasks.update","params":{"patch":{"status":"review"},"projectID":"HEPH","taskID":"HEPH-12"}}`.
+   `{"id":57,"kind":"request","method":"tickets.update","params":{"patch":{"status":"review"},"projectID":"HEPH","ticketID":"HEPH-12"}}`.
 3. On the Mac, the `WebSocketListener` hands the frame to the connection's `RPCPeer`; the `HostService` routes
-   `tasks.update` to the task service ([services/host.md](services/host.md)), which applies the patch, sets `updated`
-   and writes `.hephaestus/tasks/HEPH-12.yml` atomically ([data/task-yml.md](data/task-yml.md)).
-4. The `HostService` answers the request with the updated `TaskItem` and emits
-   `task.changed {projectID: "HEPH", task}` to every authenticated connection: the iPad, the other remotes, and the
+   `tickets.update` to the ticket service ([services/host.md](services/host.md)), which applies the patch, sets
+   `updated` and writes `.hephaestus/tasks/HEPH-12.yml` atomically ([data/ticket-yml.md](data/ticket-yml.md)).
+4. The `HostService` answers the request with the updated `TicketItem` and emits
+   `ticket.changed {projectID: "HEPH", ticket}` to every authenticated connection: the iPad, the other remotes, and the
    Mac's own `Workspace` over the `LoopbackChannel` ([protocol/events.md](protocol/events.md)).
-5. Each `Workspace` upserts the task into its `ProjectStore` of `HEPH`; the views observing the store update. The Mac's
-   window and the iPad show the new status at the same time.
-6. The file watcher later reports the write ([services/host.md](services/host.md)). Applying a `task.changed` with the
-   same task again changes nothing: upserts are idempotent.
+5. Each `Workspace` upserts the ticket into its `ProjectStore` of `HEPH`; the views observing the store update. The
+   Mac's window and the iPad show the new status at the same time.
+6. The file watcher later reports the write ([services/host.md](services/host.md)). Applying a `ticket.changed` with the
+   same ticket again changes nothing: upserts are idempotent.
 
 ### Claude editing a file, seen live on an iPhone
 
@@ -987,7 +987,7 @@ public enum Log {
 - Levels: `debug` for per-request and per-frame detail, `info` for lifecycle (listener started, connection
   established, session started), `notice` for state changes the user would care about (Main online or offline,
   migration finished), `error` for failures, `fault` for broken invariants.
-- Privacy: identifiers (device, project, task, session ids), method and event names, states, error codes, counts,
+- Privacy: identifiers (device, project, ticket, session ids), method and event names, states, error codes, counts,
   durations and paths relative to a project root are logged with `privacy: .public`. Everything else keeps the
   default (private). Mesh keys, PSKs, pairing codes, bearer tokens, credentials, file contents, message texts and
   comment bodies are never logged.
@@ -1003,7 +1003,7 @@ Exact content:
 # Hephaestus
 
 Hephaestus coordinates the work on all your projects from any of your devices. Projects live on Macs set as Mains;
-every Mac, iPad and iPhone connects to every Main and sees and controls everything on it in real time: tasks, code,
+every Mac, iPad and iPhone connects to every Main and sees and controls everything on it in real time: tickets, code,
 docs, web tabs and Claude sessions.
 
 The app is generated from its specification in [docs/](docs/README.md). The docs are the source of truth: the code

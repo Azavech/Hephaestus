@@ -42,7 +42,7 @@ is no maximum length ([../data/project-yml.md](../data/project-yml.md#validation
 | Name, identifier, description, folder, skills, Claude defaults | `store.project` (`Project`)                                                    |
 | Main                                                           | the record of `store.mainDeviceID` in `workspace.mains`; `workspace.presence`  |
 | Sub projects                                                   | `children` of `workspace.summary(of: store.projectID, on: store.mainDeviceID)` |
-| Task counts                                                    | `store.tasks`                                                                  |
+| Ticket counts                                                  | `store.tickets`                                                                |
 | Skills library                                                 | `listSkills()` of the project's Main ([Skills](#skills))                       |
 | Active sessions (Move to…)                                     | `store.sessions`                                                               |
 
@@ -59,9 +59,9 @@ A `Form` with `.formStyle(.grouped)` on every platform, with these sections in t
    `project.migrating` is true.
 2. Location: Main (device name, then a `StatusDot` and "last seen <relative time>" when offline), Folder
    (`project.rootPath`, monospaced, selectable, truncated in the middle, the full path in the help tag).
-3. Tasks: one cell per status in `TaskStatus.allCases` order, each a `TaskStatusBadge` ([tasks.md](tasks.md)) and the
-   count; then "Broken" and the count when the project has broken tasks (a `TaskItem` with a `parseError`, counted
-   apart from the statuses).
+3. Tickets: one cell per status in `TicketStatus.allCases` order, each a `TicketStatusBadge` ([tickets.md](tickets.md))
+   and the count; then "Broken" and the count when the project has broken tickets (a `TicketItem` with a `parseError`,
+   counted apart from the statuses).
 4. Sub Projects: one row per direct sub project, then a "New Sub Project…" button.
 5. Skills: an "All skills" toggle, then one toggle per skill of the library.
 6. Claude: Permission Mode picker, Model field.
@@ -171,12 +171,12 @@ window's path bar: a top-level project when `parentID` is nil (opened from the p
   `conflict`.
 - Messages under the field, shown when it is not empty, the first matching condition only:
 
-| Condition                              | Message (red unless noted)                                   |
-|----------------------------------------|--------------------------------------------------------------|
-| a character other than `A`–`Z`         | "Use letters A to Z only."                                   |
-| fewer than 2 or more than 8 characters | "Use 2 to 8 letters."                                        |
-| used by a project of a connected Main  | "<ID> is already used by “<project name>” on <Main name>."   |
-| valid                                  | "Tasks will be numbered <ID>-1, <ID>-2, …" (secondary color) |
+| Condition                              | Message (red unless noted)                                     |
+|----------------------------------------|----------------------------------------------------------------|
+| a character other than `A`–`Z`         | "Use letters A to Z only."                                     |
+| fewer than 2 or more than 8 characters | "Use 2 to 8 letters."                                          |
+| used by a project of a connected Main  | "<ID> is already used by “<project name>” on <Main name>."     |
+| valid                                  | "Tickets will be numbered <ID>-1, <ID>-2, …" (secondary color) |
 
 ## Add Existing Folder
 
@@ -298,9 +298,9 @@ presenter iterates `workspace.events()` for the life of the window, keeps the la
 "Remove Project…" opens a confirmation dialog:
 
 - Title: "Remove “<name>”?"
-- Message: "The project is removed from Hephaestus. Its folder <rootPath> stays on <Main>, with its tasks and sessions,
-  unless you move it to the Trash." When the project has sub projects, "Its sub projects are removed with it." is
-  added. The Main stops the project's sessions
+- Message: "The project is removed from Hephaestus. Its folder <rootPath> stays on <Main>, with its tickets and
+  sessions, unless you move it to the Trash." When the project has sub projects, "Its sub projects are removed with it."
+  is added. The Main stops the project's sessions
   ([../protocol/methods.md](../protocol/methods.md#projectsremove)).
 - Buttons: "Remove" → `removeProject(projectID:moveToTrash: false)`; "Remove and Move to Trash" (destructive) →
   `removeProject(projectID:moveToTrash: true)`; "Cancel".
@@ -348,14 +348,14 @@ Inside the module, the presenter puts an action `presentMigrationProgress(_ migr
 - [../client/workspace.md](../client/workspace.md): `Workspace` (`mains`, `presence`, `device`, `connection(_:)`,
   `summary(of:on:)`, `projectPath(of:on:)`, `events()`, `WorkspaceEvent`, selection rule 2), `MainConnection`
   (`isConnected`, `hostInfo`, `refreshHostInfo()`, `projects`, request functions), `ProjectStore` (`mainDeviceID`,
-  `projectID`, `project`, `tasks`, `sessions`, `phase`, `connection`, `reload()`), `Selection`.
+  `projectID`, `project`, `tickets`, `sessions`, `phase`, `connection`, `reload()`), `Selection`.
 - [../protocol/types.md](../protocol/types.md): `Project` (`parseError`, `migrating`), `ProjectSummary`, `ProjectPatch`,
-  `ClaudeDefaults`, `DeviceRecord`, `Presence`, `SkillSummary`, `SessionInfo`, `TaskItem`, `TaskStatus`,
+  `ClaudeDefaults`, `DeviceRecord`, `Presence`, `SkillSummary`, `SessionInfo`, `TicketItem`, `TicketStatus`,
   `MigrationState`.
 - [../protocol/methods.md](../protocol/methods.md): `projects.*`, `host.listDirectories`, `skills.list`,
   `sessions.stop`. [../protocol/events.md](../protocol/events.md): `migration.progress`,
   `skills.changed`.
 - [../data/project-yml.md](../data/project-yml.md): `ProjectIdentifier`.
-- [tasks.md](tasks.md): `TaskStatusBadge`. [sessions.md](sessions.md): `PermissionModePicker`, `ClaudeModelField`.
+- [tickets.md](tickets.md): `TicketStatusBadge`. [sessions.md](sessions.md): `PermissionModePicker`, `ClaudeModelField`.
 - [shell.md](shell.md): `WindowContext` (`navigate`), `WindowBanners` (`perform`), path bar and its project menu,
   window root, `StatusDot`, `PlatformIcon`.

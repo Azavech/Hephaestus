@@ -18,7 +18,7 @@ Each Main runs one MCP server that gives its Claude sessions the `mcp__hephaestu
 another Main over its peer link. Sessions get the server through `--mcp-config` ([cli.md](cli.md#31-arguments)).
 
 Every file is macOS only and wrapped in `#if os(macOS)`. Logging uses `Log.host` with the rules of
-[../architecture.md](../architecture.md#logging): tool names, project and task ids and error codes are logged; bearer
+[../architecture.md](../architecture.md#logging): tool names, project and ticket ids and error codes are logged; bearer
 tokens, arguments and results never are.
 
 ## 1. Lifecycle
@@ -39,7 +39,7 @@ public struct MCPSessionContext: Sendable, Equatable {
     public var sessionID: UUID
     public var projectID: String
     public var kind: SessionKind
-    public var taskID: String?
+    public var ticketID: String?
     public var bundleID: String?
     public init(...)   // memberwise: one labeled parameter per property, in order, no default
 }
@@ -95,7 +95,7 @@ Internal types (same module): `HTTPRequestParser`, `HTTPRequest`, `HTTPResponse`
 
 ## 3. HTTP/1.1 server
 
-Each accepted `NWConnection` is served by one task: it receives up to 65,536 bytes at a time into an
+Each accepted `NWConnection` is served by one ticket: it receives up to 65,536 bytes at a time into an
 `HTTPRequestParser`, and serves the complete requests in order, one at a time. Connections are served concurrently.
 
 ```swift
@@ -220,11 +220,11 @@ errors (section 8), so Claude can correct them.
 ## 5. Sessions, tokens and `--mcp-config`
 
 - `SessionService` registers each session process before spawning it: `register(MCPSessionContext{sessionID,
-  projectID, kind, taskID, bundleID})` returns a new token, 32 random bytes (`SecRandomCopyBytes`) as 64 lowercase hex
+  projectID, kind, ticketID, bundleID})` returns a new token, 32 random bytes (`SecRandomCopyBytes`) as 64 lowercase hex
   characters. It unregisters the token when the process ends ([cli.md](cli.md#57-errors-and-the-end-of-a-process)).
 - A request's token selects its `MCPSessionContext`: the tools listed and callable depend on its `kind` (section 6),
-  `get_task`, `update_task` and `comment_task` in a `feedback` session are limited to its `taskID`, and the Forge
-  tools pass its `sessionID`.
+  `get_ticket`, `update_ticket` and `comment_ticket` in a `feedback` session are limited to its `ticketID`, and the
+  Forge tools pass its `sessionID`.
 - `configJSON(token:)` returns, compact, with the current port:
 
 ```json
@@ -240,37 +240,38 @@ mcp__hephaestus` lets sessions call them without permission prompts.
 written here (served compact by `tools/list`). Each definition has the session kinds that list it and may call it,
 given by `MCPToolKinds.kinds(for:)` from this table:
 
-| Tools                                                  | Session kinds                                               |
-|--------------------------------------------------------|-------------------------------------------------------------|
-| 6.1–6.6, 6.8, 6.10, 6.13–6.18                          | `project`, `task`, `bundle`                                 |
-| 6.7 `get_task`, 6.9 `update_task`, 6.11 `comment_task` | `project`, `task`, `bundle`, `feedback` (its own task only) |
-| 6.12 `start_task_session`                              | `project`, `task`                                           |
-| 6.19 `forge_push_docs`                                 | `task`, `bundle`                                            |
-| 6.20 `forge_push_regen`                                | `regeneration`                                              |
-| 6.21–6.24 the bundle tools                             | `bundle`                                                    |
-| 6.25 `rename_session`                                  | `project`, `task`, `bundle`, `feedback`, `regeneration`     |
-| 6.26 `close_session`                                   | `project`, `task`, `bundle`, `feedback`                     |
+| Tools                                                        | Session kinds                                                   |
+|--------------------------------------------------------------|-----------------------------------------------------------------|
+| 6.1–6.6, 6.8, 6.10, 6.13–6.18                                | `project`, `ticket`, `bundle`                                   |
+| 6.7 `get_ticket`, 6.9 `update_ticket`, 6.11 `comment_ticket` | `project`, `ticket`, `bundle`, `feedback` (its own ticket only) |
+| 6.12 `start_ticket_session`                                  | `project`, `ticket`                                             |
+| 6.19 `forge_push_docs`                                       | `ticket`, `bundle`                                              |
+| 6.20 `forge_push_regen`                                      | `regeneration`                                                  |
+| 6.21–6.24 the bundle tools                                   | `bundle`                                                        |
+| 6.25 `rename_session`                                        | `project`, `ticket`, `bundle`, `feedback`, `regeneration`       |
+| 6.26 `close_session`                                         | `project`, `ticket`, `bundle`, `feedback`                       |
 
-A `feedback` session therefore lists `get_task`, `update_task`, `comment_task`, `rename_session` and `close_session`,
-and a `regeneration` session lists `forge_push_regen` and `rename_session`. A feedback session uses `update_task` and
-`comment_task` to turn its feedback into a task, then `close_session` once no question is open
+A `feedback` session therefore lists `get_ticket`, `update_ticket`, `comment_ticket`, `rename_session` and
+`close_session`, and a `regeneration` session lists `forge_push_regen` and `rename_session`. A feedback session uses
+`update_ticket` and `comment_ticket` to turn its feedback into a ticket, then `close_session` once no question is open
 ([prompts.md](prompts.md#feedback-part)); it has no push tool, since it changes no file. Forge sessions write to the
 public repository ([../public-repository.md](../public-repository.md)): they get no tool that reads the devices,
-projects, tasks, web tabs, sessions or skills of the mesh beyond their own feedback task, none that changes them beyond
-the name, description, status and comments of that task and the title of their own session, and none that runs a
-command or starts a session, so nothing they call can push around the Forge push gate ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). `MCPToolKinds.swift`
-holds this table and nothing else: `kinds(for:)` names each tool of the table (the first row: the 14 tools of 6.1–6.6,
-6.8, 6.10 and 6.13–6.18) and returns an empty set for any other name, so a tool added to the catalog is listed
-and callable in no session until the table names it.
+projects, tickets, web tabs, sessions or skills of the mesh beyond their own feedback ticket, none that changes them
+beyond the name, description, status and comments of that ticket and the title of their own session, and none that runs
+a command or starts a session, so nothing they call can push around the Forge push gate
+([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). `MCPToolKinds.swift` holds this table and nothing else:
+`kinds(for:)` names each tool of the table (the first row: the 14 tools of 6.1–6.6, 6.8, 6.10 and 6.13–6.18) and returns
+an empty set for any other name, so a tool added to the catalog is listed and callable in no session until the table
+names it.
 
 A `bundle` session, the coordinator of a bundle ([../services/bundles.md](../services/bundles.md)), gets the tools
-that read and change projects and tasks, the bundle tools and `forge_push_docs`, which pushes only for the bundles of
-the Forge source project. It starts its task sessions with `start_bundle_task` alone, and gets no tool that runs a
+that read and change projects and tickets, the bundle tools and `forge_push_docs`, which pushes only for the bundles of
+the Forge source project. It starts its ticket sessions with `start_bundle_ticket` alone, and gets no tool that runs a
 command: in the Forge source project it holds a push tool.
 
-A `task` session lists `forge_push_docs` too. It pushes only for a task session of the Forge source project, on the
+A `ticket` session lists `forge_push_docs` too. It pushes only for a ticket session of the Forge source project, on the
 Forge host, that is not a session of a bundle ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)): implementing a
-feedback task there pushes its documentation and starts the regeneration, as a bundle does. The task sessions of a
+feedback ticket there pushes its documentation and starts the regeneration, as a bundle does. The ticket sessions of a
 bundle leave the push to their coordinator.
 
 ```swift
@@ -307,8 +308,8 @@ struct MCPToolHandler: Sendable {
 Argument rules for every tool:
 
 - `project`: uppercased, then it must match `^[A-Z]{2,8}$`.
-- `task`: uppercased, then it must match `^[A-Z]{2,8}-F?[0-9]+$` (a task id or a feedback task id,
-  [../data/task-yml.md](../data/task-yml.md#task-id)); its project is the part before the `-`.
+- `ticket`: uppercased, then it must match `^[A-Z]{2,8}-F?[0-9]+$` (a ticket id or a feedback ticket id,
+  [../data/ticket-yml.md](../data/ticket-yml.md#ticket-id)); its project is the part before the `-`.
 - The arguments are checked in the order of the schema's `properties`, before the tool's own checks and calls; the
   first problem ends the call with `Invalid arguments: <what is wrong>.` (section 8). An argument set to `null` counts
   as absent. Arguments the schema does not list are ignored.
@@ -323,7 +324,7 @@ Argument rules for every tool:
   | a value is not in its `enum`                                         | `<name> must be one of <values>` (the `enum` values, joined with `, `) |
   | an item of an array is not in its `enum` (`scopes`)                  | `<name> must hold values among <values>`                               |
   | `project`, `identifier` or `parent` breaks the `project` rule above  | `<name> is not a project identifier`                                   |
-  | `task` breaks the `task` rule above                                  | `task is not a task id`                                                |
+  | `ticket` breaks the `ticket` rule above                                  | `ticket is not a ticket id`                                                |
   | the `name` of `get_skill` or `save_skill` breaks `^[a-z0-9-]{1,64}$` | `name is not a skill name`                                             |
 
 - A tool acting on a project first locates its Main (section 7). The calls of a tool go to that Main.
@@ -347,7 +348,7 @@ Calls `mesh.snapshot {}` on this Main. Result: the `MeshSnapshot` `{meshID, devi
 ```json
 {
   "name": "list_projects",
-  "description": "List the projects of every Main of the mesh with their sub projects. A project is named by its identifier (2 to 8 letters, for example HEPH), which also starts the ids of its tasks. Projects of an offline Main are not listed.",
+  "description": "List the projects of every Main of the mesh with their sub projects. A project is named by its identifier (2 to 8 letters, for example HEPH), which also starts the ids of its tickets. Projects of an offline Main are not listed.",
   "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false}
 }
 ```
@@ -366,7 +367,7 @@ listed with `"online": false` and `"error": "<code>: <message>"`.
 ```json
 {
   "name": "get_project",
-  "description": "Get a project: its settings from project.yml (name, description, code and docs folders, sub projects, web tabs, enabled skills, Claude defaults), the Main hosting it, its root folder and its number of tasks per status.",
+  "description": "Get a project: its settings from project.yml (name, description, code and docs folders, sub projects, web tabs, enabled skills, Claude defaults), the Main hosting it, its root folder and its number of tickets per status.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -381,10 +382,10 @@ listed with `"online": false` and `"error": "<code>: <message>"`.
 Calls `projects.snapshot {projectID}`. Result:
 
 ```json
-{"main":{"id":"<device id>","name":"Studio"},"project":<Project>,"taskCounts":{"todo":3,"in_progress":1,"review":0,"done":8,"broken":0}}
+{"main":{"id":"<device id>","name":"Studio"},"project":<Project>,"ticketCounts":{"todo":3,"in_progress":1,"review":0,"done":8,"broken":0}}
 ```
 
-`project.rootPath` is the root folder; `broken` counts the tasks with a `parseError`, which count in no status.
+`project.rootPath` is the root folder; `broken` counts the tickets with a `parseError`, which count in no status.
 
 ### 6.4 create_project
 
@@ -435,17 +436,17 @@ Calls `projects.snapshot {projectID}`. Result:
 
 Calls `projects.update {projectID, patch: {name?, description?}}` with the given fields only. Result: the `Project`.
 
-### 6.6 list_tasks
+### 6.6 list_tickets
 
 ```json
 {
-  "name": "list_tasks",
-  "description": "List the tasks of a project in task-number order: id, name, status, created and updated dates, and number of comments. Use get_task to read a task's description and comments.",
+  "name": "list_tickets",
+  "description": "List the tickets of a project in ticket-number order: id, name, status, created and updated dates, and number of comments. Use get_ticket to read a ticket's description and comments.",
   "inputSchema": {
     "type": "object",
     "properties": {
       "project": {"type": "string", "pattern": "^[A-Za-z]{2,8}$", "description": "Project identifier, for example HEPH."},
-      "status": {"type": "string", "enum": ["todo", "in_progress", "review", "done"], "description": "Only the tasks with this status."}
+      "status": {"type": "string", "enum": ["todo", "in_progress", "review", "done"], "description": "Only the tickets with this status."}
     },
     "required": ["project"],
     "additionalProperties": false
@@ -453,50 +454,50 @@ Calls `projects.update {projectID, patch: {name?, description?}}` with the given
 }
 ```
 
-Calls `projects.snapshot {projectID}`. Result, sorted by task number:
+Calls `projects.snapshot {projectID}`. Result, sorted by ticket number:
 
 ```json
-{"project":"HEPH","tasks":[{"id":"HEPH-1","name":"Sidebar breaks on iPad","status":"todo","created":"2026-10-29T21:04:00.000Z","updated":"2026-10-29T22:10:00.000Z","comments":2},{"id":"HEPH-7","parseError":"<message>"}]}
+{"project":"HEPH","tickets":[{"id":"HEPH-1","name":"Sidebar breaks on iPad","status":"todo","created":"2026-10-29T21:04:00.000Z","updated":"2026-10-29T22:10:00.000Z","comments":2},{"id":"HEPH-7","parseError":"<message>"}]}
 ```
 
-A task with a `parseError` is listed with `id` and `parseError` only, and left out when `status` is given.
+A ticket with a `parseError` is listed with `id` and `parseError` only, and left out when `status` is given.
 
-### 6.7 get_task
+### 6.7 get_ticket
 
 ```json
 {
-  "name": "get_task",
-  "description": "Get a task: name, status, dates, Markdown description, and comments with their attachments.",
+  "name": "get_ticket",
+  "description": "Get a ticket: name, status, dates, Markdown description, and comments with their attachments.",
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id, for example HEPH-12, or HEPH-F3 for a feedback task."}
+      "ticket": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Ticket id, for example HEPH-12, or HEPH-F3 for a feedback ticket."}
     },
-    "required": ["task"],
+    "required": ["ticket"],
     "additionalProperties": false
   }
 }
 ```
 
-In a `feedback` session, `task` uppercased must be the session's `taskID`, else tool error `Forge sessions can only
-read their own feedback task.` Calls `projects.snapshot {projectID}` and takes the task (absent: tool error
-`notFound: Task <id> does not exist.`). Result:
-`{"task":<TaskItem>,"attachmentsFolder":"<project root>/.hephaestus/attachments/<task id>"}`;
+In a `feedback` session, `ticket` uppercased must be the session's `ticketID`, else tool error `Forge sessions can only
+read their own feedback ticket.` Calls `projects.snapshot {projectID}` and takes the ticket (absent: tool error
+`notFound: Ticket <id> does not exist.`). Result:
+`{"ticket":<TicketItem>,"attachmentsFolder":"<project root>/.hephaestus/attachments/<ticket id>"}`;
 `attachmentsFolder` is present only when the project is hosted on this Main (`localProjectRoot`), so Claude can read the
 files.
 
-### 6.8 create_task
+### 6.8 create_ticket
 
 ```json
 {
-  "name": "create_task",
-  "description": "Create a task in a project. Its id is the project identifier followed by the next task number, for example HEPH-13. The name is one line; the description is Markdown.",
+  "name": "create_ticket",
+  "description": "Create a ticket in a project. Its id is the project identifier followed by the next ticket number, for example HEPH-13. The name is one line; the description is Markdown.",
   "inputSchema": {
     "type": "object",
     "properties": {
       "project": {"type": "string", "pattern": "^[A-Za-z]{2,8}$", "description": "Project identifier, for example HEPH."},
-      "name": {"type": "string", "minLength": 1, "description": "Task name, one line."},
-      "description": {"type": "string", "description": "Task description in Markdown."},
+      "name": {"type": "string", "minLength": 1, "description": "Ticket name, one line."},
+      "description": {"type": "string", "description": "Ticket description in Markdown."},
       "status": {"type": "string", "enum": ["todo", "in_progress", "review", "done"], "description": "Initial status. Default: todo."}
     },
     "required": ["project", "name"],
@@ -505,78 +506,78 @@ files.
 }
 ```
 
-Calls `tasks.create {projectID, name, description?, status?}`. Result: the `TaskItem`.
+Calls `tickets.create {projectID, name, description?, status?}`. Result: the `TicketItem`.
 
-### 6.9 update_task
+### 6.9 update_ticket
 
 ```json
 {
-  "name": "update_task",
-  "description": "Change the name, Markdown description or status of a task.",
+  "name": "update_ticket",
+  "description": "Change the name, Markdown description or status of a ticket.",
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id, for example HEPH-12, or HEPH-F3 for a feedback task."},
-      "name": {"type": "string", "minLength": 1, "description": "New task name, one line."},
+      "ticket": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Ticket id, for example HEPH-12, or HEPH-F3 for a feedback ticket."},
+      "name": {"type": "string", "minLength": 1, "description": "New ticket name, one line."},
       "description": {"type": "string", "description": "New description in Markdown."},
       "status": {"type": "string", "enum": ["todo", "in_progress", "review", "done"], "description": "New status."}
     },
-    "required": ["task"],
+    "required": ["ticket"],
     "additionalProperties": false
   }
 }
 ```
 
-In a `feedback` session, `task` uppercased must be the session's `taskID`, else tool error `Forge sessions can only
-change their own feedback task.` Calls `tasks.update {projectID, taskID, patch: {name?, description?, status?}}` with
-the given fields only. Result: the `TaskItem`.
+In a `feedback` session, `ticket` uppercased must be the session's `ticketID`, else tool error `Forge sessions can only
+change their own feedback ticket.` Calls `tickets.update {projectID, ticketID, patch: {name?, description?, status?}}`
+with the given fields only. Result: the `TicketItem`.
 
-### 6.10 delete_task
+### 6.10 delete_ticket
 
 ```json
 {
-  "name": "delete_task",
-  "description": "Delete a task with its comments and attachments. Its number is never reused.",
+  "name": "delete_ticket",
+  "description": "Delete a ticket with its comments and attachments. Its number is never reused.",
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id, for example HEPH-12, or HEPH-F3 for a feedback task."}
+      "ticket": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Ticket id, for example HEPH-12, or HEPH-F3 for a feedback ticket."}
     },
-    "required": ["task"],
+    "required": ["ticket"],
     "additionalProperties": false
   }
 }
 ```
 
-Calls `tasks.delete {projectID, taskID}`. Result: `{"deleted":"HEPH-12"}`.
+Calls `tickets.delete {projectID, ticketID}`. Result: `{"deleted":"HEPH-12"}`.
 
-### 6.11 comment_task
+### 6.11 comment_ticket
 
 ```json
 {
-  "name": "comment_task",
-  "description": "Add a comment to a task. The body is Markdown. files lists absolute paths of files on this Mac to attach to the comment, of any size; the user sees attached images in the comment.",
+  "name": "comment_ticket",
+  "description": "Add a comment to a ticket. The body is Markdown. files lists absolute paths of files on this Mac to attach to the comment, of any size; the user sees attached images in the comment.",
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id, for example HEPH-12, or HEPH-F3 for a feedback task."},
+      "ticket": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Ticket id, for example HEPH-12, or HEPH-F3 for a feedback ticket."},
       "body": {"type": "string", "minLength": 1, "description": "Comment text in Markdown."},
       "files": {"type": "array", "items": {"type": "string"}, "description": "Absolute paths of files on this Mac to attach."}
     },
-    "required": ["task", "body"],
+    "required": ["ticket", "body"],
     "additionalProperties": false
   }
 }
 ```
 
-- In a `feedback` session, `task` uppercased must be the session's `taskID`, else tool error `Forge sessions can only
-  change their own feedback task.`, checked before the files.
+- In a `feedback` session, `ticket` uppercased must be the session's `ticketID`, else tool error `Forge sessions can
+  only change their own feedback ticket.`, checked before the files.
 - Each path must be absolute and name a readable regular file on this Main; otherwise a tool error
   `Cannot attach <path>: <reason>.` and nothing is sent. Files have no size limit. Every path is checked before any
   upload, in this order: not absolute, `the path is not absolute`; nothing there, the system's text for the error
   (`strerror`, for example `No such file or directory`); not a regular file, `it is not a regular file`; not readable,
   the system's text (`Permission denied`).
-- Each file is uploaded to the Main hosting the task's project, in order, with `perform(_:params:on:)` (in process on
+- Each file is uploaded to the Main hosting the ticket's project, in order, with `perform(_:params:on:)` (in process on
   this Main, forwarded over the peer link otherwise, section 7): `uploads.begin {projectID, fileName: <last path
   component>, size}`, then `uploads.chunk {uploadID, offset, data}` with the file's bytes read in order with a
   `FileHandle`, `MethodLimits.maxChunkSize` bytes at a time (the last chunk shorter), one request at a time
@@ -585,35 +586,35 @@ Calls `tasks.delete {projectID, taskID}`. Result: `{"deleted":"HEPH-12"}`.
   the tool error `Cannot attach <path>: <reason>.`; no comment is added. `<reason>`: `<code>: <message>` for an error
   response, the error's message for a read error, `the file changed while it was read` for a file that ends before its
   size or goes on after it; its final period is left out.
-- Then calls `tasks.addComment {projectID, taskID, body, attachments, author: "Claude"}` with one `UploadRef {uploadID,
-  fileName: <last path component>}` per file, in the order of `files`. On this Main the in-process request context has
-  the author `Claude`; on another Main the `author` param is honored because it comes over a peer link
+- Then calls `tickets.addComment {projectID, ticketID, body, attachments, author: "Claude"}` with one `UploadRef
+  {uploadID, fileName: <last path component>}` per file, in the order of `files`. On this Main the in-process request
+  context has the author `Claude`; on another Main the `author` param is honored because it comes over a peer link
   ([../services/host.md](../services/host.md)). Either way the comment's author is `Claude`, and the comment can be
-  deleted but not edited ([../protocol/methods.md](../protocol/methods.md#tasksupdatecomment)). When `tasks.addComment`
-  fails, `uploads.cancel` is sent for each upload (errors ignored) and its error is the tool error.
-- Result: the `TaskItem`.
+  deleted but not edited ([../protocol/methods.md](../protocol/methods.md#ticketsupdatecomment)). When
+  `tickets.addComment` fails, `uploads.cancel` is sent for each upload (errors ignored) and its error is the tool error.
+- Result: the `TicketItem`.
 
-### 6.12 start_task_session
+### 6.12 start_ticket_session
 
 ```json
 {
-  "name": "start_task_session",
-  "description": "Start a Claude session that works on a task. It runs on the Main hosting the task's project, and the user can follow and answer it from any device. Modes: implement (implement the task, keep the docs in sync, build and test, comment a summary), debug (find the root cause, explain it, fix it after the user confirms), review (review the work done for the task and comment the findings), plan (comment an implementation plan, no code changes), custom (follow the given instructions). The task goes to in_progress when the session starts a turn and to review when it ends it.",
+  "name": "start_ticket_session",
+  "description": "Start a Claude session that works on a ticket. It runs on the Main hosting the ticket's project, and the user can follow and answer it from any device. Modes: implement (implement the ticket, keep the docs in sync, build and test, comment a summary), debug (find the root cause, explain it, fix it after the user confirms), review (review the work done for the ticket and comment the findings), plan (comment an implementation plan, no code changes), custom (follow the given instructions). The ticket goes to in_progress when the session starts a turn and to review when it ends it.",
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id, for example HEPH-12, or HEPH-F3 for a feedback task."},
+      "ticket": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Ticket id, for example HEPH-12, or HEPH-F3 for a feedback ticket."},
       "mode": {"type": "string", "enum": ["implement", "debug", "review", "plan", "custom"], "description": "What the session does."},
       "instructions": {"type": "string", "description": "Instructions for the session. Required with mode custom; with another mode they are added to the session's first message."}
     },
-    "required": ["task", "mode"],
+    "required": ["ticket", "mode"],
     "additionalProperties": false
   }
 }
 ```
 
 Mode `custom` without non-empty `instructions` → tool error `Mode custom needs instructions.` Calls `sessions.start
-{projectID, kind: "task", taskID, mode, message: instructions}` (`message` omitted when absent). Result: the
+{projectID, kind: "ticket", ticketID, mode, message: instructions}` (`message` omitted when absent). Result: the
 `SessionInfo`.
 
 ### 6.13 list_web_tabs
@@ -663,14 +664,14 @@ URL.`). Calls `tabs.open {projectID, url, title?, locked?}`. Result: the `WebTab
 ```json
 {
   "name": "search",
-  "description": "Search every online Main: projects, tasks, comments, docs, code, skills, web tabs, Claude sessions and devices. Matching ignores case and diacritics, and every word of the query must match. An exact task id or project identifier ranks first.",
+  "description": "Search every online Main: projects, tickets, comments, docs, code, skills, web tabs, Claude sessions and devices. Matching ignores case and diacritics, and every word of the query must match. An exact ticket id or project identifier ranks first.",
   "inputSchema": {
     "type": "object",
     "properties": {
       "query": {"type": "string", "minLength": 1, "description": "Words to search for."},
       "scopes": {
         "type": "array",
-        "items": {"type": "string", "enum": ["projects", "tasks", "comments", "docs", "code", "skills", "webTabs", "sessions", "devices"]},
+        "items": {"type": "string", "enum": ["projects", "tickets", "comments", "docs", "code", "skills", "webTabs", "sessions", "devices"]},
         "description": "Kinds of items to search. Default: every kind."
       }
     },
@@ -742,12 +743,12 @@ Calls `skills.files {name}` and `skills.readFile {name, path: "SKILL.md"}` on th
 3. `skills.writeFile {name, path: "SKILL.md", data: <content as UTF-8>}`.
 4. Result: the skill's `SkillSummary` from `skills.list`.
 
-### 6.19 forge_push_docs (task and bundle sessions)
+### 6.19 forge_push_docs (ticket and bundle sessions)
 
 ```json
 {
   "name": "forge_push_docs",
-  "description": "Check the documentation commits of this task or bundle that are not on GitHub yet for personal data, then push them. Commit first, once the user agrees. On an error, do what the message says, then call it again.",
+  "description": "Check the documentation commits of this ticket or bundle that are not on GitHub yet for personal data, then push them. Commit first, once the user agrees. On an error, do what the message says, then call it again.",
   "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false}
 }
 ```
@@ -772,32 +773,32 @@ Calls `MCPHost.forgePushRegen(sessionID:)` with the token's session, as for 6.19
 ```json
 {
   "name": "get_bundle",
-  "description": "Get the bundle this session coordinates: its tasks in order, each with the task, its task session, its branch and its work folder, and how many task sessions may run at once.",
+  "description": "Get the bundle this session coordinates: its tickets in order, each with the ticket, its ticket session, its branch and its work folder, and how many ticket sessions may run at once.",
   "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false}
 }
 ```
 
 Result: `BundleDetails` ([../services/bundles.md](../services/bundles.md#swift-api)).
 
-### 6.22 start_bundle_task
+### 6.22 start_bundle_ticket
 
 ```json
 {
-  "name": "start_bundle_task",
-  "description": "Start the task session of a task of your bundle: it implements the task in its own git worktree, on the branch task/<task id>, commits there and comments a summary; the task goes to review when its session ends its turn. When the task already has a session, send that session instructions instead.",
+  "name": "start_bundle_ticket",
+  "description": "Start the ticket session of a ticket of your bundle: it implements the ticket in its own git worktree, on the branch task/<ticket id>, commits there and comments a summary; the ticket goes to review when its session ends its turn. When the ticket already has a session, send that session instructions instead.",
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id of your bundle, for example HEPH-12."},
-      "instructions": {"type": "string", "description": "Added to the first message of a new session; sent to the existing session of the task, where they are required."}
+      "ticket": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Ticket id of your bundle, for example HEPH-12."},
+      "instructions": {"type": "string", "description": "Added to the first message of a new session; sent to the existing session of the ticket, where they are required."}
     },
-    "required": ["task"],
+    "required": ["ticket"],
     "additionalProperties": false
   }
 }
 ```
 
-`BundleService.startTask` ([../services/bundles.md](../services/bundles.md#tools-of-the-coordinator)); `instructions`
+`BundleService.startTicket` ([../services/bundles.md](../services/bundles.md#tools-of-the-coordinator)); `instructions`
 empty after trimming counts as absent. Result: the `SessionInfo`.
 
 ### 6.23 update_bundle
@@ -824,7 +825,7 @@ empty after trimming counts as absent. Result: the `SessionInfo`.
 ```json
 {
   "name": "finish_bundle",
-  "description": "Finish your bundle once the work of its tasks is on its base branch (and pushed, in the Forge repository): removes the worktrees, deletes the branches whose work is on the base branch, and marks the bundle done. Lists the branches it kept.",
+  "description": "Finish your bundle once the work of its tickets is on its base branch (and pushed, in the Forge repository): removes the worktrees, deletes the branches whose work is on the base branch, and marks the bundle done. Lists the branches it kept.",
   "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false}
 }
 ```
@@ -875,7 +876,7 @@ more messages.`
 
 ## 7. Locating a project and forwarding
 
-A tool acting on a project (every tool with `project`, `task` or `parent`) finds the Main hosting it:
+A tool acting on a project (every tool with `project`, `ticket` or `parent`) finds the Main hosting it:
 
 1. `projects.list {}` on this Main. The project is found when it or one of its sub projects, at any depth
    (`ProjectSummary.children`), has that identifier.
@@ -907,13 +908,13 @@ bundle and close tools call the local hooks.
 
 ## Depends on
 
-| Name                                                                                                                                                                                                                               | Defined in                                         |
-|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------|
-| `SessionKind`, `MeshSnapshot`, `ProjectSummary` (`children`), `Project` (`rootPath`), `TaskItem` (`parseError`), `WebTab`, `SearchResult`, `SearchScope`, `SkillSummary`, `SkillFile`, `SessionInfo`, `UploadRef`, `ProtocolError` | [../protocol/types.md](../protocol/types.md)       |
-| `mesh.snapshot`, `projects.*`, `tasks.*` (`tasks.addComment` with `author`), `sessions.start`, `sessions.update`, `tabs.open`, `search.query`, `skills.*`, `uploads.*`, `maxChunkSize`                                             | [../protocol/methods.md](../protocol/methods.md)   |
-| `HostService` (conformance to `MCPHost`, `perform`), `RequestContext.local(device:author:)`, `MeshService.requestPeer`, starting and stopping the server                                                                           | [../services/host.md](../services/host.md)         |
-| `ForgeService.pushDocs`, `ForgeService.pushRegen`, the Forge push gate                                                                                                                                                             | [../forge/pipeline.md](../forge/pipeline.md)       |
-| the public repository rule that limits the tools of Forge sessions                                                                                                                                                                 | [../public-repository.md](../public-repository.md) |
-| `Log.host`, logging rules                                                                                                                                                                                                          | [../architecture.md](../architecture.md)           |
-| SKILL.md validation                                                                                                                                                                                                                | [skills.md](skills.md)                             |
-| token registration by session processes, `SessionService.close` (closing a session)                                                                                                                                                | [cli.md](cli.md)                                   |
+| Name                                                                                                                                                                                                                                 | Defined in                                         |
+|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------|
+| `SessionKind`, `MeshSnapshot`, `ProjectSummary` (`children`), `Project` (`rootPath`), `TicketItem` (`parseError`), `WebTab`, `SearchResult`, `SearchScope`, `SkillSummary`, `SkillFile`, `SessionInfo`, `UploadRef`, `ProtocolError` | [../protocol/types.md](../protocol/types.md)       |
+| `mesh.snapshot`, `projects.*`, `tickets.*` (`tickets.addComment` with `author`), `sessions.start`, `sessions.update`, `tabs.open`, `search.query`, `skills.*`, `uploads.*`, `maxChunkSize`                                           | [../protocol/methods.md](../protocol/methods.md)   |
+| `HostService` (conformance to `MCPHost`, `perform`), `RequestContext.local(device:author:)`, `MeshService.requestPeer`, starting and stopping the server                                                                             | [../services/host.md](../services/host.md)         |
+| `ForgeService.pushDocs`, `ForgeService.pushRegen`, the Forge push gate                                                                                                                                                               | [../forge/pipeline.md](../forge/pipeline.md)       |
+| the public repository rule that limits the tools of Forge sessions                                                                                                                                                                   | [../public-repository.md](../public-repository.md) |
+| `Log.host`, logging rules                                                                                                                                                                                                            | [../architecture.md](../architecture.md)           |
+| SKILL.md validation                                                                                                                                                                                                                  | [skills.md](skills.md)                             |
+| token registration by session processes, `SessionService.close` (closing a session)                                                                                                                                                  | [cli.md](cli.md)                                   |

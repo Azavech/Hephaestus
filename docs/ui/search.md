@@ -11,7 +11,7 @@ files:
 
 ---
 
-Global search covers projects, tasks, comments, docs, code, skills, web tabs, sessions and devices on every connected
+Global search covers projects, tickets, comments, docs, code, skills, web tabs, sessions and devices on every connected
 Main. The queries, their scheduling (250 ms debounce), the fan-out to the Mains, the merge and the order of the
 results are done by `SearchModel` ([../services/search.md](../services/search.md#5-searchmodel-client)); this doc is
 the UI on top of it and the navigation to a result.
@@ -79,7 +79,7 @@ Both call `context.openSearch()` ([shell.md](shell.md#52-windowcontext)). Each p
 | All     | `scopes` is empty    | `scopes = []`                                                              |
 | a scope | `scopes` contains it | inserts or removes it; when `scopes` then holds every scope, `scopes = []` |
 
-The scope chips, in this order, with the titles of the result groups: Projects, Tasks, Comments, Docs, Code, Skills,
+The scope chips, in this order, with the titles of the result groups: Projects, Tickets, Comments, Docs, Code, Skills,
 Web Tabs, Sessions, Devices. `model.scopes` is the binding: a change makes the model search again
 ([../services/search.md](../services/search.md#51-scheduling-and-cancellation)).
 
@@ -92,7 +92,7 @@ is hidden.
 | `kind`     | Group title | Symbol                                    |
 |------------|-------------|-------------------------------------------|
 | `projects` | Projects    | `folder`                                  |
-| `tasks`    | Tasks       | `checklist`                               |
+| `tickets`  | Tickets     | `checklist`                               |
 | `comments` | Comments    | `text.bubble`                             |
 | `docs`     | Docs        | `book.closed`                             |
 | `code`     | Code        | `chevron.left.forwardslash.chevron.right` |
@@ -117,11 +117,11 @@ palette the headers are pinned (`LazyVStack(pinnedViews: [.sectionHeaders])`), f
 | location | caption, secondary, one line, middle truncation (table below); `devices`: a `PresenceLabel` of that device instead |
 | snippet  | `snippet`, caption, one line, tail truncation, with the matches highlighted; omitted when empty                    |
 
-| `kind`                                     | Location                      |
-|--------------------------------------------|-------------------------------|
-| `projects`, `skills`                       | "<Main>"                      |
-| `tasks`, `comments`, `webTabs`, `sessions` | "<Main> ▸ <project>"          |
-| `docs`, `code`                             | "<Main> ▸ <project> ▸ <path>" |
+| `kind`                                       | Location                      |
+|----------------------------------------------|-------------------------------|
+| `projects`, `skills`                         | "<Main>"                      |
+| `tickets`, `comments`, `webTabs`, `sessions` | "<Main> ▸ <project>"          |
+| `docs`, `code`                               | "<Main> ▸ <project> ▸ <path>" |
 
 - `<Main>`: the name of `deviceID`: `workspace.connection(deviceID)?.name`, else the record name in `workspace.mesh`,
   else "Unknown Main".
@@ -141,12 +141,12 @@ with each range bold (`.inlinePresentationIntent = .stronglyEmphasized`) on the 
 
 Shown instead of the results, centered, secondary:
 
-| Condition (first that applies)                   | Content                                                                                 |
-|--------------------------------------------------|-----------------------------------------------------------------------------------------|
-| the trimmed `model.text` is empty                | "Search projects, tasks, comments, docs, code, skills, web tabs, sessions and devices." |
-| no connection of the Workspace is connected      | "No Main is online."                                                                    |
-| `model.results` is empty and `model.isSearching` | a `ProgressView`                                                                        |
-| `model.results` is empty                         | "No results for “<trimmed text>”"                                                       |
+| Condition (first that applies)                   | Content                                                                                   |
+|--------------------------------------------------|-------------------------------------------------------------------------------------------|
+| the trimmed `model.text` is empty                | "Search projects, tickets, comments, docs, code, skills, web tabs, sessions and devices." |
+| no connection of the Workspace is connected      | "No Main is online."                                                                      |
+| `model.results` is empty and `model.isSearching` | a `ProgressView`                                                                          |
+| `model.results` is empty                         | "No results for “<trimmed text>”"                                                         |
 
 Under the results (or the last state), one caption line in orange per entry of `model.failures`:
 "<Main> did not answer: <message>", `<Main>` being the name of that Main as in a row's location ([Row](#row)). The
@@ -161,8 +161,8 @@ palette or dismisses the sheet:
 | `kind`     | `mainDeviceID` | `projectID` | `section`  | `item`                                                                  |
 |------------|----------------|-------------|------------|-------------------------------------------------------------------------|
 | `projects` | `deviceID`     | `projectID` | `overview` | nil                                                                     |
-| `tasks`    | `deviceID`     | `projectID` | `tasks`    | `taskID`                                                                |
-| `comments` | `deviceID`     | `projectID` | `tasks`    | `taskID`                                                                |
+| `tickets`  | `deviceID`     | `projectID` | `tickets`  | `ticketID`                                                              |
+| `comments` | `deviceID`     | `projectID` | `tickets`  | `ticketID`                                                              |
 | `docs`     | `deviceID`     | `projectID` | `docs`     | `path`, followed by `#L<line>` when `line` is set                       |
 | `code`     | `deviceID`     | `projectID` | `code`     | `path`, followed by `#L<line>` when `line` is set                       |
 | `skills`   | `deviceID`     | unchanged   | `skills`   | `itemID`, or `<itemID>/<path>` when `path` is set and is not `SKILL.md` |

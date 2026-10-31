@@ -11,8 +11,8 @@ Every project, top-level or sub project, has the file `<project root>/.hephaestu
 of the project and the state every device shares: sub projects, web tabs, enabled skills and Claude
 defaults.
 
-The first section defines the YAML coding used by every YAML file of Hephaestus: this file, the task files
-([task-yml.md](task-yml.md)) and the session metadata files ([sessions.md](sessions.md)).
+The first section defines the YAML coding used by every YAML file of Hephaestus: this file, the ticket files
+([ticket-yml.md](ticket-yml.md)) and the session metadata files ([sessions.md](sessions.md)).
 
 ## YAML coding (all YAML files)
 
@@ -78,6 +78,11 @@ empty: ''
   seconds; quoted or not), booleans `true` `false` `yes` `no` `on` `off`, decimal integers.
 - A key absent from the file takes its default: each struct implements `init(from:)` with `decodeIfPresent` for every
   key that has a default. A required key that is absent, or a value that cannot be decoded, makes the file invalid.
+- The data on disk keeps the names it had before tasks were renamed tickets, so that no project needs a migration: the
+  folder `.hephaestus/tasks/` ([ticket-yml.md](ticket-yml.md)), the key `taskCounter` of this file, the key `taskID`
+  and the kind `task` of session files ([sessions.md](sessions.md#metadata-file)), and the keys `tasks` and `task` of
+  bundle files ([../services/bundles.md](../services/bundles.md#bundle-file)). A Swift property named after tickets is
+  coded with the old key through its `CodingKeys`.
 - Keys that are not in the schema are ignored by decoding and kept when the file is rewritten (next section).
 - After decoding, the struct is normalized and validated by the rules of its file.
 - Errors are `DataError` values ([app-storage.md](app-storage.md#errors)) whose message is `<file name>: <problem>`:
@@ -138,7 +143,7 @@ Consequences:
 
 A retired key is a key that earlier versions of the app wrote and this version no longer knows. Decoding ignores it,
 whatever its value, like any unknown key; step 2 removes it, so the next write of the file drops it. project.yml has
-one retired key, `runs` (the run configurations of earlier versions). The task and session files have none.
+one retired key, `runs` (the run configurations of earlier versions). The ticket and session files have none.
 
 ### Read-modify-write
 
@@ -163,20 +168,20 @@ The functions of this doc do no locking. The host serializes the writes of one p
 
 Top level, in this order:
 
-| Key               | YAML type            | Required | Default | Written             | Meaning                                                                    |
-|-------------------|----------------------|----------|---------|---------------------|----------------------------------------------------------------------------|
-| `id`              | string               | yes      |         | always              | Project identifier: the `projectID` of the protocol. Never changes.        |
-| `name`            | string               | yes      |         | always              | Display name.                                                              |
-| `description`     | string               | no       | empty   | when not empty      | Description; may span several lines.                                       |
-| `created`         | timestamp            | yes      |         | always              | Creation time.                                                             |
-| `code`            | string               | no       | `.`     | always              | Code folder, relative to the project root.                                 |
-| `docs`            | string               | no       | `docs`  | always              | Docs folder, relative to the code folder.                                  |
-| `taskCounter`     | integer              | no       | `0`     | always              | Last task number used ([task-yml.md](task-yml.md#id-allocation)).          |
-| `feedbackCounter` | integer              | no       | `0`     | always              | Last feedback task number used ([task-yml.md](task-yml.md#id-allocation)). |
-| `subprojects`     | sequence of strings  | no       | `[]`    | always              | Roots of the sub projects, relative to this project's root.                |
-| `webTabs`         | sequence of web tabs | no       | `[]`    | always              | Web tabs, in tab strip order.                                              |
-| `skills`          | sequence of strings  | no       | `[]`    | always              | Names of the enabled library skills. Empty: every skill of the library.    |
-| `claude`          | mapping              | no       | absent  | when one key is set | Defaults of new Claude sessions.                                           |
+| Key               | YAML type            | Required | Default | Written             | Meaning                                                                          |
+|-------------------|----------------------|----------|---------|---------------------|----------------------------------------------------------------------------------|
+| `id`              | string               | yes      |         | always              | Project identifier: the `projectID` of the protocol. Never changes.              |
+| `name`            | string               | yes      |         | always              | Display name.                                                                    |
+| `description`     | string               | no       | empty   | when not empty      | Description; may span several lines.                                             |
+| `created`         | timestamp            | yes      |         | always              | Creation time.                                                                   |
+| `code`            | string               | no       | `.`     | always              | Code folder, relative to the project root.                                       |
+| `docs`            | string               | no       | `docs`  | always              | Docs folder, relative to the code folder.                                        |
+| `taskCounter`     | integer              | no       | `0`     | always              | Last ticket number used ([ticket-yml.md](ticket-yml.md#id-allocation)).          |
+| `feedbackCounter` | integer              | no       | `0`     | always              | Last feedback ticket number used ([ticket-yml.md](ticket-yml.md#id-allocation)). |
+| `subprojects`     | sequence of strings  | no       | `[]`    | always              | Roots of the sub projects, relative to this project's root.                      |
+| `webTabs`         | sequence of web tabs | no       | `[]`    | always              | Web tabs, in tab strip order.                                                    |
+| `skills`          | sequence of strings  | no       | `[]`    | always              | Names of the enabled library skills. Empty: every skill of the library.          |
+| `claude`          | mapping              | no       | absent  | when one key is set | Defaults of new Claude sessions.                                                 |
 
 Web tab (item of `webTabs`):
 
@@ -227,9 +232,9 @@ so the message is that of the first broken rule.
 Names have no maximum length. A line break is a `Character` whose `isNewline` is true (LF, CR, CR LF, vertical tab,
 form feed, U+0085, U+2028, U+2029). Every trim of the data docs removes `.whitespacesAndNewlines`, line breaks
 included, whether its rule says whitespace or white space and line breaks: the tables of this doc,
-[task-yml.md](task-yml.md), [sessions.md](sessions.md) and [app-storage.md](app-storage.md#rules),
-`ProjectIdentifier.normalize` and `TaskID(_:)`. The same name rule applies to task names ([task-yml.md](task-yml.md))
-and session titles ([sessions.md](sessions.md)).
+[ticket-yml.md](ticket-yml.md), [sessions.md](sessions.md) and [app-storage.md](app-storage.md#rules),
+`ProjectIdentifier.normalize` and `TicketID(_:)`. The same name rule applies to ticket names
+([ticket-yml.md](ticket-yml.md)) and session titles ([sessions.md](sessions.md)).
 
 `webTabs[i].id` is decoded as a `UUID`, so a value that is not a UUID is `webTabs[<i>].id: invalid value`; Yams writes
 it in canonical uppercase. The skill name rule is the one of [claude/skills.md](../claude/skills.md).
@@ -307,18 +312,18 @@ parent's `subprojects` is a separate `ProjectFile.update` of the parent made by 
 
 The host builds the types of [protocol/types.md](../protocol/types.md) from `ProjectFile`:
 
-- `Project` carries every key of the schema under the same name and nesting: `webTabs` items become `WebTab` values
-  (`id`, `title`, `url`, `locked`), and `claude` the
+- `Project` carries every key of the schema under the same name and nesting, except `taskCounter`, which is
+  `Project.ticketCounter`: `webTabs` items become `WebTab` values (`id`, `title`, `url`, `locked`), and `claude` the
   `ClaudeDefaults` value (both fields `nil` when the file has no `claude`).
-- `Project.taskCounter` is the number the host uses: the larger of the file's `taskCounter` and the highest task file
-  number ([task-yml.md](task-yml.md#id-allocation)); `Project.feedbackCounter` the same for `feedbackCounter` and the
-  highest feedback task file number.
+- `Project.ticketCounter` is the number the host uses: the larger of the file's `taskCounter` and the highest ticket
+  file number ([ticket-yml.md](ticket-yml.md#id-allocation)); `Project.feedbackCounter` the same for `feedbackCounter`
+  and the highest feedback ticket file number.
 - `ProjectSummary` takes `id`, `name` and `description` from the file; its `children` follow the order of
   `subprojects`.
 - `deviceID`, `rootPath`, `migrating` and `parseError` of `Project` and `ProjectSummary`, and the `children` of
   `ProjectSummary`, do not come from this file: the host fills them ([services/host.md](../services/host.md)).
 - Requests that change the project (`projects.update`, `tabs.open`, `tabs.update`, `tabs.close`, `tabs.move`, sub
-  project creation, task id allocation) are each one `ProjectFile.update`.
+  project creation, ticket id allocation) are each one `ProjectFile.update`.
 
 ## Logging
 
@@ -380,7 +385,8 @@ public struct ProjectFile: Codable, Sendable, Equatable {
     public var created: Date
     public var code: String
     public var docs: String
-    public var taskCounter: Int
+    /// The key taskCounter of the file, which keeps its name.
+    public var ticketCounter: Int
     public var feedbackCounter: Int
     public var subprojects: [String]
     public var webTabs: [WebTabEntry]

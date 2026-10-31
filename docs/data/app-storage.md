@@ -18,7 +18,7 @@ files:
 
 What a device keeps outside project folders: its Application Support folder, one Keychain item, the state of each
 window, and a cache of downloaded attachments ([Caches](#caches)). Project data is in the project folders
-([project-yml.md](project-yml.md), [task-yml.md](task-yml.md), [sessions.md](sessions.md)).
+([project-yml.md](project-yml.md), [ticket-yml.md](ticket-yml.md), [sessions.md](sessions.md)).
 
 ## Folder
 
@@ -47,7 +47,7 @@ Content:
 | `private-terms.txt`        | Forge host   | words the personal data check refuses, one per line             | [public-repository.md](../public-repository.md#private-terms), [forge/pipeline.md](../forge/pipeline.md) |
 | `Skills/`                  | Main         | skills library                                                  | [claude/skills.md](../claude/skills.md)                                                                  |
 | `SessionPlugins/`          | Main         | per session (`<sessionID>/`): plugin folder, `system-prompt.md` | [claude/skills.md](../claude/skills.md), [claude/cli.md](../claude/cli.md)                               |
-| `Worktrees/`               | Main         | git worktrees of bundle tasks (`<projectID>/<task id>/`)        | [services/bundles.md](../services/bundles.md#worktrees)                                                  |
+| `Worktrees/`               | Main         | git worktrees of bundle tickets (`<projectID>/<ticket id>/`)    | [services/bundles.md](../services/bundles.md#worktrees)                                                  |
 | `Updates/`                 | macOS        | downloaded updates                                              | [forge/update.md](../forge/update.md)                                                                    |
 
 A file or folder is created the first time it is written. Nothing else is stored in this folder.
@@ -127,7 +127,7 @@ The settings of this device. Nested keys are JSON objects: `forge.enabled` is `{
 | `defaultModel`            | string           | `""`          | Main    | Model of new sessions when the project sets none. Empty: no `--model`.            | [claude/cli.md](../claude/cli.md)                                                                         |
 | `defaultPermissionMode`   | string           | `acceptEdits` | Main    | Permission mode of new sessions when the project sets none.                       | [claude/cli.md](../claude/cli.md)                                                                         |
 | `sessionIdleMinutes`      | integer          | `15`          | Main    | A session process with no activity for this long is stopped.                      | [claude/cli.md](../claude/cli.md)                                                                         |
-| `bundles.maxParallel`     | integer          | `4`           | Main    | Task sessions of one bundle that run at the same time.                            | [services/bundles.md](../services/bundles.md)                                                             |
+| `bundles.maxParallel`     | integer          | `4`           | Main    | Ticket sessions of one bundle that run at the same time.                          | [services/bundles.md](../services/bundles.md)                                                             |
 | `autosave`                | boolean          | `true`        | every   | The editors save 1.5 s after the last edit.                                       | [ui/code.md](../ui/code.md)                                                                               |
 | `showHiddenFiles`         | boolean          | `false`       | every   | The file browser shows hidden files and folders.                                  | [ui/code.md](../ui/code.md)                                                                               |
 | `forge.enabled`           | boolean          | `false`       | Main    | This Main is the Forge. Onboarding turns it on for the Mac that creates the mesh. | [forge/pipeline.md](../forge/pipeline.md), [ui/onboarding.md](../ui/onboarding.md#use-this-mac-as-a-main) |
@@ -159,7 +159,7 @@ of the table, and the first broken rule fails the change with `.invalid(<message
 | `defaultModel`            | whitespace trimmed                                           | no line break                              | `the model must be on one line`                                                     |
 | `defaultPermissionMode`   | none                                                         | a `PermissionMode` value                   | `invalid permission mode`                                                           |
 | `sessionIdleMinutes`      | none                                                         | 1 to 1440                                  | `the idle timeout must be between 1 and 1440 minutes`                               |
-| `bundles.maxParallel`     | none                                                         | 1 to 16                                    | `the parallel task sessions must be between 1 and 16`                               |
+| `bundles.maxParallel`     | none                                                         | 1 to 16                                    | `the parallel ticket sessions must be between 1 and 16`                             |
 | `forge.sourceProjectID`   | `ProjectIdentifier.normalize`                                | `^[A-Z]{2,8}$`                             | `the identifier must be 2 to 8 letters A to Z`                                      |
 | `forge.branch`            | whitespace trimmed                                           | not empty, no whitespace                   | `the branch must not be empty or contain spaces`                                    |
 | `updates.signingIdentity` | whitespace trimmed                                           | no line break                              | `the signing identity must be on one line`                                          |
@@ -399,7 +399,7 @@ that write in them.
 | macOS          | `~/Library/Caches/Hephaestus/Attachments/`                          |
 | iOS and iPadOS | `Library/Caches/Hephaestus/Attachments/` inside the app's container |
 
-- Content: task attachments, files attached to session messages, and the large project files opened in the image
+- Content: ticket attachments, files attached to session messages, and the large project files opened in the image
   viewer or Quick Look, under `<mainDeviceID>/<projectID>/`. Layout, reuse and writing: `AttachmentCache` and the
   download functions of [client/workspace.md](../client/workspace.md#transfers).
 - The system may delete the folder's content (iOS and iPadOS do when storage runs low); a missing file is downloaded
@@ -425,8 +425,8 @@ Each window keeps its selection with `@SceneStorage` ([ui/shell.md](../ui/shell.
 
 ## Atomic writes
 
-`AtomicFile.write(_:to:)` writes every file of the data docs (`project.yml`, task files, session metadata, and the JSON
-files of this doc); task and session attachments are moved into place from uploads
+`AtomicFile.write(_:to:)` writes every file of the data docs (`project.yml`, ticket files, session metadata, and the
+JSON files of this doc); ticket and session attachments are moved into place from uploads
 ([services/files.md](../services/files.md#7-uploads)):
 
 1. The destination is resolved through symlinks (`URL.resolvingSymlinksInPath()`), so writing to a symlink replaces the
@@ -445,7 +445,7 @@ Appends to a session's `.jsonl` file are not atomic writes ([sessions.md](sessio
 
 ## Errors
 
-The data code throws `DataError`. Its message is shown to the user as it is (error banners, broken task rows).
+The data code throws `DataError`. Its message is shown to the user as it is (error banners, broken ticket rows).
 `DataError` is not a `LocalizedError`, so its `localizedDescription` is Foundation's generic text: code that shows,
 logs or sends a `DataError` uses its `message`, and the host maps it to a protocol error before answering
 ([services/host.md](../services/host.md) §6.9, [ui/shell.md](../ui/shell.md)).
@@ -461,7 +461,7 @@ logs or sends a `DataError` uses its `message`, and the host maps it to a protoc
 When a request fails because of a `DataError`, the host answers with the code of the table and the error's message
 ([protocol/envelope.md](../protocol/envelope.md)). The message of `.refused` is `The file is invalid: <parse error>`,
 the parse error being the `DataError` message of the file (`<file name>: <problem>`,
-[project-yml.md](project-yml.md#read-modify-write), [task-yml.md](task-yml.md#broken-files)). When a file read at
+[project-yml.md](project-yml.md#read-modify-write), [ticket-yml.md](ticket-yml.md#broken-files)). When a file read at
 load time is `.unreadable` or `.invalid`, the file is broken or skipped as its doc says.
 
 ## Logging

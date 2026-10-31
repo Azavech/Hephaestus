@@ -8,7 +8,7 @@ files:
 - HephaestusKit/Sources/HephHost/Projects/ProjectService.swift
 - HephaestusKit/Sources/HephHost/Projects/ProjectWriteQueue.swift
 - HephaestusKit/Sources/HephHost/Projects/FileWatcher.swift
-- HephaestusKit/Sources/HephHost/Tasks/TaskService.swift
+- HephaestusKit/Sources/HephHost/Tickets/TicketService.swift
 - HephaestusKit/Sources/HephHost/Tabs/TabService.swift
 
 ---
@@ -24,7 +24,7 @@ Bonjour, registry, presence and peer links in [../devices/mesh.md](../devices/me
 [../devices/migration.md](../devices/migration.md); sessions in [../claude/cli.md](../claude/cli.md); MCP server in
 [../claude/mcp.md](../claude/mcp.md); skills in [../claude/skills.md](../claude/skills.md); Forge in
 [../forge/pipeline.md](../forge/pipeline.md); files on disk in [../data/project-yml.md](../data/project-yml.md),
-[../data/task-yml.md](../data/task-yml.md), [../data/sessions.md](../data/sessions.md),
+[../data/ticket-yml.md](../data/ticket-yml.md), [../data/sessions.md](../data/sessions.md),
 [../data/app-storage.md](../data/app-storage.md); `RPCPeer`, `Topic` and `WireCoding` in
 [../protocol/envelope.md](../protocol/envelope.md); wire types in [../protocol/types.md](../protocol/types.md).
 
@@ -51,7 +51,7 @@ its type is public (`EventHub`, `UploadService`, `MeshService`, `MigrationServic
 | `registry`  | `ProjectRegistry`  | this doc §6                             | hosted projects, `projects.json`, write queues   |
 | `watcher`   | `FileWatcher`      | this doc §11                            | FSEvents → events                                |
 | `projects`  | `ProjectService`   | this doc §7                             | `projects.*` except `projects.migrate`           |
-| `tasks`     | `TaskService`      | this doc §8                             | `tasks.*`, `attachments.read`, task cache        |
+| `tickets`   | `TicketService`    | this doc §8                             | `tickets.*`, `attachments.read`, ticket cache    |
 | `bundles`   | `BundleService`    | [bundles.md](bundles.md)                | `bundles.*`, worktrees, bundle coordinators      |
 | `tabs`      | `TabService`       | this doc §9                             | `tabs.*`                                         |
 | `hostInfo`  | `HostInfoService`  | this doc §10                            | `host.info`, `host.listDirectories`              |
@@ -120,7 +120,7 @@ public actor HostService {
     nonisolated var registry: ProjectRegistry { get }
     nonisolated var watcher: FileWatcher { get }
     nonisolated var projects: ProjectService { get }
-    nonisolated var tasks: TaskService { get }
+    nonisolated var tickets: TicketService { get }
     nonisolated var bundles: BundleService { get }
     nonisolated var tabs: TabService { get }
     nonisolated var hostInfo: HostInfoService { get }
@@ -333,7 +333,7 @@ For each request of an authenticated connection, and for `perform`:
 | `projects.*` except `projects.migrate`            | `projects`                                        |
 | `projects.migrate`, `migration.*`                 | `migration`                                       |
 | `uploads.*`                                       | `uploads`                                         |
-| `tasks.*`, `attachments.read`                     | `tasks`                                           |
+| `tickets.*`, `attachments.read`                   | `tickets`                                         |
 | `files.*`                                         | `files`                                           |
 | `tabs.*`                                          | `tabs`                                            |
 | `sessions.*` (`sessions.readAttachment` included) | `sessions`                                        |
@@ -343,7 +343,7 @@ For each request of an authenticated connection, and for `perform`:
 
 Every handler except `ForgeService` conforms to `HostMethodHandler`. `HostService` decodes the `forge.*` params and
 calls: `forge.feedback` → `forge.feedback(screenshot:comment:context:from: context.device.id)`; `forge.status` →
-`forge.status()`; `forge.regenerate` → `forge.regenerate()`; `forge.retry` → `forge.retry(itemTaskID:)`.
+`forge.status()`; `forge.regenerate` → `forge.regenerate()`; `forge.retry` → `forge.retry(itemTicketID:)`.
 
 Every handler resolves the `projectID` param with `registry.hosted(_:)`, which throws `notFound` "Project <id> is not
 hosted on this Main." ([../protocol/methods.md](../protocol/methods.md), errors common to all methods).
@@ -385,14 +385,14 @@ public actor EventHub {
   `sessionChanged`, it records the session's pending permission count with
   `registry.setPendingPermissions(projectID, sessionID: session.id, count: session.pendingPermissions.count)`, and
   for `sessionRemoved` with `count: 0` (§6.1). For `sessionChanged` it then awaits
-  `tasks.sessionChanged(projectID:session:)` (§8.1), so the task's new status is in the cache, then calls
-  `bundles.sessionChanged(projectID:session:)` ([bundles.md](bundles.md#observing-the-task-sessions)); for
-  `sessionRemoved` it calls `tasks.sessionRemoved(sessionID:)`. Last, it
+  `tickets.sessionChanged(projectID:session:)` (§8.1), so the ticket's new status is in the cache, then calls
+  `bundles.sessionChanged(projectID:session:)` ([bundles.md](bundles.md#observing-the-ticket-sessions)); for
+  `sessionRemoved` it calls `tickets.sessionRemoved(sessionID:)`. Last, it
   notifies the Forge of the events it follows ([../forge/pipeline.md](../forge/pipeline.md)): `sessionChanged` →
   `forge.sessionChanged(projectID:session:)`, `sessionRemoved` → `forge.sessionRemoved(projectID:sessionID:)` (the
-  id's `uuidString`), `taskChanged` → `forge.taskChanged(projectID:task:)`, `taskRemoved` →
-  `forge.taskRemoved(projectID:taskID:)`. The services of this doc, of [files.md](files.md), [bundles.md](bundles.md)
-  and [search.md](search.md), the host protocol requirements (§12) and the Forge emit through
+  id's `uuidString`), `ticketChanged` → `forge.ticketChanged(projectID:ticket:)`, `ticketRemoved` →
+  `forge.ticketRemoved(projectID:ticketID:)`. The services of this doc, of [files.md](files.md),
+  [bundles.md](bundles.md) and [search.md](search.md), the host protocol requirements (§12) and the Forge emit through
   `emit`; other services may call `events.broadcast` directly for events the Forge does not follow (`mesh.changed`,
   `migration.progress`).
 - Events given in sequence by one caller reach each connection in that order (each channel sends its frames in order).
@@ -425,7 +425,7 @@ actor ProjectRegistry {
     func children(of projectID: String) -> [HostedProject]     // registered direct sub projects, subprojects order
     func descendants(of projectID: String) -> [String]         // ids of every nested sub project
     func summaries() -> [ProjectSummary]                       // projects.list (§7.1)
-    func project(_ projectID: String) async throws -> Project  // wire Project (§6.1); awaits tasks.highestNumber
+    func project(_ projectID: String) async throws -> Project  // wire Project (§6.1); awaits tickets.highestNumber
     /// Every registered project whose realRoot contains `absolutePath`, deepest first, with the relative path.
     func containing(_ absolutePath: String) -> [(projectID: String, relativePath: String)]
 
@@ -467,8 +467,8 @@ Built as [../data/project-yml.md](../data/project-yml.md) ("Mapping to the proto
 | `parseError`             | `parseError`                                                                                              |
 | `children`               | `ProjectSummary` only: `children(of:)` as summaries, recursively                                          |
 | `pendingPermissionCount` | `ProjectSummary` only: the sum of `pendingPermissions` (the project's own sessions, not its sub projects) |
-| `taskCounter`            | `Project` only: `max(file.taskCounter, tasks.highestNumber(projectID:feedback: false))`                   |
-| `feedbackCounter`        | `Project` only: `max(file.feedbackCounter, tasks.highestNumber(projectID:feedback: true))`                |
+| `ticketCounter`          | `Project` only: `max(file.ticketCounter, tickets.highestNumber(projectID:feedback: false))`               |
+| `feedbackCounter`        | `Project` only: `max(file.feedbackCounter, tickets.highestNumber(projectID:feedback: true))`              |
 
 `setPendingPermissions(_:sessionID:count:)` stores the count of one session (`0` removes the entry); when the
 project's sum changed it emits `projectsChanged`. It does nothing for a project that is not registered. The counts come
@@ -502,7 +502,7 @@ project.yml that appears or becomes valid) and `reloaded` (an entry added to `su
 2. `conflict` "<path> is already a project of this Main." when `realRoot` equals the `realRoot` of a registered project;
    `conflict` "Identifier <id> is already used by <name> on this Main." when a registered project has the identifier
    (this check is local; the mesh check is §6.7).
-3. Stores the `HostedProject`, creates its `ProjectWriteQueue`, calls `tasks.load(projectID:)` and
+3. Stores the `HostedProject`, creates its `ProjectWriteQueue`, calls `tickets.load(projectID:)` and
    `bundles.load(projectID:)`.
 4. Registers its sub projects (§6.3); a sub project that fails a check is logged and skipped.
 5. Top-level only: `ProjectsFile.add(root.path)` and save; `watcher.watch(root)`.
@@ -510,7 +510,7 @@ project.yml that appears or becomes valid) and `reloaded` (an entry added to `su
 
 ### 6.5 unregister(_:forget:)
 
-Removes the project and its descendants from memory, with their task and bundle caches (`tasks.unload`,
+Removes the project and its descendants from memory, with their ticket and bundle caches (`tickets.unload`,
 `bundles.unload`) and write queues (operations still queued fail with `notFound`). With `forget == true` (project
 removed or moved away) it calls `bundles.removeWorktrees(projectID:)` for each of them
 ([bundles.md](bundles.md#projects-removed-or-moved)), and for a top-level project it also removes the path from
@@ -574,8 +574,8 @@ actor ProjectWriteQueue {
 
 - `checkWritable(_:)` throws `locked` "<name> is being moved to another Main." when the project or one of its
   ancestors is `migrating`, <name> being the name of that migrating project.
-- Writers: `files.write`, `files.create`, `files.rename`, `files.delete`, every task change, `tabs.*`,
-  `projects.update`, the parent update of `projects.create` and `projects.remove`, task id allocation, and every
+- Writers: `files.write`, `files.create`, `files.rename`, `files.delete`, every ticket change, `tabs.*`,
+  `projects.update`, the parent update of `projects.create` and `projects.remove`, ticket id allocation, and every
   write of other areas into a project folder, except session storage (`.hephaestus/sessions/`), which
   `SessionService` writes through its `SessionArchive` after `checkWritable` ([../claude/cli.md](../claude/cli.md)).
 - Each writer re-reads from disk what it changes (the read-modify-write of
@@ -590,13 +590,13 @@ actor ProjectWriteQueue {
 
 The data code throws `DataError` ([../data/app-storage.md](../data/app-storage.md)). The host answers with:
 
-| `DataError`   | Protocol error                                                                                                  |
-|---------------|-----------------------------------------------------------------------------------------------------------------|
-| `.notFound`   | `notFound`                                                                                                      |
-| `.invalid`    | `badRequest`                                                                                                    |
-| `.refused`    | `conflict` (an invalid project.yml or a broken task, as [../protocol/methods.md](../protocol/methods.md) lists) |
-| `.unreadable` | `unavailable`                                                                                                   |
-| `.io`         | `internal`                                                                                                      |
+| `DataError`   | Protocol error                                                                                                    |
+|---------------|-------------------------------------------------------------------------------------------------------------------|
+| `.notFound`   | `notFound`                                                                                                        |
+| `.invalid`    | `badRequest`                                                                                                      |
+| `.refused`    | `conflict` (an invalid project.yml or a broken ticket, as [../protocol/methods.md](../protocol/methods.md) lists) |
+| `.unreadable` | `unavailable`                                                                                                     |
+| `.io`         | `internal`                                                                                                        |
 
 The message is the `DataError` message.
 
@@ -625,7 +625,7 @@ its sub projects in `children`.
 
 ### 7.2 projects.snapshot
 
-`project`: `registry.project(projectID)`; `tasks`: `tasks.list(projectID:)` (by task number); `bundles`:
+`project`: `registry.project(projectID)`; `tickets`: `tickets.list(projectID:)` (by ticket number); `bundles`:
 `bundles.list(projectID:)` (by bundle number); `sessions`:
 `sessions.sessions(projectID:)` reordered by `created` ascending. Served while the project is migrating.
 
@@ -715,35 +715,35 @@ is `badRequest` with its message; an invalid file on disk is `conflict`.
 In the Trash messages, <path> is the project's `root` path and <reason> the error's `localizedDescription` without its
 final period. After a failure the processes stopped by step 2 stay stopped; nothing else changed.
 
-## 8. TaskService
+## 8. TicketService
 
-Task files, `TaskID`, `TaskFile`, broken tasks, id allocation and attachment storage are defined in
-[../data/task-yml.md](../data/task-yml.md).
+Ticket files, `TicketID`, `TicketFile`, broken tickets, id allocation and attachment storage are defined in
+[../data/ticket-yml.md](../data/ticket-yml.md).
 
 ```swift
-// Tasks/TaskService.swift
-actor TaskService: HostMethodHandler {
+// Tickets/TicketService.swift
+actor TicketService: HostMethodHandler {
     init(host: HostService)
     // cache
-    func load(projectID: String) async                    // TaskFile.loadAll for a registered project
+    func load(projectID: String) async                    // TicketFile.loadAll for a registered project
     func unload(projectID: String)
-    func list(projectID: String) throws -> [TaskItem]     // by task number
-    func task(projectID: String, taskID: String) throws -> TaskItem
+    func list(projectID: String) throws -> [TicketItem]     // by ticket number
+    func ticket(projectID: String, ticketID: String) throws -> TicketItem
     func highestNumber(projectID: String, feedback: Bool) -> Int  // largest cached number of the series, 0 when none
     // methods (context.author and the peer-link `author` param decide comment authors)
-    /// feedback: true for the Forge's feedback tasks (<projectID>-F<n>); tasks.create passes false.
-    func create(projectID: String, name: String, description: String?, status: TaskStatus?,
-                feedback: Bool = false) async throws -> TaskItem
-    func update(projectID: String, taskID: String, patch: TaskPatch) async throws -> TaskItem
-    func delete(projectID: String, taskID: String) async throws
-    func addComment(projectID: String, taskID: String, body: String, attachments: [UploadRef],
-                    author: String) async throws -> TaskItem
-    func updateComment(projectID: String, taskID: String, commentID: UUID, body: String) async throws -> TaskItem
-    func deleteComment(projectID: String, taskID: String, commentID: UUID) async throws -> TaskItem
-    func readAttachment(projectID: String, taskID: String, fileName: String, offset: Int?,
+    /// feedback: true for the Forge's feedback tickets (<projectID>-F<n>); tickets.create passes false.
+    func create(projectID: String, name: String, description: String?, status: TicketStatus?,
+                feedback: Bool = false) async throws -> TicketItem
+    func update(projectID: String, ticketID: String, patch: TicketPatch) async throws -> TicketItem
+    func delete(projectID: String, ticketID: String) async throws
+    func addComment(projectID: String, ticketID: String, body: String, attachments: [UploadRef],
+                    author: String) async throws -> TicketItem
+    func updateComment(projectID: String, ticketID: String, commentID: UUID, body: String) async throws -> TicketItem
+    func deleteComment(projectID: String, ticketID: String, commentID: UUID) async throws -> TicketItem
+    func readAttachment(projectID: String, ticketID: String, fileName: String, offset: Int?,
                         length: Int?) async throws -> AttachmentsReadResult
     // FileWatcher (§11.3)
-    func reload(projectID: String, taskID: TaskID) async
+    func reload(projectID: String, ticketID: TicketID) async
     func rescan(projectID: String) async
     // sessions (§8.1)
     func sessionChanged(projectID: String, session: SessionInfo) async
@@ -751,32 +751,32 @@ actor TaskService: HostMethodHandler {
 }
 ```
 
-- The cache holds the `TaskItem` of every task file of every registered project, valid or broken (mapping of
-  [../data/task-yml.md](../data/task-yml.md#mapping-to-taskitem)).
-- A `taskID` that `TaskID(_:)` does not parse with the project's identifier, or without a task file: `notFound` "Task
-  <id> does not exist.".
-- Every change runs inside `registry.write(projectID)` with the `TaskFile` functions listed below, stores the new
-  `TaskItem` in the cache, and emits `taskChanged {projectID, task}` when it differs from the cached one (a deletion
-  emits `taskRemoved {projectID, taskID}`). The file watcher then finds the file equal to the cache and emits nothing
-  for it (§11.3).
-- A change of a broken task other than deletion: `TaskFile.update` throws `.refused` → `conflict`.
-- The functions throw `ProtocolError` only: `TaskService` maps `DataError` itself (§6.9), so in-process callers (the
-  Forge, §12.4) get the errors a client gets. A task file that disappears during a change (`TaskFile`'s
-  `.notFound("task <id> not found")`) is `notFound` "Task <id> does not exist." too.
+- The cache holds the `TicketItem` of every ticket file of every registered project, valid or broken (mapping of
+  [../data/ticket-yml.md](../data/ticket-yml.md#mapping-to-ticketitem)).
+- A `ticketID` that `TicketID(_:)` does not parse with the project's identifier, or without a ticket file: `notFound`
+  "Ticket <id> does not exist.".
+- Every change runs inside `registry.write(projectID)` with the `TicketFile` functions listed below, stores the new
+  `TicketItem` in the cache, and emits `ticketChanged {projectID, ticket}` when it differs from the cached one (a
+  deletion emits `ticketRemoved {projectID, ticketID}`). The file watcher then finds the file equal to the cache and
+  emits nothing for it (§11.3).
+- A change of a broken ticket other than deletion: `TicketFile.update` throws `.refused` → `conflict`.
+- The functions throw `ProtocolError` only: `TicketService` maps `DataError` itself (§6.9), so in-process callers (the
+  Forge, §12.4) get the errors a client gets. A ticket file that disappears during a change (`TicketFile`'s
+  `.notFound("ticket <id> not found")`) is `notFound` "Ticket <id> does not exist." too.
 
-Methods (`TaskFile` calls and rules):
+Methods (`TicketFile` calls and rules):
 
-- `tasks.create`: name validated (`badRequest`); `allocateID(projectRoot:feedback:)` with the given `feedback`
+- `tickets.create`: name validated (`badRequest`); `allocateID(projectRoot:feedback:)` with the given `feedback`
   (false for the request), then `create`; `registry.reloaded` with the new project.yml.
-- `tasks.update`: `update` with the non-nil `TaskPatch` fields; `name` trimmed, not empty and on one line, with no
+- `tickets.update`: `update` with the non-nil `TicketPatch` fields; `name` trimmed, not empty and on one line, with no
   maximum length (`badRequest`).
-- `tasks.delete`: `delete` (also for a broken task).
-- `tasks.addComment`: below.
-- `tasks.updateComment`: `update` whose change finds the comment in the file it read (`.notFound("comment <id> not
+- `tickets.delete`: `delete` (also for a broken ticket).
+- `tickets.addComment`: below.
+- `tickets.updateComment`: `update` whose change finds the comment in the file it read (`.notFound("comment <id> not
   found")` when missing), throws `ProtocolError(.badRequest, "Claude's comments cannot be edited.")` when the
   comment's `author` is `Claude` (nothing is written), and otherwise sets the comment's `body` and `edited` = now. An
   empty trimmed body on a comment without attachments → `badRequest` "The comment is empty.".
-- `tasks.deleteComment`: every comment, Claude's included: `update` removing the comment, then `deleteAttachment` for
+- `tickets.deleteComment`: every comment, Claude's included: `update` removing the comment, then `deleteAttachment` for
   each of its files that no other comment names.
 - `attachments.read`: `attachmentURL` (`badRequest` for a name that is not one path component, `notFound` when
   missing); `offset` (default 0) below 0 or above the file's size → `badRequest` "Invalid offset <offset> for
@@ -786,20 +786,20 @@ Methods (`TaskFile` calls and rules):
   the entry naming the file, else
   `AttachmentNaming.mimeType(forFileName:)`. Any file size is accepted.
 
-`tasks.create` emits `taskChanged` and, through `reloaded`, `projectChanged` (the counter). Allocation fails with
+`tickets.create` emits `ticketChanged` and, through `reloaded`, `projectChanged` (the counter). Allocation fails with
 `conflict` while project.yml is invalid.
 
-`tasks.addComment`:
+`tickets.addComment`:
 
 Inside `registry.write(projectID)`:
 
-1. The body trimmed is empty and there is no attachment → `badRequest` "The comment is empty.". The task exists
-   (`notFound`) and its cached `TaskItem` is not broken (`conflict`, "The file is invalid: <parse error>").
+1. The body trimmed is empty and there is no attachment → `badRequest` "The comment is empty.". The ticket exists
+   (`notFound`) and its cached `TicketItem` is not broken (`conflict`, "The file is invalid: <parse error>").
 2. `uploads.claim(attachments, projectID:)` ([files.md](files.md) §7.3): the upload errors of
    [../protocol/methods.md](../protocol/methods.md#using-uploads); nothing is stored.
-3. Each claimed upload, in order: `TaskFile.storeAttachment(fileAt: <its url>, originalName: <its fileName>,
-   projectRoot:id:)`, which moves the file into `.hephaestus/attachments/<task id>/`.
-4. `TaskFile.update` appending the comment: `id` new UUID, `author`, `created` now, `body`, the stored attachments.
+3. Each claimed upload, in order: `TicketFile.storeAttachment(fileAt: <its url>, originalName: <its fileName>,
+   projectRoot:id:)`, which moves the file into `.hephaestus/attachments/<ticket id>/`.
+4. `TicketFile.update` appending the comment: `id` new UUID, `author`, `created` now, `body`, the stored attachments.
 5. Success: `uploads.finish(<claimed>)`. When step 3 or 4 fails, the files stored by step 3 are moved back to their
    uploads (`attachmentURL` → `ClaimedUpload.url`, [files.md](files.md) §7.3), `uploads.release(<claimed>)`, and the
    error is returned. The uploads stay usable.
@@ -810,30 +810,32 @@ else `context.author` when set (in-process calls: `Claude` for MCP tools); else 
 
 Watcher entry points:
 
-- `reload(projectID:taskID:)`: `TaskFile.loadOne`. `nil` (file gone): when cached, removed and `taskRemoved` emitted.
-  Otherwise the `TaskItem` is stored and `taskChanged` emitted when it differs from the cache or was not cached.
-- `rescan(projectID:)`: `TaskFile.loadAll`, applied like `reload` to every task of the result and every cached task.
+- `reload(projectID:ticketID:)`: `TicketFile.loadOne`. `nil` (file gone): when cached, removed and `ticketRemoved`
+  emitted. Otherwise the `TicketItem` is stored and `ticketChanged` emitted when it differs from the cache or was not
+  cached.
+- `rescan(projectID:)`: `TicketFile.loadAll`, applied like `reload` to every ticket of the result and every cached
+  ticket.
 
-### 8.1 Status of a task while its sessions work
+### 8.1 Status of a ticket while its sessions work
 
-The status of a task follows the turns of its Claude sessions: the `task` sessions of every mode and the `feedback`
-session of a feedback task ([../forge/pipeline.md](../forge/pipeline.md#feedback-intake)). `sessionChanged` keeps in
+The status of a ticket follows the turns of its Claude sessions: the `ticket` sessions of every mode and the `feedback`
+session of a feedback ticket ([../forge/pipeline.md](../forge/pipeline.md#feedback-intake)). `sessionChanged` keeps in
 memory the last status of every session it is given, per session id (unknown before the first call, so after a restart
-of the Main); `sessionRemoved` forgets it. For a session of kind `task` or `feedback` with a `taskID`, a change of
-status sets the status of that task with `update(projectID:taskID:patch: TaskPatch(status:))`:
+of the Main); `sessionRemoved` forgets it. For a session of kind `ticket` or `feedback` with a `ticketID`, a change of
+status sets the status of that ticket with `update(projectID:ticketID:patch: TicketPatch(status:))`:
 
-| Previous status of the session                     | New status                       | Task status set |
-|----------------------------------------------------|----------------------------------|-----------------|
-| unknown, `stopped`, `starting`, `idle` or `failed` | `running` or `waitingPermission` | `in_progress`   |
-| `running` or `waitingPermission`                   | `idle`, `stopped` or `failed`    | `review`        |
+| Previous status of the session                     | New status                       | Ticket status set |
+|----------------------------------------------------|----------------------------------|-------------------|
+| unknown, `stopped`, `starting`, `idle` or `failed` | `running` or `waitingPermission` | `in_progress`     |
+| `running` or `waitingPermission`                   | `idle`, `stopped` or `failed`    | `review`          |
 
-- The rule applies whatever the task's status: a `done` task goes back to `in_progress` when a session works on it
-  again. Nothing is written when the task already has the status to set.
+- The rule applies whatever the ticket's status: a `done` ticket goes back to `in_progress` when a session works on it
+  again. Nothing is written when the ticket already has the status to set.
 - Any other change (a turn waiting for a permission and resuming, an idle session stopped by its idle timer, a session
-  that fails while `starting`) leaves the task as it is.
-- A task that does not exist or is broken is left alone. A failure of the update is logged, not returned.
-- The user and Claude can still set any status with `tasks.update`; the next turn of a session sets it again. Hephaestus
-  never sets a task to `done` by itself: only the user does, with `tasks.update`.
+  that fails while `starting`) leaves the ticket as it is.
+- A ticket that does not exist or is broken is left alone. A failure of the update is logged, not returned.
+- The user and Claude can still set any status with `tickets.update`; the next turn of a session sets it again.
+  Hephaestus never sets a ticket to `done` by itself: only the user does, with `tickets.update`.
 
 ## 9. TabService
 
@@ -951,26 +953,26 @@ actor FileWatcher {
    owner and its ancestors), with the paths it contains, relative to its root, each listed once, sorted. More than
    1,000 paths for one project in one batch → `paths: [""]` (the root: clients refresh everything of that project).
 5. Flag `MustScanSubDirs`, `UserDropped` or `KernelDropped` on a path: every registered project whose root is inside
-   the path or contains it re-reads project.yml (as in §11.3) and runs `tasks.rescan`; the path goes into the
+   the path or contains it re-reads project.yml (as in §11.3) and runs `tickets.rescan`; the path goes into the
    `filesChanged` of the projects that contain it, and `""` (the root) into that of every project whose root is inside
    it.
 6. Flag `RootChanged` when the folder no longer exists: `registry.unregister(projectID, forget: false)` and
    `unwatch(root)`, logged. The project is served again after the next `start()` once its folder is back.
 
-The events of one batch are emitted in this order: project events (`projectsChanged`, `projectChanged`), task events,
+The events of one batch are emitted in this order: project events (`projectsChanged`, `projectChanged`), ticket events,
 `filesChanged`.
 
 ### 11.3 Classification
 
 `rel` is the path relative to the owner's root. Every path also goes into `filesChanged`, whatever its row.
 
-| `rel`                                                                   | Action                                                                            |
-|-------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
-| `.hephaestus/project.yml`                                               | re-read (below)                                                                   |
-| `.hephaestus/tasks/<name>` with `TaskID(fileName: <name>)` of the owner | `tasks.reload(projectID:taskID:)`                                                 |
-| `.hephaestus/tasks`                                                     | `tasks.rescan(projectID:)`                                                        |
-| `<s>/.hephaestus/project.yml`, `<s>` an entry of `subprojects`          | `registry.register` of `<owner root>/<s>` with the owner as parent; errors logged |
-| anything else                                                           | nothing more                                                                      |
+| `rel`                                                                     | Action                                                                            |
+|---------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
+| `.hephaestus/project.yml`                                                 | re-read (below)                                                                   |
+| `.hephaestus/tasks/<name>` with `TicketID(fileName: <name>)` of the owner | `tickets.reload(projectID:ticketID:)`                                             |
+| `.hephaestus/tasks`                                                       | `tickets.rescan(projectID:)`                                                      |
+| `<s>/.hephaestus/project.yml`, `<s>` an entry of `subprojects`            | `registry.register` of `<owner root>/<s>` with the owner as parent; errors logged |
+| anything else                                                             | nothing more                                                                      |
 
 Re-reading project.yml (`ProjectFile.load`):
 
@@ -994,10 +996,10 @@ implemented as follows. §12.4 lists the members the Forge uses directly.
 - `devices()`: the records of `mesh.snapshot().devices` with `revoked == false`.
 - `settings()`: `settings()`.
 - `claudeProject(_:)`: from `registry.hosted(_:)`, below.
-- `claudeTask(projectID:taskID:)`: from `tasks.task(projectID:taskID:)`, below.
-- `claudeBundle(projectID:bundleID:)`: from the cached `BundleItem` and `tasks.task(projectID:taskID:)`, below.
-- `bundleWorkFolder(projectID:taskID:)`: `bundles.workFolder(projectID:taskID:)`
-  ([bundles.md](bundles.md#working-folder-of-a-task-session)).
+- `claudeTicket(projectID:ticketID:)`: from `tickets.ticket(projectID:ticketID:)`, below.
+- `claudeBundle(projectID:bundleID:)`: from the cached `BundleItem` and `tickets.ticket(projectID:ticketID:)`, below.
+- `bundleWorkFolder(projectID:ticketID:)`: `bundles.workFolder(projectID:ticketID:)`
+  ([bundles.md](bundles.md#working-folder-of-a-ticket-session)).
 - `checkWritable(_:)`: `registry.checkWritable(_:)`.
 - `sessionArchive(_:)`: one `SessionArchive(projectRoot: root)` per registered project, created on first use, dropped at
   unregistration.
@@ -1014,12 +1016,12 @@ Built values:
   [../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository) 3.5 never takes a sub project for a
   top-level project), `subprojects` = `children(of:)` as `ProjectRef` values, `claude` = `file.claudeDefaults`,
   `skills` = `file.skills` ([../claude/prompts.md](../claude/prompts.md)).
-- `ClaudeTaskContext`: `id`, `name`, `description`, `parseError` from the cached `TaskItem`; `yaml` = the text of
-  the task file read from disk; `attachments` = `TaskFile.attachmentsFolder` + `file` for every attachment of every
+- `ClaudeTicketContext`: `id`, `name`, `description`, `parseError` from the cached `TicketItem`; `yaml` = the text of
+  the ticket file read from disk; `attachments` = `TicketFile.attachmentsFolder` + `file` for every attachment of every
   comment, in comment then attachment order.
-- `ClaudeBundleContext`: `id`, `name`, `base` (`""` while unset), `tasks` = one `ClaudeBundleTask` per task of the
-  bundle, in order (`name` and `status` of its `TaskItem`; `""` and nil for a deleted task), `maxParallel` = the setting
-  `bundles.maxParallel`.
+- `ClaudeBundleContext`: `id`, `name`, `base` (`""` while unset), `tickets` = one `ClaudeBundleTicket` per ticket of the
+  bundle, in order (`name` and `status` of its `TicketItem`; `""` and nil for a deleted ticket), `maxParallel` = the
+  setting `bundles.maxParallel`.
 
 ### 12.2 SkillsHost ([../claude/skills.md](../claude/skills.md))
 
@@ -1057,8 +1059,8 @@ migration checks, [../devices/migration.md](../devices/migration.md#outcome-chec
 ### 12.4 ForgeService ([../forge/pipeline.md](../forge/pipeline.md#swift-api))
 
 There is no host protocol for the Forge. `ForgeService` is created with `init(host: HostService)` and uses these
-members directly: `registry.hosted(_:)`, `tasks.create`, `tasks.addComment` and `tasks.update` (§8), `uploads.check`
-([files.md](files.md) §7), `sessions.start(_:)` and `sessions.sessions(projectID:)`
+members directly: `registry.hosted(_:)`, `tickets.create`, `tickets.addComment` and `tickets.update` (§8),
+`uploads.check` ([files.md](files.md) §7), `sessions.start(_:)` and `sessions.sessions(projectID:)`
 ([../claude/cli.md](../claude/cli.md)), `emit(_:)` (§5), `mesh.localDevice()` and `mesh.snapshot()` (the device names
 and addresses of the private terms too), `registry.all()` and `registry.descendants(of:)` (the projects of the private
 terms), `hostInfo.claudePath` and `hostInfo.gitAvailable` (§10), `projects.importFolder(_:)` (§7.4) and `settings()`
@@ -1096,8 +1098,8 @@ routed to them (§4.4). The host calls `migration.recover()` (§3.1), `migration
 |--------------------|-------------------|-------------------------------------------------------------------------------------------------------------------------|
 | `projects.changed` | `ProjectRegistry` | register, unregister, `setMigrating`; name, description, sub projects, `parseError` or `pendingPermissionCount` changed |
 | `project.changed`  | `ProjectRegistry` | the wire `Project` changed: a write, the watcher, `setMigrating`, `markInvalid`                                         |
-| `task.changed`     | `TaskService`     | a task method wrote the file; the watcher found a difference                                                            |
-| `task.removed`     | `TaskService`     | `tasks.delete`; the watcher found the file gone                                                                         |
+| `ticket.changed`   | `TicketService`   | a ticket method wrote the file; the watcher found a difference                                                          |
+| `ticket.removed`   | `TicketService`   | `tickets.delete`; the watcher found the file gone                                                                       |
 | `bundle.changed`   | `BundleService`   | a bundle method or tool wrote the bundle file ([bundles.md](bundles.md))                                                |
 | `bundle.removed`   | `BundleService`   | `bundles.delete`                                                                                                        |
 | `files.changed`    | `FileWatcher`     | each batch with paths of the project                                                                                    |

@@ -206,7 +206,7 @@ stages or deletes anything in it.
     regen: <summary of the change>
 
     Docs <first 8 characters of BASE>..<first 8 characters of HEAD>:
-    - M docs/ui/tasks.md
+    - M docs/ui/tickets.md
     - A docs/forge/feedback.md
     ```
 
@@ -316,7 +316,7 @@ To bring the code in line with the docs, follow `docs/forge/generation.md` step 
 
 ## Commits
 
-- Documentation changes: `docs: <summary> (<task id>)`, only files under `docs/`.
+- Documentation changes: `docs: <summary> (<ticket id>)`, only files under `docs/`.
 - Regenerations: `regen: <summary>`, as described in `docs/forge/generation.md`.
 
 ## Commands

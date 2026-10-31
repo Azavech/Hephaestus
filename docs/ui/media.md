@@ -18,15 +18,15 @@ files:
 
 `HephUI/Media` shows images and attached files: the zoomable image viewer (inline and full screen), image thumbnails,
 attachment chips, Quick Look for other files, and the view of project files too large for the editor. It is used by
-task comments ([tasks.md](tasks.md#rendering)), the attachments of session messages
+ticket comments ([tickets.md](tickets.md#rendering)), the attachments of session messages
 ([sessions.md](sessions.md#transcript)) and files opened in the Code section ([code.md](code.md#content)). It also owns
 attachment picking: the attach menu, drops and pastes that give the `AttachmentInput` values of session messages and
-task comments ([Attachment picking](#attachment-picking)).
+ticket comments ([Attachment picking](#attachment-picking)).
 
 The views never send requests themselves: the caller gives a `download` closure (`DownloadAction`) that brings the
 file into the device's attachment cache and returns its local URL, reporting progress (`downloadAttachment`,
 `downloadSessionAttachment` or `downloadFile` of [../client/workspace.md](../client/workspace.md#transfers)), and a
-`cacheKey`, a string unique to that file (for example `<projectID>/<taskID>/<file>`). Files have no size limit. Errors
+`cacheKey`, a string unique to that file (for example `<projectID>/<ticketID>/<file>`). Files have no size limit. Errors
 show in the view that failed, with a Retry button, and in the window's `WindowBanners`
 ([shell.md](shell.md#81-windowbanners)) where this doc says so.
 
@@ -84,8 +84,8 @@ public enum AttachmentIcon {
 }
 ```
 
-`size` is in bytes (`TaskAttachment.size`, [../protocol/types.md](../protocol/types.md#taskattachment)); `mimeType` is
-the attachment's `type`. `TransferProgress` is defined in [../client/workspace.md](../client/workspace.md#transfers).
+`size` is in bytes (`TicketAttachment.size`, [../protocol/types.md](../protocol/types.md#ticketattachment)); `mimeType`
+is the attachment's `type`. `TransferProgress` is defined in [../client/workspace.md](../client/workspace.md#transfers).
 
 ## Loading and caching
 
@@ -246,8 +246,8 @@ by 1.5, `zoomOut()` divides it by 1.5, both clamped to the limits, and `zoomToFi
 
 The attach menu, drops and pastes turn files and images into `AttachmentInput` values: a file name, an `UploadSource`
 ([../client/workspace.md](../client/workspace.md#transfers)) and a size. `MessageComposer`
-([sessions.md](sessions.md#message-composer)), the composer of session messages and task comments
-([tasks.md](tasks.md#composer)), uploads each one in chunks as soon as it receives it. Files and images have no size
+([sessions.md](sessions.md#message-composer)), the composer of session messages and ticket comments
+([tickets.md](tickets.md#composer)), uploads each one in chunks as soon as it receives it. Files and images have no size
 limit, and files are not read here.
 
 ```swift
@@ -362,7 +362,7 @@ It has no environment: it posts its error banners with `AppModel.shared.banners.
 ## Depends on
 
 - [shell.md](shell.md): `WindowBanners`, `AppModel.banners`. [../protocol/types.md](../protocol/types.md):
-  `TaskAttachment` (`type`, `size`), for the callers. [../client/workspace.md](../client/workspace.md#transfers):
+  `TicketAttachment` (`type`, `size`), for the callers. [../client/workspace.md](../client/workspace.md#transfers):
   `UploadSource`, `TransferProgress`, the download functions the callers pass as `download`.
 - [../architecture.md](../architecture.md#logging): `Log.ui`.
 - Frameworks: ImageIO, QuickLook (SwiftUI `quickLookPreview`), UniformTypeIdentifiers, CryptoKit, PhotosUI (iOS and

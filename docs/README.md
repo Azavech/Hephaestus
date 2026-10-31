@@ -18,8 +18,8 @@ the other files refine it.
 4. [devices/roles.md](devices/roles.md), [devices/mesh.md](devices/mesh.md), [devices/migration.md](devices/migration.md).
 5. [protocol/envelope.md](protocol/envelope.md), [protocol/types.md](protocol/types.md),
    [protocol/methods.md](protocol/methods.md), [protocol/events.md](protocol/events.md).
-6. [data/project-yml.md](data/project-yml.md), [data/task-yml.md](data/task-yml.md), [data/sessions.md](data/sessions.md),
-   [data/app-storage.md](data/app-storage.md).
+6. [data/project-yml.md](data/project-yml.md), [data/ticket-yml.md](data/ticket-yml.md),
+   [data/sessions.md](data/sessions.md), [data/app-storage.md](data/app-storage.md).
 7. [services/host.md](services/host.md), then [services/files.md](services/files.md),
    [services/search.md](services/search.md), [services/bundles.md](services/bundles.md).
 8. [claude/cli.md](claude/cli.md), [claude/mcp.md](claude/mcp.md), [claude/prompts.md](claude/prompts.md),
@@ -50,7 +50,7 @@ the other files refine it.
 | [protocol/methods.md](protocol/methods.md)   | Every method: params, result, errors, side effects, events emitted                                                     |
 | [protocol/events.md](protocol/events.md)     | Every event: params, who emits it, who receives it                                                                     |
 | [data/project-yml.md](data/project-yml.md)   | `.hephaestus/project.yml`                                                                                              |
-| [data/task-yml.md](data/task-yml.md)         | `.hephaestus/tasks/<TASK-ID>.yml` and task attachments                                                                 |
+| [data/ticket-yml.md](data/ticket-yml.md)     | `.hephaestus/tasks/<TICKET-ID>.yml` and ticket attachments                                                             |
 | [data/sessions.md](data/sessions.md)         | Session metadata and event files under `.hephaestus/sessions/`                                                         |
 | [data/app-storage.md](data/app-storage.md)   | Application Support files, `settings.json` keys, Keychain items, per-window UI state                                   |
 | [claude/cli.md](claude/cli.md)               | Locating and running the Claude CLI, the stream-json session process, permissions, child processes                     |
@@ -60,15 +60,15 @@ the other files refine it.
 | [services/host.md](services/host.md)         | HostService: startup and shutdown, request routing, project registry, file watching, peer links                        |
 | [services/files.md](services/files.md)       | File operations, path safety, revisions, ignore rules, atomic writes, attachments, uploads                             |
 | [services/search.md](services/search.md)     | Search matcher, Main search service, client fan-out                                                                    |
-| [services/bundles.md](services/bundles.md)   | Task bundles: bundle files, worktrees, the coordinator and its parallel task sessions                                  |
+| [services/bundles.md](services/bundles.md)   | Ticket bundles: bundle files, worktrees, the coordinator and its parallel ticket sessions                              |
 | [ui/shell.md](ui/shell.md)                   | Scenes, windows, toolbar, path bar, sidebar, layouts per device, shortcuts, banners, app wiring                        |
 | [ui/onboarding.md](ui/onboarding.md)         | First launch: become a Main or join a mesh                                                                             |
 | [ui/settings.md](ui/settings.md)             | Settings screens                                                                                                       |
 | [ui/devices.md](ui/devices.md)               | Devices screen: presence, rename, revoke, pairing                                                                      |
 | [ui/search.md](ui/search.md)                 | Search UI                                                                                                              |
 | [ui/overview.md](ui/overview.md)             | Project Overview, sub projects, Move to…                                                                               |
-| [ui/tasks.md](ui/tasks.md)                   | Task list and task detail, comments, attachments, bundles                                                              |
-| [ui/sessions.md](ui/sessions.md)             | Session chat UI, permission cards, the task Claude section                                                             |
+| [ui/tickets.md](ui/tickets.md)               | Ticket list and ticket detail, comments, attachments, bundles                                                          |
+| [ui/sessions.md](ui/sessions.md)             | Session chat UI, permission cards, the ticket Claude section                                                           |
 | [ui/skills.md](ui/skills.md)                 | Skills screen                                                                                                          |
 | [ui/code.md](ui/code.md)                     | Code screen: file browser and editor tabs                                                                              |
 | [ui/editor.md](ui/editor.md)                 | HephEditor: text views, gutter, syntax highlighting grammars                                                           |
@@ -100,7 +100,7 @@ the other files refine it.
 - **CI builds only in-sync code.** The `docs-sync` job of [forge/ci.md](forge/ci.md) compares the hash of `docs/` with
   `App/DocsHash.txt`. When they differ, the docs are ahead of the code: tests, builds and releases are skipped until a
   regeneration commit brings the code in sync. Only in-sync code is tested, built and released.
-- **Feedback loop.** Feedback from any device becomes a task and a Claude discussion that edits the docs
+- **Feedback loop.** Feedback from any device becomes a ticket and a Claude discussion that edits the docs
   ([forge/feedback.md](forge/feedback.md)). The Forge checks the docs commits for personal data and pushes them
   ([public-repository.md](public-repository.md#forge-push-gate)); the pushed docs are regenerated into code, which is
   checked and pushed the same way; CI checks again, builds and releases it, and every Mac updates and restarts itself

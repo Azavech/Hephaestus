@@ -31,19 +31,19 @@ from each method.
 
 These are not repeated in the method sections:
 
-| Code           | Case                                                                                              |
-|----------------|---------------------------------------------------------------------------------------------------|
-| `badRequest`   | The params do not decode; a name breaks the name rules below; a path breaks the path rules below  |
-| `unauthorized` | The callers rule does not accept the connection                                                   |
-| `notFound`     | A `projectID` that is not a project or sub project hosted by this Main                            |
-| `conflict`     | The method must rewrite an invalid file: a `project.yml` that does not parse, a broken task file  |
-| `locked`       | A write method (column W) on a project that is migrating, or whose top-level project is migrating |
-| `tooLarge`     | The response does not fit in one frame ([envelope.md](envelope.md#frames))                        |
-| `internal`     | An unexpected failure                                                                             |
+| Code           | Case                                                                                               |
+|----------------|----------------------------------------------------------------------------------------------------|
+| `badRequest`   | The params do not decode; a name breaks the name rules below; a path breaks the path rules below   |
+| `unauthorized` | The callers rule does not accept the connection                                                    |
+| `notFound`     | A `projectID` that is not a project or sub project hosted by this Main                             |
+| `conflict`     | The method must rewrite an invalid file: a `project.yml` that does not parse, a broken ticket file |
+| `locked`       | A write method (column W) on a project that is migrating, or whose top-level project is migrating  |
+| `tooLarge`     | The response does not fit in one frame ([envelope.md](envelope.md#frames))                         |
+| `internal`     | An unexpected failure                                                                              |
 
 The app never writes over an invalid file: `DataError.refused` maps to `conflict`
 ([data/app-storage.md](../data/app-storage.md#errors)), with the message "The file is invalid: <parse error>",
-<parse error> being the file's `parseError` (`ProjectSummary.parseError`, `TaskItem.parseError`,
+<parse error> being the file's `parseError` (`ProjectSummary.parseError`, `TicketItem.parseError`,
 [types.md](types.md)).
 
 ### Write methods
@@ -58,11 +58,11 @@ Methods marked W in the method table change a project. They are refused with `lo
   absolute, contains a `.` or `..` component, or resolves (symbolic links included) outside the project root is refused
   with `badRequest` ([services/files.md](../services/files.md)).
 - Skill paths follow the same rules relative to the skill folder.
-- Names (project, sub project, task, session title, device) are trimmed of surrounding white space
-  and line breaks. A project name, a task name and a session title must not be empty and
+- Names (project, sub project, ticket, session title, device) are trimmed of surrounding white space
+  and line breaks. A project name, a ticket name and a session title must not be empty and
   must be on one line (no line break, [data/project-yml.md](../data/project-yml.md#validation-and-normalization));
   they have no maximum length. Another name is refused with `badRequest` and the message of
-  [data/project-yml.md](../data/project-yml.md), [data/task-yml.md](../data/task-yml.md) or
+  [data/project-yml.md](../data/project-yml.md), [data/ticket-yml.md](../data/ticket-yml.md) or
   [data/sessions.md](../data/sessions.md). A device name must not be empty (`badRequest` "Enter a device name.",
   [devices/roles.md](../devices/roles.md#names)). Skill names: [Skills](#skills).
 
@@ -86,7 +86,7 @@ Methods marked W in the method table change a project. They are refused with `lo
 | `migrationChunkSize` | 262,144 bytes (256 KiB)   | `migration.chunk` data: every chunk of a file has this size except the last                                                                                                         | `badRequest`                 |
 | `maxSearchResults`   | 200                       | `search.query` `limit`: default and maximum                                                                                                                                         | none                         |
 
-- Attachments have no size limit (comment files, message files, MCP `comment_task` files, feedback screenshots). A
+- Attachments have no size limit (comment files, message files, MCP `comment_ticket` files, feedback screenshots). A
   file reaches the Main in chunks through an upload ([Uploads](#uploads)) and is read back in ranges
   (`attachments.read`, `sessions.readAttachment`, a ranged `files.read`).
 - Every request and response must also fit in one 48 MiB frame ([envelope.md](envelope.md#frames)). A 4 MiB chunk takes
@@ -119,12 +119,12 @@ Methods marked W in the method table change a project. They are refused with `lo
 | `uploads.begin`           | `uploadsBegin`           | `UploadsBeginParams`           | `UploadsBeginResult`        | `anyDevice`   |   |
 | `uploads.chunk`           | `uploadsChunk`           | `UploadsChunkParams`           | `EmptyPayload`              | `anyDevice`   |   |
 | `uploads.cancel`          | `uploadsCancel`          | `UploadsCancelParams`          | `EmptyPayload`              | `anyDevice`   |   |
-| `tasks.create`            | `tasksCreate`            | `TasksCreateParams`            | `TaskItem`                  | `anyDevice`   | W |
-| `tasks.update`            | `tasksUpdate`            | `TasksUpdateParams`            | `TaskItem`                  | `anyDevice`   | W |
-| `tasks.delete`            | `tasksDelete`            | `TasksDeleteParams`            | `EmptyPayload`              | `anyDevice`   | W |
-| `tasks.addComment`        | `tasksAddComment`        | `TasksAddCommentParams`        | `TaskItem`                  | `anyDevice`   | W |
-| `tasks.updateComment`     | `tasksUpdateComment`     | `TasksUpdateCommentParams`     | `TaskItem`                  | `anyDevice`   | W |
-| `tasks.deleteComment`     | `tasksDeleteComment`     | `TasksDeleteCommentParams`     | `TaskItem`                  | `anyDevice`   | W |
+| `tickets.create`          | `ticketsCreate`          | `TicketsCreateParams`          | `TicketItem`                | `anyDevice`   | W |
+| `tickets.update`          | `ticketsUpdate`          | `TicketsUpdateParams`          | `TicketItem`                | `anyDevice`   | W |
+| `tickets.delete`          | `ticketsDelete`          | `TicketsDeleteParams`          | `EmptyPayload`              | `anyDevice`   | W |
+| `tickets.addComment`      | `ticketsAddComment`      | `TicketsAddCommentParams`      | `TicketItem`                | `anyDevice`   | W |
+| `tickets.updateComment`   | `ticketsUpdateComment`   | `TicketsUpdateCommentParams`   | `TicketItem`                | `anyDevice`   | W |
+| `tickets.deleteComment`   | `ticketsDeleteComment`   | `TicketsDeleteCommentParams`   | `TicketItem`                | `anyDevice`   | W |
 | `attachments.read`        | `attachmentsRead`        | `AttachmentsReadParams`        | `AttachmentsReadResult`     | `anyDevice`   |   |
 | `bundles.create`          | `bundlesCreate`          | `BundlesCreateParams`          | `BundleItem`                | `anyDevice`   | W |
 | `bundles.update`          | `bundlesUpdate`          | `BundlesUpdateParams`          | `BundleItem`                | `anyDevice`   | W |
@@ -201,7 +201,8 @@ public enum MethodLimits {
   [types.md](types.md#conventions): `public struct <Name>: Codable, Sendable, Hashable`, `public var` fields in table
   order, a public memberwise `init` with optional parameters defaulting to `nil`.
 - Callers send requests with `RPCPeer.request` ([envelope.md](envelope.md#rpcpeerswift-hephnet)), for example
-  `let task = try await peer.request(.tasksCreate, TasksCreateParams(projectID: "HEPH", name: "Fix"), as: TaskItem.self)`.
+  `let ticket = try await peer.request(.ticketsCreate, TicketsCreateParams(projectID: "HEPH", name: "Fix"), as:
+  TicketItem.self)`.
 
 ## Mesh and pairing
 
@@ -432,7 +433,7 @@ Everything a client mirrors for one project.
 | Field      | Type            | Meaning                                                                           |
 |------------|-----------------|-----------------------------------------------------------------------------------|
 | `project`  | `Project`       | The project                                                                       |
-| `tasks`    | `[TaskItem]`    | Its tasks, broken ones included, ordered by task number                           |
+| `tickets`  | `[TicketItem]`  | Its tickets, broken ones included, ordered by ticket number                       |
 | `bundles`  | `[BundleItem]`  | Its bundles, ordered by bundle number                                             |
 | `sessions` | `[SessionInfo]` | Its sessions of every kind, ordered by `created`, with their `pendingPermissions` |
 
@@ -616,8 +617,8 @@ client side, with progress: [client/workspace.md](../client/workspace.md#transfe
 
 ### Using uploads
 
-`tasks.addComment`, `sessions.start`, `sessions.send` and `forge.feedback` name uploads with `UploadRef` values. Before
-the request changes anything, the Main checks every `UploadRef` of the request, in order:
+`tickets.addComment`, `sessions.start`, `sessions.send` and `forge.feedback` name uploads with `UploadRef` values.
+Before the request changes anything, the Main checks every `UploadRef` of the request, in order:
 
 | Check                                               | Error                                                  |
 |-----------------------------------------------------|--------------------------------------------------------|
@@ -629,143 +630,144 @@ the request changes anything, the Main checks every `UploadRef` of the request, 
 
 - The request's project is its `projectID`; for `forge.feedback`, the Forge's source project.
 - When the request succeeds, each upload file is moved into place under the sanitized `fileName` of its `UploadRef`
-  (the task's attachments folder, the session's attachment folder) and the upload is gone.
+  (the ticket's attachments folder, the session's attachment folder) and the upload is gone.
 - When the request fails, the uploads it names stay as they were, usable by another request: files already moved are
   moved back ([services/files.md](../services/files.md#7-uploads)).
 - An upload that no request uses is deleted one hour after its last chunk (after `uploads.begin` when it received no
   chunk), and every upload is deleted when the Main's host stops or starts. A request naming it afterwards fails with
   `notFound`.
 
-## Tasks
+## Tickets
 
-Task storage: [data/task-yml.md](../data/task-yml.md). Attachment files: [services/files.md](../services/files.md).
+Ticket storage: [data/ticket-yml.md](../data/ticket-yml.md). Attachment files:
+[services/files.md](../services/files.md).
 
-### tasks.create
+### tickets.create
 
-`TasksCreateParams`:
+`TicketsCreateParams`:
 
-| Field         | Type          | Meaning                 |
-|---------------|---------------|-------------------------|
-| `projectID`   | `String`      | Project                 |
-| `name`        | `String`      | Name                    |
-| `description` | `String?`     | Markdown; default empty |
-| `status`      | `TaskStatus?` | Default `todo`          |
+| Field         | Type            | Meaning                 |
+|---------------|-----------------|-------------------------|
+| `projectID`   | `String`        | Project                 |
+| `name`        | `String`        | Name                    |
+| `description` | `String?`       | Markdown; default empty |
+| `status`      | `TicketStatus?` | Default `todo`          |
 
-- Result: `TaskItem`, the new task (`created` and `updated` now, no comments), with a task id `<projectID>-<n>`:
-  only the Forge creates feedback task ids ([forge.feedback](#forgefeedback)).
-- Errors: `conflict` (project.yml is invalid, so `taskCounter` cannot be saved); `badRequest` "no task number is left
-  in <projectID>" ([data/task-yml.md](../data/task-yml.md#id-allocation)).
-- Writes: `taskCounter` in project.yml, then `.hephaestus/tasks/<task id>.yml` with the next task number
-  ([data/task-yml.md](../data/task-yml.md)).
-- Events: `project.changed`, `task.changed`.
+- Result: `TicketItem`, the new ticket (`created` and `updated` now, no comments), with a ticket id `<projectID>-<n>`:
+  only the Forge creates feedback ticket ids ([forge.feedback](#forgefeedback)).
+- Errors: `conflict` (project.yml is invalid, so `taskCounter` cannot be saved); `badRequest` "no ticket number is left
+  in <projectID>" ([data/ticket-yml.md](../data/ticket-yml.md#id-allocation)).
+- Writes: `taskCounter` in project.yml, then `.hephaestus/tasks/<ticket id>.yml` with the next ticket number
+  ([data/ticket-yml.md](../data/ticket-yml.md)).
+- Events: `project.changed`, `ticket.changed`.
 
-### tasks.update
+### tickets.update
 
-`TasksUpdateParams`:
+`TicketsUpdateParams`:
 
-| Field       | Type        | Meaning                                  |
-|-------------|-------------|------------------------------------------|
-| `projectID` | `String`    | Project                                  |
-| `taskID`    | `String`    | Task                                     |
-| `patch`     | `TaskPatch` | Changes ([types.md](types.md#taskpatch)) |
+| Field       | Type          | Meaning                                    |
+|-------------|---------------|--------------------------------------------|
+| `projectID` | `String`      | Project                                    |
+| `ticketID`  | `String`      | Ticket                                     |
+| `patch`     | `TicketPatch` | Changes ([types.md](types.md#ticketpatch)) |
 
-- Result: `TaskItem` after the change, `updated` now. When the patch leaves every field equal, nothing is written,
+- Result: `TicketItem` after the change, `updated` now. When the patch leaves every field equal, nothing is written,
   `updated` keeps its value and no event is sent.
-- Errors: `notFound` (task); `conflict` (broken task).
-- Writes: the task file. Events: `task.changed`.
+- Errors: `notFound` (ticket); `conflict` (broken ticket).
+- Writes: the ticket file. Events: `ticket.changed`.
 
-### tasks.delete
+### tickets.delete
 
-`TasksDeleteParams`: `projectID` (`String`), `taskID` (`String`).
+`TicketsDeleteParams`: `projectID` (`String`), `ticketID` (`String`).
 
 - Result: `EmptyPayload`.
-- Errors: `notFound` (task).
-- Writes: deletes the task file (broken tasks included) and `.hephaestus/attachments/<task id>/`.
-- Events: `task.removed`.
+- Errors: `notFound` (ticket).
+- Writes: deletes the ticket file (broken tickets included) and `.hephaestus/attachments/<ticket id>/`.
+- Events: `ticket.removed`.
 
-### tasks.addComment
+### tickets.addComment
 
-`TasksAddCommentParams`:
+`TicketsAddCommentParams`:
 
 | Field         | Type          | Meaning                                                                                                                            |
 |---------------|---------------|------------------------------------------------------------------------------------------------------------------------------------|
 | `projectID`   | `String`      | Project                                                                                                                            |
-| `taskID`      | `String`      | Task                                                                                                                               |
+| `ticketID`    | `String`      | Ticket                                                                                                                             |
 | `body`        | `String`      | Markdown; may be empty when `attachments` is not                                                                                   |
 | `attachments` | `[UploadRef]` | Files to attach: complete uploads of the project ([Uploads](#uploads))                                                             |
 | `author`      | `String?`     | Author to record; honored on peer links only (the MCP server of another Main forwards `Claude`, [claude/mcp.md](../claude/mcp.md)) |
 
-- Result: `TaskItem` with the new comment (new `id`, `created` now; task `updated` now). The author is `author` on a
+- Result: `TicketItem` with the new comment (new `id`, `created` now; ticket `updated` now). The author is `author` on a
   peer link when given, else the name of the caller's device record.
-- Errors: `notFound` (task; an unknown upload); `badRequest` (empty body, after trimming, and no attachment; an upload
-  named twice, of another project, or incomplete); `conflict` (broken task; an upload in use by another request).
-- Writes: each upload's file moved into `.hephaestus/attachments/<task id>/` under the sanitized `fileName` of its
+- Errors: `notFound` (ticket; an unknown upload); `badRequest` (empty body, after trimming, and no attachment; an upload
+  named twice, of another project, or incomplete); `conflict` (broken ticket; an upload in use by another request).
+- Writes: each upload's file moved into `.hephaestus/attachments/<ticket id>/` under the sanitized `fileName` of its
   `UploadRef`, with ` 2`, ` 3`… inserted before the extension on a collision
-  ([data/task-yml.md](../data/task-yml.md#attachments)), recorded as a `TaskAttachment` (MIME type from the file name
-  extension, size of the file); the task file. On a failure the files go back to their uploads
+  ([data/ticket-yml.md](../data/ticket-yml.md#attachments)), recorded as a `TicketAttachment` (MIME type from the file
+  name extension, size of the file); the ticket file. On a failure the files go back to their uploads
   ([Using uploads](#using-uploads)).
-- Events: `task.changed`.
+- Events: `ticket.changed`.
 
-### tasks.updateComment
+### tickets.updateComment
 
-`TasksUpdateCommentParams`: `projectID` (`String`), `taskID` (`String`), `commentID` (`UUID`), `body` (`String`, the
+`TicketsUpdateCommentParams`: `projectID` (`String`), `ticketID` (`String`), `commentID` (`UUID`), `body` (`String`, the
 new Markdown body).
 
-- Result: `TaskItem` after the change: the comment's `body` replaced and `edited` now; task `updated` now.
-- Errors: `notFound` (task or comment); `badRequest` "Claude's comments cannot be edited." (the comment's `author` is
-  `Claude`); `badRequest` (empty body, after trimming, on a comment without attachments); `conflict` (broken task).
+- Result: `TicketItem` after the change: the comment's `body` replaced and `edited` now; ticket `updated` now.
+- Errors: `notFound` (ticket or comment); `badRequest` "Claude's comments cannot be edited." (the comment's `author` is
+  `Claude`); `badRequest` (empty body, after trimming, on a comment without attachments); `conflict` (broken ticket).
 - Only the comments of devices can be edited; Claude's comments (made through the MCP tools,
   [claude/mcp.md](../claude/mcp.md)) can only be deleted.
-- Writes: the task file. Events: `task.changed`.
+- Writes: the ticket file. Events: `ticket.changed`.
 
-### tasks.deleteComment
+### tickets.deleteComment
 
-`TasksDeleteCommentParams`: `projectID` (`String`), `taskID` (`String`), `commentID` (`UUID`).
+`TicketsDeleteCommentParams`: `projectID` (`String`), `ticketID` (`String`), `commentID` (`UUID`).
 
 - Works on every comment, Claude's included.
-- Result: `TaskItem` after the change (task `updated` now).
-- Errors: `notFound` (task or comment); `conflict` (broken task).
-- Writes: the task file; deletes the comment's attachment files that no other comment of the task names.
-- Events: `task.changed`.
+- Result: `TicketItem` after the change (ticket `updated` now).
+- Errors: `notFound` (ticket or comment); `conflict` (broken ticket).
+- Writes: the ticket file; deletes the comment's attachment files that no other comment of the ticket names.
+- Events: `ticket.changed`.
 
 ### attachments.read
 
-Reads a range of a task attachment.
+Reads a range of a ticket attachment.
 
 `AttachmentsReadParams`:
 
 | Field       | Type     | Meaning                                                     |
 |-------------|----------|-------------------------------------------------------------|
 | `projectID` | `String` | Project                                                     |
-| `taskID`    | `String` | Task                                                        |
-| `fileName`  | `String` | A `TaskAttachment.file`                                     |
+| `ticketID`  | `String` | Ticket                                                      |
+| `fileName`  | `String` | A `TicketAttachment.file`                                   |
 | `offset`    | `Int?`   | First byte to read; default 0                               |
 | `length`    | `Int?`   | Number of bytes to read; default and maximum `maxChunkSize` |
 
 `AttachmentsReadResult`:
 
-| Field      | Type     | Meaning                                                                                                                                         |
-|------------|----------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| `data`     | `Data`   | The bytes from `offset`: `min(length, size − offset)` bytes; empty when `offset` equals `size`                                                  |
-| `size`     | `Int`    | Size of the whole file in bytes                                                                                                                 |
-| `mimeType` | `String` | The `type` of the attachment entry that names the file, else the type of its extension ([data/task-yml.md](../data/task-yml.md#reading-a-file)) |
+| Field      | Type     | Meaning                                                                                                                                             |
+|------------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
+| `data`     | `Data`   | The bytes from `offset`: `min(length, size − offset)` bytes; empty when `offset` equals `size`                                                      |
+| `size`     | `Int`    | Size of the whole file in bytes                                                                                                                     |
+| `mimeType` | `String` | The `type` of the attachment entry that names the file, else the type of its extension ([data/ticket-yml.md](../data/ticket-yml.md#reading-a-file)) |
 
 - A `length` above `maxChunkSize` reads `maxChunkSize` bytes. A file of any size is read in ranges: the client reads
   from offset 0, `maxChunkSize` bytes at a time, until it has `size` bytes
   ([client/workspace.md](../client/workspace.md#transfers)).
-- Allowed for a broken task.
+- Allowed for a broken ticket.
 - Errors: `badRequest` (`fileName` is not a valid stored file name; `offset` below 0 or above `size`; `length` below
-  1); `notFound` (no such file in `.hephaestus/attachments/<task id>/`).
+  1); `notFound` (no such file in `.hephaestus/attachments/<ticket id>/`).
 
 ## Bundles
 
-Task bundles, their files, worktrees and coordinator: [services/bundles.md](../services/bundles.md). Every method
+Ticket bundles, their files, worktrees and coordinator: [services/bundles.md](../services/bundles.md). Every method
 takes `projectID` (`String`); the statuses each one allows and its errors are in
 [services/bundles.md](../services/bundles.md#methods).
 
 | Method           | Params besides `projectID`                     | Result         | Writes                         | Events                                 |
 |------------------|------------------------------------------------|----------------|--------------------------------|----------------------------------------|
-| `bundles.create` | `name` (`String`), `taskIDs` (`[String]`)      | `BundleItem`   | `.hephaestus/bundles/<id>.yml` | `bundle.changed`                       |
+| `bundles.create` | `name` (`String`), `ticketIDs` (`[String]`)    | `BundleItem`   | `.hephaestus/bundles/<id>.yml` | `bundle.changed`                       |
 | `bundles.update` | `bundleID` (`String`), `patch` (`BundlePatch`) | `BundleItem`   | the bundle file                | `bundle.changed`                       |
 | `bundles.delete` | `bundleID` (`String`)                          | `EmptyPayload` | deletes the file, worktrees    | `bundle.removed`                       |
 | `bundles.start`  | `bundleID` (`String`)                          | `BundleItem`   | the bundle file, a session     | `bundle.changed`, `session.changed`, … |
@@ -828,8 +830,8 @@ File operations, path safety, atomic writes and revisions: [services/files.md](.
 - Errors: `conflict` (`baseRevision` is set and the file's current revision differs, or the file no longer exists);
   `notFound` (the parent folder does not exist); `badRequest` (`path` is a folder); `tooLarge` (`data` over
   `maxFileSize`).
-- Writes: the file, atomically. Events: `files.changed` (and `project.changed`, `task.changed` when the file is a
-  project or task file).
+- Writes: the file, atomically. Events: `files.changed` (and `project.changed`, `ticket.changed` when the file is a
+  project or ticket file).
 
 ### files.create
 
@@ -915,32 +917,32 @@ Session process: [claude/cli.md](../claude/cli.md). Prompts and generated messag
 
 `SessionsStartParams`:
 
-| Field            | Type              | Meaning                                                                                                                                                                                           |
-|------------------|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `projectID`      | `String`          | Project                                                                                                                                                                                           |
-| `kind`           | `SessionKind`     | `project` or `task`                                                                                                                                                                               |
-| `taskID`         | `String?`         | Task sessions: the task (required); absent for project sessions                                                                                                                                   |
-| `mode`           | `SessionMode?`    | Task sessions: the mode (required); absent for project sessions                                                                                                                                   |
-| `title`          | `String?`         | Default: by kind, as in [claude/cli.md](../claude/cli.md) (task sessions `<Mode> <task id>`, for example `Implement HEPH-12`; project sessions `Chat <n>`, until the generated title replaces it) |
-| `message`        | `String?`         | Project sessions: the first message. Task sessions: the custom instructions (required for mode `custom`)                                                                                          |
-| `attachments`    | `[UploadRef]?`    | Project sessions: files attached to the first message, complete uploads of the project ([Uploads](#uploads)); `nil` or empty: none                                                                |
-| `permissionMode` | `PermissionMode?` | Default: the project's `claude.permissionMode`, else the Main's default permission mode setting                                                                                                   |
-| `model`          | `String?`         | Default: the project's `claude.model`, else the Main's default model setting, else none                                                                                                           |
+| Field            | Type              | Meaning                                                                                                                                                                                               |
+|------------------|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `projectID`      | `String`          | Project                                                                                                                                                                                               |
+| `kind`           | `SessionKind`     | `project` or `ticket`                                                                                                                                                                                 |
+| `ticketID`       | `String?`         | Ticket sessions: the ticket (required); absent for project sessions                                                                                                                                   |
+| `mode`           | `SessionMode?`    | Ticket sessions: the mode (required); absent for project sessions                                                                                                                                     |
+| `title`          | `String?`         | Default: by kind, as in [claude/cli.md](../claude/cli.md) (ticket sessions `<Mode> <ticket id>`, for example `Implement HEPH-12`; project sessions `Chat <n>`, until the generated title replaces it) |
+| `message`        | `String?`         | Project sessions: the first message. Ticket sessions: the custom instructions (required for mode `custom`)                                                                                            |
+| `attachments`    | `[UploadRef]?`    | Project sessions: files attached to the first message, complete uploads of the project ([Uploads](#uploads)); `nil` or empty: none                                                                    |
+| `permissionMode` | `PermissionMode?` | Default: the project's `claude.permissionMode`, else the Main's default permission mode setting                                                                                                       |
+| `model`          | `String?`         | Default: the project's `claude.model`, else the Main's default model setting, else none                                                                                                               |
 
 - Result: `SessionInfo` of the new session (new `id`), status `starting` when its process starts now, else `stopped`.
-- Process: a task session starts at once with its generated first message ([claude/prompts.md](../claude/prompts.md)).
+- Process: a ticket session starts at once with its generated first message ([claude/prompts.md](../claude/prompts.md)).
   A project session starts at once when `message` or `attachments` is given, with `message` (empty when `nil`) and the
   attachments as the first user message, as `sessions.send` sends one; otherwise on the first `sessions.send`.
 - Generated title: after the first user message of a project, feedback or bundle session, the Main asks a quick model
   for a short title in the background and replaces the default title with it (project sessions: the title alone;
-  feedback and bundle sessions: `<task or bundle id> · <title>`), whatever the title is then; `session.changed`
+  feedback and bundle sessions: `<ticket or bundle id> · <title>`), whatever the title is then; `session.changed`
   announces it. The request does not wait for it, and the default title stays when it fails
   ([claude/cli.md](../claude/cli.md#510-generated-titles-sessiontitler)).
 - Errors: `badRequest` (`kind` is `feedback` or `regeneration`: only the Forge starts those; `kind` is `bundle`:
   `bundles.start` starts those; a project session with
-  `taskID` or `mode`; a task session without `taskID` or `mode`, or with `attachments`; mode `custom` without a
+  `ticketID` or `mode`; a ticket session without `ticketID` or `mode`, or with `attachments`; mode `custom` without a
   `message`; an empty `title` or `model`; a `title` with a line break; an upload named twice, of another project, or
-  incomplete); `notFound` (task; an unknown upload); `conflict` (the task is broken: "The file is invalid: <parse
+  incomplete); `notFound` (ticket; an unknown upload); `conflict` (the ticket is broken: "The file is invalid: <parse
   error>"; an upload in use by another request); `unavailable` (a process must start and the Claude CLI or the
   Hephaestus tools are not available, [claude/cli.md](../claude/cli.md)).
 - Writes: `.hephaestus/sessions/<id>.yml`; `<id>.jsonl` when the first message is sent; the attachments' files moved
@@ -982,20 +984,20 @@ One page of a session's transcript ([data/sessions.md](../data/sessions.md#readi
 
 ### sessions.readAttachment
 
-Reads a range of a file attached to a message of the session, as `attachments.read` reads a task attachment.
+Reads a range of a file attached to a message of the session, as `attachments.read` reads a ticket attachment.
 
 `SessionsReadAttachmentParams`:
 
-| Field       | Type     | Meaning                                                       |
-|-------------|----------|---------------------------------------------------------------|
-| `projectID` | `String` | Project                                                       |
-| `sessionID` | `UUID`   | Session                                                       |
-| `fileName`  | `String` | A `TaskAttachment.file` of one of the session's `user` events |
-| `offset`    | `Int?`   | First byte to read; default 0                                 |
-| `length`    | `Int?`   | Number of bytes to read; default and maximum `maxChunkSize`   |
+| Field       | Type     | Meaning                                                         |
+|-------------|----------|-----------------------------------------------------------------|
+| `projectID` | `String` | Project                                                         |
+| `sessionID` | `UUID`   | Session                                                         |
+| `fileName`  | `String` | A `TicketAttachment.file` of one of the session's `user` events |
+| `offset`    | `Int?`   | First byte to read; default 0                                   |
+| `length`    | `Int?`   | Number of bytes to read; default and maximum `maxChunkSize`     |
 
 - Result: `AttachmentsReadResult` ([attachments.read](#attachmentsread)) with `mimeType` the type of the file name's
-  extension (`AttachmentNaming.mimeType(forFileName:)`, [data/task-yml.md](../data/task-yml.md#naming)).
+  extension (`AttachmentNaming.mimeType(forFileName:)`, [data/ticket-yml.md](../data/ticket-yml.md#naming)).
 - A `length` above `maxChunkSize` reads `maxChunkSize` bytes.
 - Errors: `badRequest` (`fileName` is not a single path component; `offset` below 0 or above the size; `length` below
   1); `notFound` (no such file in the session's attachment folder `.hephaestus/sessions/<session id in lowercase>/`,
@@ -1017,7 +1019,7 @@ Reads a range of a file attached to a message of the session, as `attachments.re
 - Effects: moves the uploads' files into the session's attachment folder
   `.hephaestus/sessions/<session id in lowercase>/` (sanitized `fileName`, ` 2`, ` 3`… on collision,
   [data/sessions.md](../data/sessions.md#attachments)); appends a `user` event (`text` as sent, `attachments` as
-  `TaskAttachment` values, the caller's `deviceID`); starts the process when none is alive; sends the message to the
+  `TicketAttachment` values, the caller's `deviceID`); starts the process when none is alive; sends the message to the
   CLI with the absolute paths of the attached files ([claude/cli.md](../claude/cli.md)). A message sent during a turn
   is queued by the CLI. When the request fails, the uploads stay as they were ([Using uploads](#using-uploads)).
 - Errors: `notFound` (session; an unknown upload); `conflict` `This conversation is over.` (the session is closed,
@@ -1293,19 +1295,19 @@ on another Main, and with `unavailable` and the check's message when a configura
 | Field       | Type     | Meaning              |
 |-------------|----------|----------------------|
 | `projectID` | `String` | The source project   |
-| `taskID`    | `String` | The feedback task    |
+| `ticketID`  | `String` | The feedback ticket  |
 | `sessionID` | `UUID`   | The feedback session |
 
 - Errors: `unavailable` (not the Forge, or a configuration check failed); `locked` (the source project is migrating);
   `badRequest` (the comment is empty after trimming; the screenshot upload is of another project or incomplete; "no
-  feedback number is left in <projectID>", [data/task-yml.md](../data/task-yml.md#id-allocation)); `notFound` (an
+  feedback number is left in <projectID>", [data/ticket-yml.md](../data/ticket-yml.md#id-allocation)); `notFound` (an
   unknown screenshot upload); `conflict`
   (the screenshot upload is in use by another request) ([Using uploads](#using-uploads)).
-- Effects: creates the feedback task, whose id is `<projectID>-F<n>` (`feedbackCounter` in project.yml), with the
+- Effects: creates the feedback ticket, whose id is `<projectID>-F<n>` (`feedbackCounter` in project.yml), with the
   screenshot attached to a comment, adds a Forge item in state
-  `discussing`, starts the task's `feedback` session ([forge/pipeline.md](../forge/pipeline.md)). The sending device
+  `discussing`, starts the ticket's `feedback` session ([forge/pipeline.md](../forge/pipeline.md)). The sending device
   opens the session at once ([forge/feedback.md](../forge/feedback.md)).
-- Events: `project.changed`, `task.changed`, `session.changed`, `forge.changed`.
+- Events: `project.changed`, `ticket.changed`, `session.changed`, `forge.changed`.
 
 ### forge.status
 
@@ -1324,10 +1326,10 @@ on another Main, and with `unavailable` and the check's message when a configura
 
 ### forge.retry
 
-`ForgeRetryParams`: `itemTaskID` (`String`), the `taskID` of a failed Forge item.
+`ForgeRetryParams`: `itemTicketID` (`String`), the `ticketID` of a failed Forge item.
 
 - Result: `EmptyPayload`, once the checks passed; the retry runs in the background, after the check of
   `forge.regenerate` ([forge/pipeline.md](../forge/pipeline.md#methods)).
-- Errors: `unavailable` (not the Forge, or a configuration check failed); `notFound` (no item for that task);
+- Errors: `unavailable` (not the Forge, or a configuration check failed); `notFound` (no item for that ticket);
   `conflict` (the item is not `failed`, or not in the current cycle).
 - Events: `forge.changed`.

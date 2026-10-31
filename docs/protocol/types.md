@@ -3,7 +3,7 @@
 files:
 - HephaestusKit/Sources/HephCore/Protocol/Types/DeviceTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/ProjectTypes.swift
-- HephaestusKit/Sources/HephCore/Protocol/Types/TaskTypes.swift
+- HephaestusKit/Sources/HephCore/Protocol/Types/TicketTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/BundleTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/FileTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/SessionTypes.swift
@@ -30,11 +30,11 @@ in [methods.md](methods.md), the event payloads in [events.md](events.md), the J
 - JSON field names are the field names. A type ending in `?` is optional: the member is omitted when `nil`.
 - No custom `CodingKeys` and no custom coding, except where a section says so.
 - Identifiers: `projectID` is the project identifier (2–8 letters A–Z, [data/project-yml.md](../data/project-yml.md));
-  `taskID` is `<projectID>-<n>`, or `<projectID>-F<n>` for a feedback task
-  ([data/task-yml.md](../data/task-yml.md#task-id)); `bundleID` is `<projectID>-B<n>`
+  `ticketID` is `<projectID>-<n>`, or `<projectID>-F<n>` for a feedback ticket
+  ([data/ticket-yml.md](../data/ticket-yml.md#ticket-id)); `bundleID` is `<projectID>-B<n>`
   ([services/bundles.md](../services/bundles.md#bundle-id)); device, mesh, session, comment, web tab,
   migration, upload and Forge cycle ids are `UUID`s; session event ids are strings (`SessionEvent`).
-- Names (project, sub project, task, session title) are trimmed of surrounding white space and line
+- Names (project, sub project, ticket, session title) are trimmed of surrounding white space and line
   breaks, must not be empty and must be on one line; they have no maximum length
   ([methods.md](methods.md#paths)).
 - Project-relative paths are `/`-separated, without a leading `/`; `""` is the project root.
@@ -132,8 +132,8 @@ Identifiable.
 | `created`         | `Date`           | Creation date                                                |
 | `code`            | `String`         | Code folder, relative to the project root (`.` is the root)  |
 | `docs`            | `String`         | Docs folder, relative to the code folder                     |
-| `taskCounter`     | `Int`            | Last task number used                                        |
-| `feedbackCounter` | `Int`            | Last feedback task number used                               |
+| `ticketCounter`   | `Int`            | Last ticket number used                                      |
+| `feedbackCounter` | `Int`            | Last feedback ticket number used                             |
 | `subprojects`     | `[String]`       | Relative paths of the sub project roots                      |
 | `webTabs`         | `[WebTab]`       | Web tabs, in tab strip order                                 |
 | `skills`          | `[String]`       | Names of the enabled library skills; empty means all skills  |
@@ -186,9 +186,9 @@ Changes for `tabs.update`. A `nil` field leaves the value unchanged.
 | `title`  | `String?` | New title           |
 | `locked` | `Bool?`   | Lock or unlock      |
 
-## Tasks (TaskTypes.swift)
+## Tickets (TicketTypes.swift)
 
-### TaskStatus
+### TicketStatus
 
 | Case         | Raw value     | `displayName` |
 |--------------|---------------|---------------|
@@ -198,108 +198,108 @@ Changes for `tabs.update`. A `nil` field leaves the value unchanged.
 | `done`       | `done`        | Done          |
 
 `public var displayName: String` returns the text of the last column. `allCases` is in the order of the table (the
-order of the task list sections).
+order of the ticket list sections).
 
-### TaskItem
+### TicketItem
 
-A task ([data/task-yml.md](../data/task-yml.md)). Identifiable.
+A ticket ([data/ticket-yml.md](../data/ticket-yml.md)). Identifiable.
 
-| Field         | Type            | Meaning                                                          |
-|---------------|-----------------|------------------------------------------------------------------|
-| `id`          | `String`        | Task id, `<projectID>-<n>` or `<projectID>-F<n>` (feedback task) |
-| `name`        | `String`        | Name                                                             |
-| `description` | `String`        | Markdown; empty when there is none                               |
-| `status`      | `TaskStatus`    | Status                                                           |
-| `created`     | `Date`          | Creation date                                                    |
-| `updated`     | `Date`          | Last change of the task (a field or a comment)                   |
-| `comments`    | `[TaskComment]` | Comments, oldest first                                           |
-| `parseError`  | `String?`       | Set when the task file cannot be parsed (a broken task)          |
+| Field         | Type              | Meaning                                                              |
+|---------------|-------------------|----------------------------------------------------------------------|
+| `id`          | `String`          | Ticket id, `<projectID>-<n>` or `<projectID>-F<n>` (feedback ticket) |
+| `name`        | `String`          | Name                                                                 |
+| `description` | `String`          | Markdown; empty when there is none                                   |
+| `status`      | `TicketStatus`    | Status                                                               |
+| `created`     | `Date`            | Creation date                                                        |
+| `updated`     | `Date`            | Last change of the ticket (a field or a comment)                     |
+| `comments`    | `[TicketComment]` | Comments, oldest first                                               |
+| `parseError`  | `String?`         | Set when the ticket file cannot be parsed (a broken ticket)          |
 
-A broken task has `id` from its file name, `name` and `description` empty, `status` `todo`, `created` and `updated`
+A broken ticket has `id` from its file name, `name` and `description` empty, `status` `todo`, `created` and `updated`
 equal to the file's modification date, no comments, and `parseError` set to the parser's message. The Main never
-rewrites a broken task file.
+rewrites a broken ticket file.
 
-### TaskComment
+### TicketComment
 
 Identifiable.
 
-| Field         | Type               | Meaning                                                                               |
-|---------------|--------------------|---------------------------------------------------------------------------------------|
-| `id`          | `UUID`             | Comment id                                                                            |
-| `author`      | `String`           | Name of the device that wrote it, or `Claude` for comments made through the MCP tools |
-| `created`     | `Date`             | Creation date                                                                         |
-| `edited`      | `Date?`            | Date of the last edit                                                                 |
-| `body`        | `String`           | Markdown                                                                              |
-| `attachments` | `[TaskAttachment]` | Attached files                                                                        |
+| Field         | Type                 | Meaning                                                                               |
+|---------------|----------------------|---------------------------------------------------------------------------------------|
+| `id`          | `UUID`               | Comment id                                                                            |
+| `author`      | `String`             | Name of the device that wrote it, or `Claude` for comments made through the MCP tools |
+| `created`     | `Date`               | Creation date                                                                         |
+| `edited`      | `Date?`              | Date of the last edit                                                                 |
+| `body`        | `String`             | Markdown                                                                              |
+| `attachments` | `[TicketAttachment]` | Attached files                                                                        |
 
 A comment whose `author` is `Claude` can be deleted but not edited
-([methods.md](methods.md#tasksupdatecomment)); the comments of devices can be edited and deleted.
+([methods.md](methods.md#ticketsupdatecomment)); the comments of devices can be edited and deleted.
 
-### TaskAttachment
+### TicketAttachment
 
-A file stored in `.hephaestus/attachments/<task id>/`. Identifiable by `file` (`var id: String { file }`).
+A file stored in `.hephaestus/attachments/<ticket id>/`. Identifiable by `file` (`var id: String { file }`).
 
-| Field  | Type     | Meaning                                    |
-|--------|----------|--------------------------------------------|
-| `file` | `String` | File name in the task's attachments folder |
-| `type` | `String` | MIME type (for example `image/png`)        |
-| `size` | `Int`    | Size in bytes                              |
+| Field  | Type     | Meaning                                      |
+|--------|----------|----------------------------------------------|
+| `file` | `String` | File name in the ticket's attachments folder |
+| `type` | `String` | MIME type (for example `image/png`)          |
+| `size` | `Int`    | Size in bytes                                |
 
-### TaskPatch
+### TicketPatch
 
-Changes for `tasks.update`. A `nil` field leaves the value unchanged.
+Changes for `tickets.update`. A `nil` field leaves the value unchanged.
 
-| Field         | Type          | Meaning                                   |
-|---------------|---------------|-------------------------------------------|
-| `name`        | `String?`     | New name, trimmed: not empty, on one line |
-| `description` | `String?`     | New description (Markdown)                |
-| `status`      | `TaskStatus?` | New status                                |
+| Field         | Type            | Meaning                                   |
+|---------------|-----------------|-------------------------------------------|
+| `name`        | `String?`       | New name, trimmed: not empty, on one line |
+| `description` | `String?`       | New description (Markdown)                |
+| `status`      | `TicketStatus?` | New status                                |
 
 ## Bundles (BundleTypes.swift)
 
-Task bundles: [services/bundles.md](../services/bundles.md).
+Ticket bundles: [services/bundles.md](../services/bundles.md).
 
 ### BundleStatus
 
-| Raw value | `displayName` | Meaning                                                     |
-|-----------|---------------|-------------------------------------------------------------|
-| `draft`   | Draft         | Not being worked on                                         |
-| `running` | Running       | Its coordinator and task sessions work on it                |
-| `review`  | Review        | Every task is done; the coordinator waits for the user's OK |
-| `done`    | Done          | Its work was brought in and its worktrees removed           |
+| Raw value | `displayName` | Meaning                                                       |
+|-----------|---------------|---------------------------------------------------------------|
+| `draft`   | Draft         | Not being worked on                                           |
+| `running` | Running       | Its coordinator and ticket sessions work on it                |
+| `review`  | Review        | Every ticket is done; the coordinator waits for the user's OK |
+| `done`    | Done          | Its work was brought in and its worktrees removed             |
 
-### BundleTask
+### BundleTicket
 
-Identifiable by `taskID` (`var id: String { taskID }`).
+Identifiable by `ticketID` (`var id: String { ticketID }`).
 
-| Field       | Type     | Meaning                                                |
-|-------------|----------|--------------------------------------------------------|
-| `taskID`    | `String` | Task id                                                |
-| `sessionID` | `UUID?`  | The last task session the bundle started for this task |
+| Field       | Type     | Meaning                                                    |
+|-------------|----------|------------------------------------------------------------|
+| `ticketID`  | `String` | Ticket id                                                  |
+| `sessionID` | `UUID?`  | The last ticket session the bundle started for this ticket |
 
 ### BundleItem
 
 A bundle. Identifiable.
 
-| Field                  | Type           | Meaning                                                     |
-|------------------------|----------------|-------------------------------------------------------------|
-| `id`                   | `String`       | Bundle id, `<projectID>-B<n>`                               |
-| `name`                 | `String`       | Name                                                        |
-| `status`               | `BundleStatus` | Status                                                      |
-| `created`              | `Date`         | Creation date                                               |
-| `updated`              | `Date`         | Last change                                                 |
-| `base`                 | `String?`      | Branch the task branches start from; set when first started |
-| `coordinatorSessionID` | `UUID?`        | The coordinator session; set when first started             |
-| `tasks`                | `[BundleTask]` | Its tasks, in order                                         |
+| Field                  | Type             | Meaning                                                       |
+|------------------------|------------------|---------------------------------------------------------------|
+| `id`                   | `String`         | Bundle id, `<projectID>-B<n>`                                 |
+| `name`                 | `String`         | Name                                                          |
+| `status`               | `BundleStatus`   | Status                                                        |
+| `created`              | `Date`           | Creation date                                                 |
+| `updated`              | `Date`           | Last change                                                   |
+| `base`                 | `String?`        | Branch the ticket branches start from; set when first started |
+| `coordinatorSessionID` | `UUID?`          | The coordinator session; set when first started               |
+| `tickets`              | `[BundleTicket]` | Its tickets, in order                                         |
 
 ### BundlePatch
 
 Changes for `bundles.update`. A `nil` field leaves the value unchanged.
 
-| Field     | Type        | Meaning                                                |
-|-----------|-------------|--------------------------------------------------------|
-| `name`    | `String?`   | New name, trimmed: not empty, on one line              |
-| `taskIDs` | `[String]?` | Replaces the tasks, in order (`draft` and `done` only) |
+| Field       | Type        | Meaning                                                  |
+|-------------|-------------|----------------------------------------------------------|
+| `name`      | `String?`   | New name, trimmed: not empty, on one line                |
+| `ticketIDs` | `[String]?` | Replaces the tickets, in order (`draft` and `done` only) |
 
 ## Files (FileTypes.swift)
 
@@ -317,30 +317,30 @@ A file or folder of a project. Identifiable by `path` (`var id: String { path }`
 
 ### UploadRef
 
-A file attached to a request (`tasks.addComment`, `sessions.start`, `sessions.send`, `forge.feedback`): a complete
+A file attached to a request (`tickets.addComment`, `sessions.start`, `sessions.send`, `forge.feedback`): a complete
 upload of the request's project, sent before with `uploads.begin` and `uploads.chunk`
 ([methods.md](methods.md#uploads)). Files have no size limit.
 
-| Field      | Type     | Meaning                                                                                                      |
-|------------|----------|--------------------------------------------------------------------------------------------------------------|
-| `uploadID` | `UUID`   | The upload, as `uploads.begin` returned it                                                                   |
-| `fileName` | `String` | Original file name of the attachment; the Main sanitizes it ([data/task-yml.md](../data/task-yml.md#naming)) |
+| Field      | Type     | Meaning                                                                                                          |
+|------------|----------|------------------------------------------------------------------------------------------------------------------|
+| `uploadID` | `UUID`   | The upload, as `uploads.begin` returned it                                                                       |
+| `fileName` | `String` | Original file name of the attachment; the Main sanitizes it ([data/ticket-yml.md](../data/ticket-yml.md#naming)) |
 
 ## Sessions (SessionTypes.swift)
 
 ### SessionKind
 
-| Raw value      | Meaning                                                                      |
-|----------------|------------------------------------------------------------------------------|
-| `project`      | Project chat                                                                 |
-| `task`         | Session bound to a task                                                      |
-| `feedback`     | Forge feedback discussion ([forge/pipeline.md](../forge/pipeline.md))        |
-| `regeneration` | Forge regeneration ([forge/pipeline.md](../forge/pipeline.md))               |
-| `bundle`       | Coordinator of a task bundle ([services/bundles.md](../services/bundles.md)) |
+| Raw value      | Meaning                                                                        |
+|----------------|--------------------------------------------------------------------------------|
+| `project`      | Project chat                                                                   |
+| `ticket`       | Session bound to a ticket                                                      |
+| `feedback`     | Forge feedback discussion ([forge/pipeline.md](../forge/pipeline.md))          |
+| `regeneration` | Forge regeneration ([forge/pipeline.md](../forge/pipeline.md))                 |
+| `bundle`       | Coordinator of a ticket bundle ([services/bundles.md](../services/bundles.md)) |
 
 ### SessionMode
 
-Mode of a task session. `public var displayName: String` returns the last column.
+Mode of a ticket session. `public var displayName: String` returns the last column.
 
 | Raw value   | `displayName` |
 |-------------|---------------|
@@ -385,9 +385,9 @@ A Claude session ([data/sessions.md](../data/sessions.md)). Identifiable.
 |----------------------|-----------------------|------------------------------------------------------------------------------------------------------------------|
 | `id`                 | `UUID`                | Session id, also the Claude CLI session id ([claude/cli.md](../claude/cli.md))                                   |
 | `kind`               | `SessionKind`         | Kind                                                                                                             |
-| `taskID`             | `String?`             | Task and feedback sessions: the task                                                                             |
-| `mode`               | `SessionMode?`        | Task sessions: the mode                                                                                          |
-| `bundleID`           | `String?`             | Bundle sessions, and task sessions started by a bundle: the bundle                                               |
+| `ticketID`           | `String?`             | Ticket and feedback sessions: the ticket                                                                         |
+| `mode`               | `SessionMode?`        | Ticket sessions: the mode                                                                                        |
+| `bundleID`           | `String?`             | Bundle sessions, and ticket sessions started by a bundle: the bundle                                             |
 | `title`              | `String`              | Title                                                                                                            |
 | `created`            | `Date`                | Creation date                                                                                                    |
 | `updated`            | `Date`                | Last change of a stored field                                                                                    |
@@ -431,7 +431,7 @@ One entry of a session transcript, stored as one JSON line of `.hephaestus/sessi
 | `at`          | `Date`                | all                                                  | When the Main recorded the event                                                              |
 | `type`        | `SessionEventType`    | all                                                  | Type                                                                                          |
 | `text`        | `String?`             | user, assistant, thinking, toolResult, system, error | Text ([data/sessions.md](../data/sessions.md))                                                |
-| `attachments` | `[TaskAttachment]?`   | user                                                 | Files attached to the message, stored in the session's attachment folder                      |
+| `attachments` | `[TicketAttachment]?` | user                                                 | Files attached to the message, stored in the session's attachment folder                      |
 | `deviceID`    | `UUID?`               | user, permissionDecision                             | Device that sent the message, or whose answer was applied                                     |
 | `messageID`   | `String?`             | assistant, thinking, toolUse                         | Id of the Claude message the block belongs to: the `messageID` of the block's `session.delta` |
 | `index`       | `Int?`                | assistant, thinking, toolUse                         | Index of the block in its message, from 0: the `index` of the block's `session.delta`         |
@@ -493,7 +493,7 @@ Kind of a streamed fragment (`session.delta`, [events.md](events.md#sessiondelta
 | Raw value  | Searched fields                                                 |
 |------------|-----------------------------------------------------------------|
 | `projects` | Project identifier, name, description                           |
-| `tasks`    | Task id, name, description                                      |
+| `tickets`  | Ticket id, name, description                                    |
 | `comments` | Comment bodies                                                  |
 | `docs`     | File names and content of the Markdown files of the docs folder |
 | `code`     | File names and text content of the code folder                  |
@@ -508,19 +508,19 @@ Matching and ranking: [services/search.md](../services/search.md).
 
 One search hit, as produced by a Main ([services/search.md](../services/search.md#3-searchresult)).
 
-| Field       | Type          | Meaning                                                                                                                                                                                      |
-|-------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `kind`      | `SearchScope` | Kind of item                                                                                                                                                                                 |
-| `deviceID`  | `UUID`        | The Main that produced the result, for `devices` too (the matched device is `itemID`)                                                                                                        |
-| `projectID` | `String?`     | The item's project; `nil` for `skills` and `devices`                                                                                                                                         |
-| `itemID`    | `String`      | Identifier of the item within its kind: project identifier, task id, comment id, project-relative path (`docs`, `code`), skill name, tab id, session id or device id (UUIDs as `uuidString`) |
-| `taskID`    | `String?`     | The task of a task or comment, or of a session bound to a task                                                                                                                               |
-| `path`      | `String?`     | `docs`, `code`: project-relative path; `skills`: path inside the skill folder                                                                                                                |
-| `line`      | `Int?`        | `docs`, `code`, `skills`: 1-based line of the snippet when it comes from the content                                                                                                         |
-| `title`     | `String`      | Text shown as the result's title                                                                                                                                                             |
-| `snippet`   | `String`      | Text shown under the title; may be empty                                                                                                                                                     |
-| `rank`      | `Int`         | `0`: exact id match, `1`: title match, `2`: content match                                                                                                                                    |
-| `date`      | `Date?`       | Recency of the item, used for ordering                                                                                                                                                       |
+| Field       | Type          | Meaning                                                                                                                                                                                        |
+|-------------|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `kind`      | `SearchScope` | Kind of item                                                                                                                                                                                   |
+| `deviceID`  | `UUID`        | The Main that produced the result, for `devices` too (the matched device is `itemID`)                                                                                                          |
+| `projectID` | `String?`     | The item's project; `nil` for `skills` and `devices`                                                                                                                                           |
+| `itemID`    | `String`      | Identifier of the item within its kind: project identifier, ticket id, comment id, project-relative path (`docs`, `code`), skill name, tab id, session id or device id (UUIDs as `uuidString`) |
+| `ticketID`  | `String?`     | The ticket of a ticket or comment, or of a session bound to a ticket                                                                                                                           |
+| `path`      | `String?`     | `docs`, `code`: project-relative path; `skills`: path inside the skill folder                                                                                                                  |
+| `line`      | `Int?`        | `docs`, `code`, `skills`: 1-based line of the snippet when it comes from the content                                                                                                           |
+| `title`     | `String`      | Text shown as the result's title                                                                                                                                                               |
+| `snippet`   | `String`      | Text shown under the title; may be empty                                                                                                                                                       |
+| `rank`      | `Int`         | `0`: exact id match, `1`: title match, `2`: content match                                                                                                                                      |
+| `date`      | `Date?`       | Recency of the item, used for ordering                                                                                                                                                         |
 
 The client highlights the query words in `title` and `snippet` itself
 ([services/search.md](../services/search.md#24-highlights)).
@@ -613,12 +613,12 @@ Where a feedback was sent from ([forge/feedback.md](../forge/feedback.md)).
 
 ### FeedbackSelection
 
-| Field          | Type      | Meaning                                                                   |
-|----------------|-----------|---------------------------------------------------------------------------|
-| `mainDeviceID` | `UUID?`   | Selected Main                                                             |
-| `projectID`    | `String?` | Selected project or sub project                                           |
-| `section`      | `String?` | Raw value of the selected sidebar section ([ui/shell.md](../ui/shell.md)) |
-| `item`         | `String?` | Selected item of that section (task id, file path, tab id, session id, …) |
+| Field          | Type      | Meaning                                                                     |
+|----------------|-----------|-----------------------------------------------------------------------------|
+| `mainDeviceID` | `UUID?`   | Selected Main                                                               |
+| `projectID`    | `String?` | Selected project or sub project                                             |
+| `section`      | `String?` | Raw value of the selected sidebar section ([ui/shell.md](../ui/shell.md))   |
+| `item`         | `String?` | Selected item of that section (ticket id, file path, tab id, session id, …) |
 
 ### ForgeConfig
 
@@ -644,7 +644,7 @@ The state of a feedback item or of a cycle, in pipeline order: `discussing`, `do
 
 ### ForgeTrigger
 
-What started a cycle: `tool` (`forge_push_docs` pushed the commits of a task or bundle session), `manual`
+What started a cycle: `tool` (`forge_push_docs` pushed the commits of a ticket or bundle session), `manual`
 (`forge.regenerate`), `automatic` (a check found the docs ahead of the code).
 
 ### ForgeHead
@@ -686,40 +686,41 @@ A GitHub Actions run watched by the Forge. Identifiable.
 
 One pass of regeneration, CI and release. Identifiable.
 
-| Field          | Type            | Meaning                                                                                               |
-|----------------|-----------------|-------------------------------------------------------------------------------------------------------|
-| `id`           | `UUID`          | Cycle id                                                                                              |
-| `trigger`      | `ForgeTrigger`  | What started it                                                                                       |
-| `state`        | `ForgeStage`    | `regenerating`, `regenPushed`, `building`, `released`, `done` or `failed`                             |
-| `failedState`  | `ForgeStage?`   | The state it failed in; set with `failed`                                                             |
-| `error`        | `String?`       | The failure message; set with `failed`                                                                |
-| `started`      | `Date`          | Creation                                                                                              |
-| `updated`      | `Date`          | Last change                                                                                           |
-| `targetCommit` | `String`        | `head.commit` when its last regeneration step ran                                                     |
-| `sessionID`    | `UUID?`         | The last regeneration session; `nil` when no session was needed                                       |
-| `attempts`     | `Int`           | Regeneration sessions started for this cycle                                                          |
-| `regenCommit`  | `String?`       | Full SHA CI builds: the commit `forge_push_regen` pushed, or `head.commit` when no session was needed |
-| `pushedAt`     | `Date?`         | When `regenCommit` was recorded or polling for it restarted                                           |
-| `run`          | `ForgeRun?`     | The CI run of `regenCommit`                                                                           |
-| `release`      | `ForgeRelease?` | The release of `run`                                                                                  |
-| `itemTaskIDs`  | `[String]`      | Task ids of the items in the cycle                                                                    |
+| Field           | Type            | Meaning                                                                                               |
+|-----------------|-----------------|-------------------------------------------------------------------------------------------------------|
+| `id`            | `UUID`          | Cycle id                                                                                              |
+| `trigger`       | `ForgeTrigger`  | What started it                                                                                       |
+| `state`         | `ForgeStage`    | `regenerating`, `regenPushed`, `building`, `released`, `done` or `failed`                             |
+| `failedState`   | `ForgeStage?`   | The state it failed in; set with `failed`                                                             |
+| `error`         | `String?`       | The failure message; set with `failed`                                                                |
+| `started`       | `Date`          | Creation                                                                                              |
+| `updated`       | `Date`          | Last change                                                                                           |
+| `targetCommit`  | `String`        | `head.commit` when its last regeneration step ran                                                     |
+| `sessionID`     | `UUID?`         | The last regeneration session; `nil` when no session was needed                                       |
+| `attempts`      | `Int`           | Regeneration sessions started for this cycle                                                          |
+| `regenCommit`   | `String?`       | Full SHA CI builds: the commit `forge_push_regen` pushed, or `head.commit` when no session was needed |
+| `pushedAt`      | `Date?`         | When `regenCommit` was recorded or polling for it restarted                                           |
+| `run`           | `ForgeRun?`     | The CI run of `regenCommit`                                                                           |
+| `release`       | `ForgeRelease?` | The release of `run`                                                                                  |
+| `itemTicketIDs` | `[String]`      | Ticket ids of the items in the cycle; JSON name `itemTaskIDs`                                         |
 
 ### ForgeItem
 
-The pipeline state of one feedback task. Identifiable by `taskID` (`var id: String { taskID }`).
+The pipeline state of one feedback ticket. Identifiable by `ticketID` (`var id: String { ticketID }`). JSON name of
+`ticketID`: `taskID`.
 
-| Field               | Type         | Meaning                                                           |
-|---------------------|--------------|-------------------------------------------------------------------|
-| `taskID`            | `String`     | The feedback task                                                 |
-| `projectID`         | `String`     | The source project when the item was created                      |
-| `title`             | `String`     | The task name, kept current                                       |
-| `state`             | `ForgeStage` | State                                                             |
-| `feedbackSessionID` | `UUID`       | The session that created the item: feedback, task or coordinator  |
-| `docsCommit`        | `String?`    | Full SHA of the last commit `forge_push_docs` pushed for the item |
-| `cycleID`           | `UUID?`      | The cycle the item is in                                          |
-| `error`             | `String?`    | The cycle's error while the item is `failed`                      |
-| `created`           | `Date`       | Creation                                                          |
-| `updated`           | `Date`       | Last change                                                       |
+| Field               | Type         | Meaning                                                            |
+|---------------------|--------------|--------------------------------------------------------------------|
+| `ticketID`          | `String`     | The feedback ticket                                                |
+| `projectID`         | `String`     | The source project when the item was created                       |
+| `title`             | `String`     | The ticket name, kept current                                      |
+| `state`             | `ForgeStage` | State                                                              |
+| `feedbackSessionID` | `UUID`       | The session that created the item: feedback, ticket or coordinator |
+| `docsCommit`        | `String?`    | Full SHA of the last commit `forge_push_docs` pushed for the item  |
+| `cycleID`           | `UUID?`      | The cycle the item is in                                           |
+| `error`             | `String?`    | The cycle's error while the item is `failed`                       |
+| `created`           | `Date`       | Creation                                                           |
+| `updated`           | `Date`       | Last change                                                        |
 
 ### ForgeState
 
@@ -743,12 +744,15 @@ When not enabled: `config`, `head`, `cycle`, `latestRelease` and `lastError` are
 ## Files on disk
 
 The files on disk are read and written through their own file types, defined by the docs in the last column; they map
-to these wire types:
+to these wire types. The files keep the names they had before tasks were renamed tickets: the folder
+`.hephaestus/tasks/`, the key `taskCounter` of project.yml, the key `taskID` and the kind `task` of session files, and
+the JSON names `taskID` and `itemTaskIDs` of `forge.json`, which `ForgeItem` and `ForgeCycle` use on the wire too
+([forge/pipeline.md](../forge/pipeline.md#types)).
 
 | File                              | Wire type                                                           | Spec                                          |
 |-----------------------------------|---------------------------------------------------------------------|-----------------------------------------------|
 | `.hephaestus/project.yml`         | `Project` without `deviceID`, `rootPath`, `migrating`, `parseError` | [data/project-yml.md](../data/project-yml.md) |
-| `.hephaestus/tasks/<id>.yml`      | `TaskItem` without `parseError`                                     | [data/task-yml.md](../data/task-yml.md)       |
+| `.hephaestus/tasks/<id>.yml`      | `TicketItem` without `parseError`                                   | [data/ticket-yml.md](../data/ticket-yml.md)   |
 | `.hephaestus/sessions/<id>.yml`   | `SessionInfo` without `statusLine`, `error`, `pendingPermissions`   | [data/sessions.md](../data/sessions.md)       |
 | `.hephaestus/sessions/<id>.jsonl` | One `SessionEvent` per line                                         | [data/sessions.md](../data/sessions.md)       |
 | `registry.json`                   | `MeshSnapshot`                                                      | [data/app-storage.md](../data/app-storage.md) |

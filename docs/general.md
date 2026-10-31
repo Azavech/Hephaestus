@@ -50,7 +50,7 @@ the repository passes its own check ([public-repository.md](public-repository.md
 
 ### Where personal data lives instead
 
-- `.hephaestus/`, where the app keeps a project's data (`project.yml`, tasks, sessions, attachments): the whole folder
+- `.hephaestus/`, where the app keeps a project's data (`project.yml`, tickets, sessions, attachments): the whole folder
   is ignored by git and never committed. The repository folder is registered once as the project `HEPH` on the Forge
   host, by the user or by the Forge itself ([forge/pipeline.md](forge/pipeline.md#registering-the-source-project)).
 - `.claude/` (Claude Code's local settings, with paths and permission rules) and `CLAUDE.local.md`: ignored.

@@ -34,8 +34,8 @@ events and keeps the live statuses. This doc defines what is stored and how `Ses
 | Key              | YAML type | Required                  | Written   | Meaning                                                                                                                 |
 |------------------|-----------|---------------------------|-----------|-------------------------------------------------------------------------------------------------------------------------|
 | `id`             | string    | yes                       | always    | Session id (a UUID); the id of the file name.                                                                           |
-| `kind`           | string    | yes                       | always    | `project`, `task`, `feedback`, `regeneration` or `bundle`.                                                              |
-| `taskID`         | string    | for `task` and `feedback` | when set  | Id of the task the session belongs to.                                                                                  |
+| `kind`           | string    | yes                       | always    | `project`, `task` (a ticket session), `feedback`, `regeneration` or `bundle`.                                           |
+| `taskID`         | string    | for `task` and `feedback` | when set  | Id of the ticket the session belongs to.                                                                                |
 | `mode`           | string    | for `task`                | when set  | `implement`, `debug`, `review`, `plan` or `custom`.                                                                     |
 | `bundleID`       | string    | for `bundle`              | when set  | Id of the bundle the session coordinates or works for.                                                                  |
 | `title`          | string    | yes                       | always    | Title shown in the UI and passed to the CLI with `--name`; set at creation, by a generated title, by `sessions.update`. |
@@ -48,8 +48,9 @@ events and keeps the live statuses. This doc defines what is stored and how `Ses
 | `closed`         | timestamp | no                        | when set  | When Claude closed the session (Closed). Absent: open.                                                                  |
 
 The values are those of `SessionKind`, `SessionMode`, `PermissionMode` and `SessionStatus`
-([protocol/types.md](../protocol/types.md)). How a new session gets its title, permission mode and model is defined in
-[claude/cli.md](../claude/cli.md).
+([protocol/types.md](../protocol/types.md)), except that the file keeps the names it had before tasks were renamed
+tickets: the kind `.ticket` is stored as `task`, and `SessionFile.ticketID` as the key `taskID`. How a new session gets
+its title, permission mode and model is defined in [claude/cli.md](../claude/cli.md).
 
 ### Validation and normalization
 
@@ -57,20 +58,20 @@ Applied when a file is read and before a file is written. A file that breaks a r
 break one fails with `.invalid(<message>)`, the message of the table without the file name, and writes nothing. The
 rules are checked in the order of the table, so the message is that of the first broken rule.
 
-| Key        | Normalization                                           | Rule                                                                                   | Message                                                                       |
-|------------|---------------------------------------------------------|----------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
-| `id`       | none                                                    | the UUID of the file name                                                              | `id <id> does not match the file name <file name>`                            |
-| `taskID`   | `TaskID(_:)` form                                       | a task id; present for `task` and `feedback`, absent for the other kinds               | `taskID must be set for task and feedback sessions only`                      |
-| `mode`     | none                                                    | present for `task`, absent for the other kinds                                         | `mode must be set for task sessions only`                                     |
-| `bundleID` | `BundleID(_:)` form                                     | a bundle id; present for `bundle`, absent for `project`, `feedback` and `regeneration` | `bundleID must be set for bundle sessions and allowed for task sessions only` |
-| `title`    | leading and trailing whitespace and line breaks removed | not empty, no line break                                                               | `the title must not be empty and must be on one line`                         |
-| `model`    | whitespace trimmed; empty becomes absent                | no line break                                                                          | `model must be on one line`                                                   |
+| Key        | Normalization                                           | Rule                                                                                   | Message                                                                         |
+|------------|---------------------------------------------------------|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------|
+| `id`       | none                                                    | the UUID of the file name                                                              | `id <id> does not match the file name <file name>`                              |
+| `taskID`   | `TicketID(_:)` form                                     | a ticket id; present for `task` and `feedback`, absent for the other kinds             | `taskID must be set for ticket and feedback sessions only`                      |
+| `mode`     | none                                                    | present for `task`, absent for the other kinds                                         | `mode must be set for ticket sessions only`                                     |
+| `bundleID` | `BundleID(_:)` form                                     | a bundle id; present for `bundle`, absent for `project`, `feedback` and `regeneration` | `bundleID must be set for bundle sessions and allowed for ticket sessions only` |
+| `title`    | leading and trailing whitespace and line breaks removed | not empty, no line break                                                               | `the title must not be empty and must be on one line`                           |
+| `model`    | whitespace trimmed; empty becomes absent                | no line break                                                                          | `model must be on one line`                                                     |
 
 A title has no maximum length; line breaks are those of
 [project-yml.md](project-yml.md#validation-and-normalization).
 
-`kind`, `mode`, `permissionMode` and `status` are checked by decoding (`<key>: invalid value`). The task does not have
-to exist: the sessions of a deleted task keep their `taskID` ([task-yml.md](task-yml.md#changes-made-by-the-app)).
+`kind`, `mode`, `permissionMode` and `status` are checked by decoding (`<key>: invalid value`). The ticket does not have
+to exist: the sessions of a deleted ticket keep their `taskID` ([ticket-yml.md](ticket-yml.md#changes-made-by-the-app)).
 
 ### Status
 
@@ -110,9 +111,10 @@ Each write sets `updated` to `YAMLCoding.now()`.
 
 ### Mapping to SessionInfo
 
-`SessionInfo` ([protocol/types.md](../protocol/types.md)) carries the thirteen keys of the file under the same names
-(`allowsAllTools` false and `closed` nil when their key is absent). Its `status` is the live status while a process exists, else the
-file's (Status). `statusLine`, `error` and `pendingPermissions` are kept in memory by `SessionService` and are not
+`SessionInfo` ([protocol/types.md](../protocol/types.md)) carries the thirteen keys of the file under the same names,
+except `taskID`, which is `SessionInfo.ticketID`, and the kind `task`, which is `.ticket` (`allowsAllTools` false and
+`closed` nil when their key is absent). Its `status` is the live status while a process exists, else the file's
+(Status). `statusLine`, `error` and `pendingPermissions` are kept in memory by `SessionService` and are not
 stored.
 
 ## Event log
@@ -148,29 +150,29 @@ Every event has `id`, `at` and `type`, plus the fields of its type. Fields not l
 
 ### Fields
 
-| Field         | JSON type                 | In                                                               | Meaning                                                                        |
-|---------------|---------------------------|------------------------------------------------------------------|--------------------------------------------------------------------------------|
-| `id`          | string (UUID)             | every event                                                      | Event id, a new UUID.                                                          |
-| `at`          | string (date)             | every event                                                      | When the Main recorded the event.                                              |
-| `type`        | string                    | every event                                                      | A `SessionEventType` value: one of the types above.                            |
-| `text`        | string                    | `user`, `assistant`, `thinking`, `toolResult`, `system`, `error` | The text (below).                                                              |
-| `attachments` | array of `TaskAttachment` | `user`, when not empty                                           | Files saved in `sessions/<id>/` (Attachments).                                 |
-| `deviceID`    | string (UUID)             | `user`, `permissionDecision`                                     | Device that sent the message, or whose answer was applied.                     |
-| `messageID`   | string                    | `assistant`, `thinking`, `toolUse`                               | Id of the Claude message the block belongs to.                                 |
-| `index`       | integer                   | `assistant`, `thinking`, `toolUse`                               | Index of the block in its message, from 0.                                     |
-| `toolUseID`   | string                    | `toolUse`, `toolResult`                                          | Id of the tool call (`toolu_…`).                                               |
-| `name`        | string                    | `toolUse`                                                        | Tool name.                                                                     |
-| `input`       | string                    | `toolUse`, `permission`                                          | Tool input, as compact JSON text.                                              |
-| `isError`     | boolean                   | `toolResult`, `result`                                           | The tool or the turn failed.                                                   |
-| `requestID`   | string                    | `permission`, `permissionDecision`                               | The CLI's permission request id.                                               |
-| `toolName`    | string                    | `permission`                                                     | Tool the CLI asks permission for.                                              |
-| `description` | string                    | `permission`, optional                                           | The CLI's description of the call.                                             |
-| `suggestions` | string                    | `permission`                                                     | The CLI's permission suggestions, as compact JSON text; `[]` when it has none. |
-| `blockedPath` | string                    | `permission`, optional                                           | The path that caused the request.                                              |
-| `decision`    | string                    | `permissionDecision`                                             | `allow`, `allowAlways`, `allowAll` or `deny` (`PermissionDecision`).           |
-| `durationMS`  | integer                   | `result`                                                         | Duration of the turn in milliseconds.                                          |
-| `costUSD`     | number                    | `result`                                                         | Cost of the turn in US dollars.                                                |
-| `stopReason`  | string                    | `result`, optional                                               | The CLI's stop reason; absent when it gives none (an interrupted turn).        |
+| Field         | JSON type                   | In                                                               | Meaning                                                                        |
+|---------------|-----------------------------|------------------------------------------------------------------|--------------------------------------------------------------------------------|
+| `id`          | string (UUID)               | every event                                                      | Event id, a new UUID.                                                          |
+| `at`          | string (date)               | every event                                                      | When the Main recorded the event.                                              |
+| `type`        | string                      | every event                                                      | A `SessionEventType` value: one of the types above.                            |
+| `text`        | string                      | `user`, `assistant`, `thinking`, `toolResult`, `system`, `error` | The text (below).                                                              |
+| `attachments` | array of `TicketAttachment` | `user`, when not empty                                           | Files saved in `sessions/<id>/` (Attachments).                                 |
+| `deviceID`    | string (UUID)               | `user`, `permissionDecision`                                     | Device that sent the message, or whose answer was applied.                     |
+| `messageID`   | string                      | `assistant`, `thinking`, `toolUse`                               | Id of the Claude message the block belongs to.                                 |
+| `index`       | integer                     | `assistant`, `thinking`, `toolUse`                               | Index of the block in its message, from 0.                                     |
+| `toolUseID`   | string                      | `toolUse`, `toolResult`                                          | Id of the tool call (`toolu_…`).                                               |
+| `name`        | string                      | `toolUse`                                                        | Tool name.                                                                     |
+| `input`       | string                      | `toolUse`, `permission`                                          | Tool input, as compact JSON text.                                              |
+| `isError`     | boolean                     | `toolResult`, `result`                                           | The tool or the turn failed.                                                   |
+| `requestID`   | string                      | `permission`, `permissionDecision`                               | The CLI's permission request id.                                               |
+| `toolName`    | string                      | `permission`                                                     | Tool the CLI asks permission for.                                              |
+| `description` | string                      | `permission`, optional                                           | The CLI's description of the call.                                             |
+| `suggestions` | string                      | `permission`                                                     | The CLI's permission suggestions, as compact JSON text; `[]` when it has none. |
+| `blockedPath` | string                      | `permission`, optional                                           | The path that caused the request.                                              |
+| `decision`    | string                      | `permissionDecision`                                             | `allow`, `allowAlways`, `allowAll` or `deny` (`PermissionDecision`).           |
+| `durationMS`  | integer                     | `result`                                                         | Duration of the turn in milliseconds.                                          |
+| `costUSD`     | number                      | `result`                                                         | Cost of the turn in US dollars.                                                |
+| `stopReason`  | string                      | `result`, optional                                               | The CLI's stop reason; absent when it gives none (an interrupted turn).        |
 
 - `text`: for `user`, the text as typed or the generated first message, without the list of attached files that is
   added to the message sent to Claude; for `toolResult`, `system` and `error`, the texts defined in
@@ -267,8 +269,8 @@ limit.
 
 - `SessionArchive.saveAttachment(fileAt:originalName:to:)` moves a complete upload
   ([services/files.md](../services/files.md#7-uploads)) into the folder with `FileManager.moveItem(at:to:)`, named with
-  `AttachmentNaming.sanitize` and `AttachmentNaming.unique` ([task-yml.md](task-yml.md#naming)), and returns the
-  `TaskAttachment` (`file`, `type` from `AttachmentNaming.mimeType`, `size` of the moved file) that goes in the `user`
+  `AttachmentNaming.sanitize` and `AttachmentNaming.unique` ([ticket-yml.md](ticket-yml.md#naming)), and returns the
+  `TicketAttachment` (`file`, `type` from `AttachmentNaming.mimeType`, `size` of the moved file) that goes in the `user`
   event. When the request fails afterwards, `SessionService` moves the stored files back to their uploads
   ([claude/cli.md](../claude/cli.md)).
 - `SessionArchive.attachmentURL(_:file:)` is the absolute path that the message sent to Claude gives for the file
@@ -287,7 +289,7 @@ limit.
 - It does not touch `SessionPlugins/<id>/` ([claude/skills.md](../claude/skills.md)) or the CLI's transcript under
   `~/.claude/projects/`.
 
-Deleting a task leaves its sessions in place ([task-yml.md](task-yml.md#changes-made-by-the-app)).
+Deleting a ticket leaves its sessions in place ([ticket-yml.md](ticket-yml.md#changes-made-by-the-app)).
 
 ## Logging
 
@@ -305,7 +307,7 @@ Deleting a task leaves its sessions in place ([task-yml.md](task-yml.md#changes-
 public struct SessionFile: Codable, Sendable, Equatable {
     public var id: UUID
     public var kind: SessionKind
-    public var taskID: String?
+    public var ticketID: String?
     public var mode: SessionMode?
     public var bundleID: String?
     public var title: String
@@ -319,13 +321,14 @@ public struct SessionFile: Codable, Sendable, Equatable {
 
     /// The values as given, except `created`, `updated` and `closed`, which pass through
     /// YAMLCoding.wholeSeconds(_:).
-    public init(id: UUID, kind: SessionKind, taskID: String?, mode: SessionMode?, bundleID: String?, title: String,
+    public init(id: UUID, kind: SessionKind, ticketID: String?, mode: SessionMode?, bundleID: String?, title: String,
                 created: Date, updated: Date, permissionMode: PermissionMode, allowsAllTools: Bool = false,
                 model: String?, status: SessionStatus, closed: Date? = nil)
-    /// Custom coding for allowsAllTools only: an absent key decodes as false, false is not encoded.
+    /// Custom coding: ticketID is the key taskID; the kind .ticket is read and written as task (any other kind as its
+    /// raw value); an absent allowsAllTools decodes as false, false is not encoded.
     public init(from decoder: any Decoder) throws
     public func encode(to encoder: any Encoder) throws
-    /// .mapping of the thirteen keys, each .value.
+    /// .mapping of the thirteen keys of the file (taskID among them), each .value.
     public static let shape: YAMLShape
     /// id.uuidString.lowercased(): the name of the files and folder, and the CLI session id.
     public static func fileStem(_ id: UUID) -> String
@@ -358,7 +361,7 @@ public actor SessionArchive {
     public func history(_ id: UUID, before: Int?, limit: Int?) throws -> SessionsHistoryResult
 
     /// Moves the file at `fileAt` (a complete upload) into <id>/ (Attachments).
-    public func saveAttachment(fileAt: URL, originalName: String, to id: UUID) throws -> TaskAttachment
+    public func saveAttachment(fileAt: URL, originalName: String, to id: UUID) throws -> TicketAttachment
     public nonisolated func attachmentURL(_ id: UUID, file: String) -> URL
 
     public func delete(_ id: UUID) throws
@@ -366,7 +369,7 @@ public actor SessionArchive {
 ```
 
 `SessionKind`, `SessionMode`, `SessionStatus`, `PermissionMode`, `PermissionDecision`, `SessionInfo`, `SessionEvent`,
-`SessionEventType`, `TaskAttachment` and `UploadRef` are defined in [protocol/types.md](../protocol/types.md);
+`SessionEventType`, `TicketAttachment` and `UploadRef` are defined in [protocol/types.md](../protocol/types.md);
 `SessionsHistoryResult` in [protocol/methods.md](../protocol/methods.md#sessionshistory); `DataError` and `AtomicFile`
 in [app-storage.md](app-storage.md); `YAMLShape` and `YAMLCoding` in [project-yml.md](project-yml.md).
 

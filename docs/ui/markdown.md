@@ -19,7 +19,7 @@ files:
 ---
 
 `HephMarkdown` renders Markdown source as SwiftUI views. It is used by the Docs reader and preview
-([docs.md](docs.md)), task descriptions and comments ([tasks.md](tasks.md)), assistant messages of Claude sessions
+([docs.md](docs.md)), ticket descriptions and comments ([tickets.md](tickets.md)), assistant messages of Claude sessions
 ([sessions.md](sessions.md)) and the skill file preview ([skills.md](skills.md)). It depends on `HephCore`
 (`Log.markdown`), `HephEditor` (code block highlighting) and the `Markdown` product of swift-markdown
 ([../architecture.md](../architecture.md#modules)).
@@ -71,13 +71,13 @@ and `resolve` is a pure function.
 
 ### Parameters
 
-| Parameter     | Meaning                                                                                                                                                                                                                                                                                                                          |
-|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `source`      | The Markdown text. A new value, or a new `basePath`, is parsed again; the same values reuse the last parse                                                                                                                                                                                                                       |
-| `basePath`    | The project-relative folder of the document (`""` is the project root). With a `basePath`, every resolvable link and image is active. Without one (a task description, a comment, a message, a skill file), only `.external` targets are active: other links render as plain text and other images as their alt text, not loaded |
-| `imageLoader` | Loads the data of an active image. When nil, `.external` targets with scheme `http` or `https` are loaded with `URLSession.shared.data(from:)` (a status outside 200–299 fails) and any other target fails                                                                                                                       |
-| `linkHandler` | Called when an active link is clicked or tapped. When nil, `.external` targets are opened with the environment's `openURL` and other targets do nothing                                                                                                                                                                          |
-| `selection`   | `.perBlock`: the block views of [Blocks](#blocks). `.acrossBlocks`: [Selection across blocks](#selection-across-blocks). Session replies use `.acrossBlocks` ([sessions.md](sessions.md#transcript)); every other caller keeps `.perBlock`                                                                                       |
+| Parameter     | Meaning                                                                                                                                                                                                                                                                                                                            |
+|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `source`      | The Markdown text. A new value, or a new `basePath`, is parsed again; the same values reuse the last parse                                                                                                                                                                                                                         |
+| `basePath`    | The project-relative folder of the document (`""` is the project root). With a `basePath`, every resolvable link and image is active. Without one (a ticket description, a comment, a message, a skill file), only `.external` targets are active: other links render as plain text and other images as their alt text, not loaded |
+| `imageLoader` | Loads the data of an active image. When nil, `.external` targets with scheme `http` or `https` are loaded with `URLSession.shared.data(from:)` (a status outside 200–299 fails) and any other target fails                                                                                                                         |
+| `linkHandler` | Called when an active link is clicked or tapped. When nil, `.external` targets are opened with the environment's `openURL` and other targets do nothing                                                                                                                                                                            |
+| `selection`   | `.perBlock`: the block views of [Blocks](#blocks). `.acrossBlocks`: [Selection across blocks](#selection-across-blocks). Session replies use `.acrossBlocks` ([sessions.md](sessions.md#transcript)); every other caller keeps `.perBlock`                                                                                         |
 
 ## Parsing
 

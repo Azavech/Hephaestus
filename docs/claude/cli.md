@@ -219,8 +219,8 @@ public actor ClaudeLocator {
 
 One `ClaudeProcess` is one running `claude` for one session. It is spawned with `ChildProcess` (stdin, stdout and
 stderr as separate pipes), working directory = the session's project root (a sub project's own root), or, for a
-`task` session with a `bundleID`, its task's work folder (`SessionHost.bundleWorkFolder`,
-[../services/bundles.md](../services/bundles.md#working-folder-of-a-task-session)); environment = the login
+`ticket` session with a `bundleID`, its ticket's work folder (`SessionHost.bundleWorkFolder`,
+[../services/bundles.md](../services/bundles.md#working-folder-of-a-ticket-session)); environment = the login
 environment, with the changes of 3.5 for the sessions of 3.5.
 
 ### 3.1 Arguments
@@ -250,7 +250,7 @@ arguments (flag, value). `<session id>` is the lowercase form.
 
 `--mcp-config`, `--allowedTools` and `--disallowedTools` take several values; each is followed by another flag, which
 ends its list. The app never passes `--bare` (it ignores the subscription login). The system prompt goes through a
-file because it holds the whole task file and argv plus the environment are limited to `ARG_MAX` (1,048,576 bytes on
+file because it holds the whole ticket file and argv plus the environment are limited to `ARG_MAX` (1,048,576 bytes on
 macOS); verified with CLI 2.1.309: the flag is read, and a missing file exits with code 1 and `Append system prompt
 file not found: <path>`.
 Example of a first start:
@@ -360,7 +360,7 @@ Every line type, what the parser returns, and what `SessionService` does with it
 | `system`                 | `status`, `status` a non-empty string                                             | `turnActivity`, `statusLine("<status, first letter uppercased>…")` | sets `statusLine`                                                                                         | —                                                                                                                              | `session.changed` (throttled)                              |
 | `system`                 | `status`, `status` null, absent, empty or not a string                            | `turnActivity`                                                     | —                                                                                                         | —                                                                                                                              | —                                                          |
 | `system`                 | `thinking_tokens`                                                                 | `statusLine("Thinking… (~<estimated_tokens> tokens)")`             | sets `statusLine`                                                                                         | —                                                                                                                              | `session.changed` (throttled)                              |
-| `system`                 | `task_summary`, `detail` not empty                                                | `statusLine(detail)`                                               | sets `statusLine`                                                                                         | —                                                                                                                              | `session.changed` (throttled)                              |
+| `system`                 | `ticket_summary`, `detail` not empty                                              | `statusLine(detail)`                                               | sets `statusLine`                                                                                         | —                                                                                                                              | `session.changed` (throttled)                              |
 | `system`                 | `post_turn_summary`, `status_detail` not empty                                    | `statusLine(status_detail)`                                        | sets `statusLine`                                                                                         | —                                                                                                                              | `session.changed` (throttled)                              |
 | `system`                 | other subtypes (`session_title_changed`, …)                                       | nothing                                                            | —                                                                                                         | —                                                                                                                              | —                                                          |
 | `stream_event`           | `event.type` = `message_start`                                                    | `turnActivity` (the parser keeps `event.message.id`)               | —                                                                                                         | —                                                                                                                              | —                                                          |
@@ -415,7 +415,7 @@ Recorded lines, with the identifiers of the sanitized fixtures ([../testing.md](
 {"type":"assistant","message":{"id":"msg_fixture_01","role":"assistant","content":[{"type":"tool_use","id":"toolu_fixture_01","name":"Bash","input":{"command":"touch probe-file.txt && ls","description":"Create probe-file.txt and list directory contents"}}]},"parent_tool_use_id":null}
 {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_fixture_01","type":"tool_result","content":"probe-file.txt\nstream.log","is_error":false}]},"parent_tool_use_id":null}
 {"type":"system","subtype":"thinking_tokens","estimated_tokens":300,"estimated_tokens_delta":250}
-{"type":"system","subtype":"task_summary","detail":"Creating probe-file.txt and listing directory contents"}
+{"type":"system","subtype":"ticket_summary","detail":"Creating probe-file.txt and listing directory contents"}
 {"type":"system","subtype":"post_turn_summary","status_category":"completed","status_detail":"touch + ls ran; listing shows probe-file.txt and stream.log","needs_action":""}
 {"type":"result","subtype":"success","is_error":false,"duration_ms":2797,"num_turns":2,"stop_reason":"end_turn","total_cost_usd":0.00121975,"result":"The command ran …","terminal_reason":"completed"}
 ```
@@ -478,7 +478,7 @@ The Hephaestus repository is public ([../public-repository.md](../public-reposit
 the sessions that work in it:
 
 - the Forge's `feedback` and `regeneration` sessions;
-- while the setting `forge.enabled` is true on this Main, every `project`, `task` and `bundle` session whose project
+- while the setting `forge.enabled` is true on this Main, every `project`, `ticket` and `bundle` session whose project
   is `forge.sourceProjectID` or one of its sub projects (the project, or an ancestor found through
   `ClaudeProjectContext.parent`, has that identifier, or an ancestor cannot be read), as read at each process start
   (5.3).
@@ -486,14 +486,14 @@ the sessions that work in it:
 They get the denied rules and the environment below, no permission suggestion (4.1), and the
 [Forge common part](prompts.md#forge-common-part) of the system prompt instead of the Common part, which names the
 mesh's devices. Feedback, regeneration and bundle sessions also get the allowed rules below and start in the
-permission mode `acceptEdits` (5.2); so do the `task` sessions of a bundle, which work without waiting for the user
-([../services/bundles.md](../services/bundles.md)). Other `project` and `task` sessions keep `mcp__hephaestus` as their
-allowed rule and start in their own permission mode. The user can change the permission mode of every session of 3.5
-and allow all its tools (4.4, 5.6); the denied rules and the environment below stay.
+permission mode `acceptEdits` (5.2); so do the `ticket` sessions of a bundle, which work without waiting for the user
+([../services/bundles.md](../services/bundles.md)). Other `project` and `ticket` sessions keep `mcp__hephaestus` as
+their allowed rule and start in their own permission mode. The user can change the permission mode of every session of
+3.5 and allow all its tools (4.4, 5.6); the denied rules and the environment below stay.
 
 Their commits are meant to reach GitHub only through the Forge push tools, which check them for personal data first
-([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). A `task` session that is not of a bundle pushes its
-documentation commits with `forge_push_docs`, and a `bundle` session those of its tasks; a `project` session has no
+([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). A `ticket` session that is not of a bundle pushes its
+documentation commits with `forge_push_docs`, and a `bundle` session those of its tickets; a `project` session has no
 push tool, and the user pushes its commits by hand, outside the session. A `feedback` session changes no file
 ([prompts.md](prompts.md#feedback-part)). The rules and the environment below stop the direct ways of pushing
 that were tried. In a session, the environment makes a push fail even when the user approves its permission card
@@ -510,7 +510,7 @@ no approval, and with all tools allowed.
 /// The rules and the environment of the sessions of cli.md 3.5.
 enum ForgeSessionRules {
     enum AllowedSet { case feedback, bundle, regeneration }
-    /// --allowedTools: .feedback for feedback sessions and the task sessions of a bundle, .bundle for bundle
+    /// --allowedTools: .feedback for feedback sessions and the ticket sessions of a bundle, .bundle for bundle
     /// sessions, .regeneration for regeneration sessions; branch: the setting forge.branch.
     static func allowedTools(_ set: AllowedSet, branch: String) -> [String]
     /// --disallowedTools.
@@ -520,7 +520,7 @@ enum ForgeSessionRules {
 }
 ```
 
-`--allowedTools` of `feedback` sessions and of the `task` sessions of a bundle, one argument per line, in this order,
+`--allowedTools` of `feedback` sessions and of the `ticket` sessions of a bundle, one argument per line, in this order,
 `<branch>` being the setting `forge.branch`:
 
 ```text
@@ -544,7 +544,7 @@ Bash(git branch *)
 Bash(scripts/check-public.sh --staged)
 ```
 
-`--allowedTools` of `bundle` sessions: the same rules, followed by these, with which the coordinator brings the task
+`--allowedTools` of `bundle` sessions: the same rules, followed by these, with which the coordinator brings the ticket
 branches in ([prompts.md](prompts.md#bundle-part)):
 
 ```text
@@ -787,12 +787,12 @@ public protocol SessionHost: Sendable {
     func settings() async -> DeviceSettings
     /// Throws ProtocolError notFound when the project is not hosted on this Main.
     func claudeProject(_ projectID: String) async throws -> ClaudeProjectContext
-    /// Throws ProtocolError notFound when the task does not exist.
-    func claudeTask(projectID: String, taskID: String) async throws -> ClaudeTaskContext
+    /// Throws ProtocolError notFound when the ticket does not exist.
+    func claudeTicket(projectID: String, ticketID: String) async throws -> ClaudeTicketContext
     /// Throws ProtocolError notFound when the bundle does not exist (services/bundles.md).
     func claudeBundle(projectID: String, bundleID: String) async throws -> ClaudeBundleContext
-    /// BundleService.workFolder: the working directory of a task session of a bundle.
-    func bundleWorkFolder(projectID: String, taskID: String) async throws -> URL
+    /// BundleService.workFolder: the working directory of a ticket session of a bundle.
+    func bundleWorkFolder(projectID: String, ticketID: String) async throws -> URL
     /// ProjectRegistry.checkWritable: throws locked when the project or an ancestor is migrating.
     func checkWritable(_ projectID: String) async throws
     /// The project's SessionArchive (data/sessions.md).
@@ -815,7 +815,7 @@ public protocol SessionHost: Sendable {
 public struct SessionStart: Sendable {
     public var projectID: String
     public var kind: SessionKind
-    public var taskID: String?
+    public var ticketID: String?
     public var mode: SessionMode?
     public var title: String?
     public var message: String?
@@ -823,7 +823,7 @@ public struct SessionStart: Sendable {
     public var permissionMode: PermissionMode?
     public var model: String?
     public var deviceID: UUID                        // requesting device; this Main's id for the Forge
-    public var bundleID: String?                     // bundle sessions, and the task sessions a bundle starts
+    public var bundleID: String?                     // bundle sessions, and the ticket sessions a bundle starts
     public var regeneration: RegenerationContext?    // regeneration sessions (prompts.md)
     /// Memberwise: one labeled parameter per property, in order; the optional parameters default to nil and
     /// `attachments` to [].
@@ -873,7 +873,7 @@ types of [../protocol/types.md](../protocol/types.md); `SessionsHistoryResult` i
 ([../protocol/methods.md](../protocol/methods.md#sessionshistory)); `UploadService` and `ClaimedUpload` are in
 [../services/files.md](../services/files.md#7-uploads); `DeviceSettings` and `AtomicFile` are in
 [../data/app-storage.md](../data/app-storage.md); `SessionArchive` and `SessionFile` in
-[../data/sessions.md](../data/sessions.md); `ClaudeProjectContext`, `ClaudeTaskContext` and `RegenerationContext` in
+[../data/sessions.md](../data/sessions.md); `ClaudeProjectContext`, `ClaudeTicketContext` and `RegenerationContext` in
 [prompts.md](prompts.md). Errors are `ProtocolError` values with the codes of
 [../protocol/envelope.md](../protocol/envelope.md). A method naming a session the project does not have fails with
 `notFound` `session <id> not found` (`<id>`: the `uuidString`, the text of
@@ -907,19 +907,19 @@ and `forge.sourceProjectID` (the sessions of 3.5).
 Checks, in order (all `badRequest` unless noted):
 
 1. The project is hosted on this Main (`notFound`) and writable (`checkWritable`: `locked`).
-2. Over the wire, `kind` is `project` or `task` (`Only the Forge starts feedback and regeneration sessions.`, and
+2. Over the wire, `kind` is `project` or `ticket` (`Only the Forge starts feedback and regeneration sessions.`, and
    `Bundle sessions are started with bundles.start.` for `bundle`); `feedback` and `regeneration` sessions are
-   started in process by the Forge, `bundle` sessions and the task sessions of a bundle by `BundleService`
+   started in process by the Forge, `bundle` sessions and the ticket sessions of a bundle by `BundleService`
    ([../services/bundles.md](../services/bundles.md)).
-3. `project`: no `taskID`, no `mode` (`A project session has no task and no mode.`).
-4. `task`: `taskID` and `mode` are present (`A task session needs a task and a mode.`); `taskID` names an existing task
-   of the project (`notFound`) that is not broken (`conflict`, `The file is invalid: <parseError>`); mode `custom`
-   needs a `message` that is not empty after trimming (`Mode custom needs instructions.`).
-5. `feedback`: `taskID` is present (`A feedback session needs a task.`) and names an existing task (`notFound`) that is
-   not broken (`conflict`, as in 4). `regeneration`: no `taskID` (`A regeneration session has no task.`). `bundle`:
-   `bundleID` names a bundle of the project (`notFound`), no `taskID` and no `mode` (`A bundle session has no task
-   and no mode.`). `bundleID` is given only to `bundle` sessions and to `task` sessions
-   (`Only bundle and task sessions belong to a bundle.`).
+3. `project`: no `ticketID`, no `mode` (`A project session has no ticket and no mode.`).
+4. `ticket`: `ticketID` and `mode` are present (`A ticket session needs a ticket and a mode.`); `ticketID` names an
+   existing ticket of the project (`notFound`) that is not broken (`conflict`, `The file is invalid: <parseError>`);
+   mode `custom` needs a `message` that is not empty after trimming (`Mode custom needs instructions.`).
+5. `feedback`: `ticketID` is present (`A feedback session needs a ticket.`) and names an existing ticket (`notFound`)
+   that is not broken (`conflict`, as in 4). `regeneration`: no `ticketID` (`A regeneration session has no ticket.`).
+   `bundle`: `bundleID` names a bundle of the project (`notFound`), no `ticketID` and no `mode` (`A bundle session has
+   no ticket and no mode.`). `bundleID` is given only to `bundle` sessions and to `ticket` sessions
+   (`Only bundle and ticket sessions belong to a bundle.`).
 6. `title`, when given, is not empty after trimming and holds no line break (no maximum length; the message of the
    `title` rule of [../data/sessions.md](../data/sessions.md)); `model`, when given, is not empty after trimming
    (`The model must not be empty.`).
@@ -935,10 +935,10 @@ Creation:
 
 - `id` = a new `UUID`.
 - `title`: the given title, trimmed; otherwise by kind: `project` → `Chat <n>`, n = 1 + the number of `project`
-  sessions of the project; `task` → `<mode displayName> <task id>` (`Implement HEPH-12`); `feedback` → `Feedback <task
-  id>`; `regeneration` → `Regeneration`; `bundle` → `Bundle <bundle id>`. The first message of a `project`,
+  sessions of the project; `ticket` → `<mode displayName> <ticket id>` (`Implement HEPH-12`); `feedback` → `Feedback
+  <ticket id>`; `regeneration` → `Regeneration`; `bundle` → `Bundle <bundle id>`. The first message of a `project`,
   `feedback` or `bundle` session then gets a generated title (5.10), given or default title alike.
-- `permissionMode`: `feedback` and `regeneration`, and `bundle` sessions and the `task` sessions of a bundle that are
+- `permissionMode`: `feedback` and `regeneration`, and `bundle` sessions and the `ticket` sessions of a bundle that are
   sessions of 3.5 → `acceptEdits`; otherwise the given value, else the project's
   `claude.permissionMode`, else the setting `defaultPermissionMode`. Every session can change it later (5.6).
 - `allowsAllTools`: false.
@@ -949,7 +949,7 @@ Creation:
   back to their uploads, the folder `<id>/` is removed, `uploads.release` is called and the request fails: nothing is
   created. After the session file is created, `uploads.finish` is called.
 - The session file is created with `status: stopped`; `session.changed` is emitted.
-- First message: `project` → `message` (empty when nil) and the stored attachments, when either is given; `task`,
+- First message: `project` → `message` (empty when nil) and the stored attachments, when either is given; `ticket`,
   `feedback`, `regeneration`, `bundle` → the generated first message of [prompts.md](prompts.md#first-messages), without
   attachments. When there is one, it is delivered as by `sessions.send` (steps 3 to 5 of 5.4) with `deviceID` = the
   request's: the process starts.
@@ -966,17 +966,17 @@ Used whenever a message must be delivered and the session has no process, and fo
    ([mcp.md](mcp.md#5-sessions-tokens-and---mcp-config)).
 3. Plugin folder: `SkillsService.buildPluginFolder(sessionID:enabled:)` with the project's `skills`
    ([skills.md](skills.md#6-session-plugin-folder)). It empties `SessionPlugins/<session id>/` first.
-4. Prompt: `Prompts.systemPrompt(_:)` ([prompts.md](prompts.md)) from `claudeProject`, `claudeTask` (task and feedback
-   sessions), `claudeBundle` (bundle sessions and the task sessions of a bundle), `bundleWorkFolder` (the task sessions
-   of a bundle), the setting `bundles.maxParallel`, `localDevice`, `devices`, the settings `forge.branch`,
-   `forge.enabled` and `forge.sourceProjectID`, the session's kind, mode and bundle, read now. The session is a session
-   of 3.5 when its kind is `feedback` or `regeneration`, or when `forge.enabled` is true and its project, or an ancestor
-   reached through `claudeProject(_:)` of each `parent`, is `forge.sourceProjectID`, or one of these ancestors cannot be
-   read (`claudeProject(_:)` throws, which ends the walk); `PromptContext.publicRepository` is then true. `instructions`
-   (task sessions): at the first start the `message` of `sessions.start`; at later starts the text after the first blank
-   line of the session's first `user` event, nil when there is none. `regeneration`: the `RegenerationContext` given at
-   the first start; nil later. The prompt is written as UTF-8 with `AtomicFile.write` to `system-prompt.md` in the
-   folder that holds the plugin folder of step 3 (`SessionPlugins/<session id>/`).
+4. Prompt: `Prompts.systemPrompt(_:)` ([prompts.md](prompts.md)) from `claudeProject`, `claudeTicket` (ticket and
+   feedback sessions), `claudeBundle` (bundle sessions and the ticket sessions of a bundle), `bundleWorkFolder` (the
+   ticket sessions of a bundle), the setting `bundles.maxParallel`, `localDevice`, `devices`, the settings
+   `forge.branch`, `forge.enabled` and `forge.sourceProjectID`, the session's kind, mode and bundle, read now. The
+   session is a session of 3.5 when its kind is `feedback` or `regeneration`, or when `forge.enabled` is true and its
+   project, or an ancestor reached through `claudeProject(_:)` of each `parent`, is `forge.sourceProjectID`, or one of
+   these ancestors cannot be read (`claudeProject(_:)` throws, which ends the walk); `PromptContext.publicRepository` is
+   then true. `instructions` (ticket sessions): at the first start the `message` of `sessions.start`; at later starts
+   the text after the first blank line of the session's first `user` event, nil when there is none. `regeneration`: the
+   `RegenerationContext` given at the first start; nil later. The prompt is written as UTF-8 with `AtomicFile.write` to
+   `system-prompt.md` in the folder that holds the plugin folder of step 3 (`SessionPlugins/<session id>/`).
 5. `resume` = the CLI transcript of the session exists (section 2).
 6. `ClaudeProcess.launch` with the arguments of 3.1, the working directory and the environment of section 3 (3.5 for the
    sessions of 3.5, as found in step 4); a spawn error gives the message `Could not start Claude: <strerror>`.
@@ -985,7 +985,7 @@ Used whenever a message must be delivered and the session has no process, and fo
 8. One task handles `messages` in order on the actor; when the stream ends it awaits `waitForExit()` and handles the
    exit (5.7), so every line is handled before the exit.
 
-A failure in step 3 or 4, reading `claudeProject` or `claudeTask` included, gives the message `Could not start Claude:
+A failure in step 3 or 4, reading `claudeProject` or `claudeTicket` included, gives the message `Could not start Claude:
 <the error's message>`. A failure of step 1, 2, 3, 4 or 6 unregisters the token (when registered), sets the status
 `failed` with `error` = the message, appends an `error` event with it and writes `status: failed` to the session file,
 so the failure outlives the app. `sessions.send` then fails with `unavailable` and the message; `sessions.start` returns
@@ -1003,7 +1003,7 @@ fails the request and leaves the session unchanged.
    [../protocol/methods.md](../protocol/methods.md#using-uploads). Attachments have no size limit.
 2. Each claimed upload, in order, is moved into the session's attachment folder with
    `SessionArchive.saveAttachment(fileAt: <its url>, originalName: <its fileName>, to:)`, which returns its
-   `TaskAttachment`. When a move fails, or when appending the `user` event of step 4 fails, the files already moved go
+   `TicketAttachment`. When a move fails, or when appending the `user` event of step 4 fails, the files already moved go
    back to their uploads, `uploads.release` is called and the request fails; once the event is appended,
    `uploads.finish` is called.
 3. CLI text: `text`, then, when there are attachments, a blank line (omitted when `text` is empty) and:
@@ -1016,14 +1016,14 @@ fails the request and leaves the session unchanged.
    one `- <absolute path>` line per file (`SessionArchive.attachmentURL`), so Claude reads them (images included) with
    its tools.
 4. The `user` event `{text, attachments, deviceID}` is appended (`text` as typed, `attachments` = the saved
-   `TaskAttachment` values, omitted when empty). When it is the session's first `user` event, the title call of 5.10
+   `TicketAttachment` values, omitted when empty). When it is the session's first `user` event, the title call of 5.10
    starts.
 5. Delivery: with a process, the user message is written; `idle` becomes `running`. Without a process, the process
    starts (5.3) and receives the message. When the write fails, the process is terminated and a new one is started
    with the message.
 
 `sessions.readAttachment {projectID, sessionID, fileName, offset?, length?}` (`readAttachment`): `fileName` must be a
-single path component (not empty, no `/`, not `.` or `..`; else `badRequest` "invalid attachment name", as for task
+single path component (not empty, no `/`, not `.` or `..`; else `badRequest` "invalid attachment name", as for ticket
 attachments); the file is `SessionArchive.attachmentURL(sessionID, file: fileName)` (missing → `notFound` "No
 attachment <fileName> in this session."). `offset` (default 0) below 0 or above the file's size → `badRequest`
 "Invalid offset <offset> for <fileName>."; `length` (default `MethodLimits.maxChunkSize`) below 1 → `badRequest`
@@ -1175,7 +1175,7 @@ Only broadcast, never logged:
 
 A `project`, `feedback` or `bundle` session is titled from its first message by one short call to the Claude CLI with
 the model `haiku`. The call is not a session: it has no session file, no events and no CLI transcript, and no list
-shows it. `task` and `regeneration` sessions keep their titles.
+shows it. `ticket` and `regeneration` sessions keep their titles.
 
 1. Trigger: `SessionService` appends the first `user` event of a session of one of these kinds (5.4 step 4, for the
    first message of `sessions.start` and for the first `sessions.send` of a project session started without one).
@@ -1196,7 +1196,7 @@ shows it. `task` and `regeneration` sessions keep their titles.
    `“…”`, `‘…’`, `` `…` ``), then a final `.`, then whitespace again; cut to its first 80 `Character`s and trimmed. An
    empty result, a spawn error, another exit code and a timeout give no title: the session keeps its title, and the
    failure is logged at `error` with the exit code or the error, never the message or the output.
-5. Title: `SessionTitler.sessionTitle`: `project` → the cleaned title; `feedback` → `<task id> · <title>`; `bundle` →
+5. Title: `SessionTitler.sessionTitle`: `project` → the cleaned title; `feedback` → `<ticket id> · <title>`; `bundle` →
    `<bundle id> · <title>` (a space, U+00B7, a space), for example `HEPH-F1 · Sidebar breaks on rotation`.
 6. Applied on the actor: when the session still exists and its project is writable, the title is written with
    `SessionArchive.update`, whatever the title is then (one the user or `rename_session` set meanwhile is replaced),
@@ -1214,7 +1214,7 @@ public enum SessionTitler {
         -> String?
     /// Step 4; nil when nothing is left.
     public static func cleanTitle(_ output: String) -> String?
-    /// Step 5; `id` is the task id of a feedback session, the bundle id of a bundle session, ignored for the others.
+    /// Step 5; `id` is the ticket id of a feedback session, the bundle id of a bundle session, ignored for the others.
     public static func sessionTitle(_ title: String, kind: SessionKind, id: String?) -> String
 }
 ```
@@ -1224,7 +1224,7 @@ public enum SessionTitler {
 Claude closes its own session with the MCP tool `close_session` ([mcp.md](mcp.md#626-close_session)), which calls
 `close(projectID:sessionID:)` with the session of its token. Only Claude closes a session: no protocol method does,
 and the app offers no way to reopen one. The prompts say when ([prompts.md](prompts.md)): a `feedback` session as soon
-as no question is open; a `project`, `task` or `bundle` session only when the user says the conversation is done or
+as no question is open; a `project`, `ticket` or `bundle` session only when the user says the conversation is done or
 asks to close it. A `regeneration` session has no `close_session` tool.
 
 1. Checks: the session exists (`notFound`); its kind is not `regeneration` (`badRequest`, `A regeneration session
@@ -1240,24 +1240,24 @@ asks to close it. A `regeneration` session has no `close_session` tool.
 A closed session keeps its transcript, its attachments and its file; `sessions.history`, `sessions.readAttachment`,
 `sessions.update`, `sessions.stop` and `sessions.delete` work as for any session. It never starts a process again:
 `sessions.send` fails with `conflict` `This conversation is over.` (5.4), and so do the instructions that
-`start_bundle_task` sends to it ([../services/bundles.md](../services/bundles.md)). The UI replaces its composer with
+`start_bundle_ticket` sends to it ([../services/bundles.md](../services/bundles.md)). The UI replaces its composer with
 the text "This conversation is over" ([../ui/sessions.md](../ui/sessions.md#composer)).
 
 ## Depends on
 
-| Name                                                                                                                                                                                                                                                                                                                                                                                                          | Defined in                                                                                       |
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
-| `SessionInfo` (`allowsAllTools`, `statusLine`, `error`, `pendingPermissions`), `SessionPatch`, `SessionEvent` (with `messageID`, `index`, `description`, `blockedPath`), `SessionKind`, `SessionMode`, `SessionStatus`, `PermissionMode`, `PermissionDecision`, `PermissionRequest`, `SessionDeltaKind`, `UploadRef`, `TaskAttachment`, `DeviceInfo`, `DeviceRecord`, `ProjectSummary.pendingPermissionCount` | [../protocol/types.md](../protocol/types.md)                                                     |
-| `ProtocolError` and its codes                                                                                                                                                                                                                                                                                                                                                                                 | [../protocol/envelope.md](../protocol/envelope.md)                                               |
-| `sessions.*` params and results (`SessionsHistoryResult`, paging, `AttachmentsReadResult`), uploads, `session.*` and `permission.*` events                                                                                                                                                                                                                                                                    | [../protocol/methods.md](../protocol/methods.md), [../protocol/events.md](../protocol/events.md) |
-| `SessionArchive`, `SessionFile.fileStem(_:)`, session file and event formats                                                                                                                                                                                                                                                                                                                                  | [../data/sessions.md](../data/sessions.md)                                                       |
-| `DeviceSettings` (`claudePath`, `claudeURL`, `defaultModel`, `defaultPermissionMode`, `sessionIdleMinutes`, `forge.branch`, `forge.enabled`, `forge.sourceProjectID`), `AtomicFile`                                                                                                                                                                                                                           | [../data/app-storage.md](../data/app-storage.md)                                                 |
-| `ClaudePathEncoding` (transcript folder)                                                                                                                                                                                                                                                                                                                                                                      | [../devices/migration.md](../devices/migration.md)                                               |
-| `HostService` (conformance to `SessionHost`), `HostMethodHandler`, `HostInfoService.refresh()`, `checkWritable`                                                                                                                                                                                                                                                                                               | [../services/host.md](../services/host.md)                                                       |
-| `UploadService` (`claim`, `finish`, `release`), `ClaimedUpload`                                                                                                                                                                                                                                                                                                                                               | [../services/files.md](../services/files.md#7-uploads)                                           |
-| `ForgeService` notifications, the Forge push tools, the configuration checks (push URL, Claude Code settings)                                                                                                                                                                                                                                                                                                 | [../forge/pipeline.md](../forge/pipeline.md)                                                     |
-| the public repository rule, the commit identity, the limits of these rules                                                                                                                                                                                                                                                                                                                                    | [../public-repository.md](../public-repository.md)                                               |
-| `Log.host`, logging rules                                                                                                                                                                                                                                                                                                                                                                                     | [../architecture.md](../architecture.md)                                                         |
-| `MCPServer`                                                                                                                                                                                                                                                                                                                                                                                                   | [mcp.md](mcp.md)                                                                                 |
-| `Prompts` (`titleRequest`, `titleSystemPrompt`), `ClaudeProjectContext`, `ClaudeTaskContext`, `RegenerationContext`                                                                                                                                                                                                                                                                                           | [prompts.md](prompts.md)                                                                         |
-| `SkillsService`                                                                                                                                                                                                                                                                                                                                                                                               | [skills.md](skills.md)                                                                           |
+| Name                                                                                                                                                                                                                                                                                                                                                                                                            | Defined in                                                                                       |
+|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
+| `SessionInfo` (`allowsAllTools`, `statusLine`, `error`, `pendingPermissions`), `SessionPatch`, `SessionEvent` (with `messageID`, `index`, `description`, `blockedPath`), `SessionKind`, `SessionMode`, `SessionStatus`, `PermissionMode`, `PermissionDecision`, `PermissionRequest`, `SessionDeltaKind`, `UploadRef`, `TicketAttachment`, `DeviceInfo`, `DeviceRecord`, `ProjectSummary.pendingPermissionCount` | [../protocol/types.md](../protocol/types.md)                                                     |
+| `ProtocolError` and its codes                                                                                                                                                                                                                                                                                                                                                                                   | [../protocol/envelope.md](../protocol/envelope.md)                                               |
+| `sessions.*` params and results (`SessionsHistoryResult`, paging, `AttachmentsReadResult`), uploads, `session.*` and `permission.*` events                                                                                                                                                                                                                                                                      | [../protocol/methods.md](../protocol/methods.md), [../protocol/events.md](../protocol/events.md) |
+| `SessionArchive`, `SessionFile.fileStem(_:)`, session file and event formats                                                                                                                                                                                                                                                                                                                                    | [../data/sessions.md](../data/sessions.md)                                                       |
+| `DeviceSettings` (`claudePath`, `claudeURL`, `defaultModel`, `defaultPermissionMode`, `sessionIdleMinutes`, `forge.branch`, `forge.enabled`, `forge.sourceProjectID`), `AtomicFile`                                                                                                                                                                                                                             | [../data/app-storage.md](../data/app-storage.md)                                                 |
+| `ClaudePathEncoding` (transcript folder)                                                                                                                                                                                                                                                                                                                                                                        | [../devices/migration.md](../devices/migration.md)                                               |
+| `HostService` (conformance to `SessionHost`), `HostMethodHandler`, `HostInfoService.refresh()`, `checkWritable`                                                                                                                                                                                                                                                                                                 | [../services/host.md](../services/host.md)                                                       |
+| `UploadService` (`claim`, `finish`, `release`), `ClaimedUpload`                                                                                                                                                                                                                                                                                                                                                 | [../services/files.md](../services/files.md#7-uploads)                                           |
+| `ForgeService` notifications, the Forge push tools, the configuration checks (push URL, Claude Code settings)                                                                                                                                                                                                                                                                                                   | [../forge/pipeline.md](../forge/pipeline.md)                                                     |
+| the public repository rule, the commit identity, the limits of these rules                                                                                                                                                                                                                                                                                                                                      | [../public-repository.md](../public-repository.md)                                               |
+| `Log.host`, logging rules                                                                                                                                                                                                                                                                                                                                                                                       | [../architecture.md](../architecture.md)                                                         |
+| `MCPServer`                                                                                                                                                                                                                                                                                                                                                                                                     | [mcp.md](mcp.md)                                                                                 |
+| `Prompts` (`titleRequest`, `titleSystemPrompt`), `ClaudeProjectContext`, `ClaudeTicketContext`, `RegenerationContext`                                                                                                                                                                                                                                                                                           | [prompts.md](prompts.md)                                                                         |
+| `SkillsService`                                                                                                                                                                                                                                                                                                                                                                                                 | [skills.md](skills.md)                                                                           |

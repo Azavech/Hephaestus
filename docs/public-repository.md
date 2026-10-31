@@ -838,7 +838,7 @@ exit $status
 ## Forge push gate
 
 The sessions that work in the repository never push ([Claude permissions](#claude-permissions)). After committing,
-Claude calls the MCP tool of its session, with no arguments: `forge_push_docs` in a task session that is not of a
+Claude calls the MCP tool of its session, with no arguments: `forge_push_docs` in a ticket session that is not of a
 bundle and in a bundle session, `forge_push_regen` in a regeneration session ([claude/mcp.md](claude/mcp.md)). A
 feedback session changes no file and has no push tool. The Forge then checks and pushes, in this order; the first
 failure ends the call with a text that tells Claude what to do next
@@ -898,7 +898,7 @@ allow rules. As tried with Claude CLI 2.1.309:
   `git restore` and `git reset` in another form, `scripts/check-public.sh` with other arguments in a Forge session
   (its `--commits` passes them to `git rev-list`, whose `--output` empties a file), `git mv`, a command with an
   environment assignment before it, `git -C <folder> …`, `bash -c "…"`. These cards offer no "Always Allow".
-  Feedback, regeneration and bundle sessions start in `acceptEdits`, a `project` or `task` session in its own mode;
+  Feedback, regeneration and bundle sessions start in `acceptEdits`, a `project` or `ticket` session in its own mode;
   the user can change the mode of any of them, and allow all its tools, from its options menu or its cards
   ([ui/sessions.md](ui/sessions.md#permission-cards)). In `bypassPermissions`, or with all tools allowed, a session
   shows no card: the CLI or the Main approves what the denied rules miss
@@ -1171,7 +1171,7 @@ The check finds known forms and the private terms. It does not find:
   and CI report its personal data; a weaker check it brings judges the later pushes in CI, and in the Forge push gate
   once the Forge's check finds no personal data in it;
 - the work of a session of another project, to which [Claude permissions](#claude-permissions) does not apply even when
-  it works in the repository through its path, such as a task session that a session of the repository starts for a
-  task of another project (`start_task_session`).
+  it works in the repository through its path, such as a ticket session that a session of the repository starts for a
+  ticket of another project (`start_ticket_session`).
 
 The author of a commit reviews it for what the check cannot see.

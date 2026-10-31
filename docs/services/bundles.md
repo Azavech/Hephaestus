@@ -1,4 +1,4 @@
-# Task bundles
+# Ticket bundles
 
 files:
 - HephaestusKit/Sources/HephCore/YAML/BundleFile.swift
@@ -7,11 +7,11 @@ files:
 
 ---
 
-A bundle is a named, ordered group of tasks of one project that Claude works on in parallel. The user creates it in
-the Tasks screen ([../ui/tasks.md](../ui/tasks.md#bundles)) and presses Work on Bundle: the Main starts the bundle's
-**coordinator**, a Claude session of kind `bundle`, which starts one task session per task, at most
-`bundles.maxParallel` at a time. Each task session works in its own git worktree, on its own branch, so that the
-sessions never change each other's files. When every task is in review, the coordinator shows the user the combined
+A bundle is a named, ordered group of tickets of one project that Claude works on in parallel. The user creates it in
+the Tickets screen ([../ui/tickets.md](../ui/tickets.md#bundles)) and presses Work on Bundle: the Main starts the
+bundle's **coordinator**, a Claude session of kind `bundle`, which starts one ticket session per ticket, at most
+`bundles.maxParallel` at a time. Each ticket session works in its own git worktree, on its own branch, so that the
+sessions never change each other's files. When every ticket is in review, the coordinator shows the user the combined
 work, and once the user agrees it brings the branches into the project's branch, pushes them (the Forge source
 project, [../forge/pipeline.md](../forge/pipeline.md#mcp-tools)) or leaves them for the user to push (other projects),
 and finishes the bundle.
@@ -23,10 +23,10 @@ logged.
 ## Bundle id
 
 - A bundle id is `<projectID>-B<n>`: the project identifier, `-B`, and the bundle number `n` (1 to `Int.max`; decimal,
-  no leading zero). Pattern: `^[A-Z]{2,8}-B[1-9][0-9]*$`. Example: `HEPH-B3`. It never matches the task id pattern,
-  so a selection item is either a task id or a bundle id ([../ui/tasks.md](../ui/tasks.md)).
-- `BundleID(_:)` trims and maps ASCII `a`–`z` to `A`–`Z` before matching, as `TaskID(_:)` does
-  ([../data/task-yml.md](../data/task-yml.md#task-id)); `BundleID(fileName:)` matches `<id>.yml` exactly.
+  no leading zero). Pattern: `^[A-Z]{2,8}-B[1-9][0-9]*$`. Example: `HEPH-B3`. It never matches the ticket id pattern,
+  so a selection item is either a ticket id or a bundle id ([../ui/tickets.md](../ui/tickets.md)).
+- `BundleID(_:)` trims and maps ASCII `a`–`z` to `A`–`Z` before matching, as `TicketID(_:)` does
+  ([../data/ticket-yml.md](../data/ticket-yml.md#ticket-id)); `BundleID(fileName:)` matches `<id>.yml` exactly.
 - A new bundle takes the number after the highest number among the entries of `.hephaestus/bundles/` whose name is
   `<projectID>-B<n>.yml` (`1` when there is none); `.invalid("no bundle number is left in <projectID>")` past
   `Int.max`. Deleting the bundle with the highest number lets its number be used again.
@@ -34,7 +34,9 @@ logged.
 ## Bundle file
 
 `<project root>/.hephaestus/bundles/<bundle id>.yml`. The YAML coding, unknown-key and read-modify-write rules of
-[../data/project-yml.md](../data/project-yml.md#yaml-coding-all-yaml-files) apply. Top level, in this order:
+[../data/project-yml.md](../data/project-yml.md#yaml-coding-all-yaml-files) apply. The keys `tasks` and `task` keep
+the names they had before tasks were renamed tickets; `BundleFile.tickets` and `BundleFile.Item.ticket` are coded with
+them. Top level, in this order:
 
 | Key           | YAML type         | Required | Default | Written  | Meaning                                                                 |
 |---------------|-------------------|----------|---------|----------|-------------------------------------------------------------------------|
@@ -45,35 +47,35 @@ logged.
 | `updated`     | timestamp         | yes      |         | always   | Time of the last change made by the app.                                |
 | `base`        | string            | no       | absent  | when set | The branch the worktrees branch from; set by the first `bundles.start`. |
 | `coordinator` | string            | no       | absent  | when set | UUID of the coordinator session; set by the first `bundles.start`.      |
-| `tasks`       | sequence of items | no       | `[]`    | always   | The tasks, in the bundle's order.                                       |
+| `tasks`       | sequence of items | no       | `[]`    | always   | The tickets, in the bundle's order.                                     |
 
 Item of `tasks`:
 
-| Key       | YAML type | Required | Default | Written  | Meaning                                                       |
-|-----------|-----------|----------|---------|----------|---------------------------------------------------------------|
-| `task`    | string    | yes      |         | always   | Task id, of the bundle's project.                             |
-| `session` | string    | no       | absent  | when set | UUID of the task session the bundle started for it, the last. |
+| Key       | YAML type | Required | Default | Written  | Meaning                                                         |
+|-----------|-----------|----------|---------|----------|-----------------------------------------------------------------|
+| `task`    | string    | yes      |         | always   | Ticket id, of the bundle's project.                             |
+| `session` | string    | no       | absent  | when set | UUID of the ticket session the bundle started for it, the last. |
 
-Validation, applied as in [../data/task-yml.md](../data/task-yml.md#validation-and-normalization):
+Validation, applied as in [../data/ticket-yml.md](../data/ticket-yml.md#validation-and-normalization):
 
-| Key             | Normalization                                           | Rule                                                  | Message                                                     |
-|-----------------|---------------------------------------------------------|-------------------------------------------------------|-------------------------------------------------------------|
-| `id`            | none                                                    | a bundle id equal to the file name without `.yml`     | `id <id> does not match the file name <file name>`          |
-| `name`          | leading and trailing whitespace and line breaks removed | not empty, no line break                              | `the name must not be empty and must be on one line`        |
-| `status`        | none                                                    | a `BundleStatus` value (checked by decoding)          | `status: invalid value`                                     |
-| `base`          | whitespace trimmed; empty becomes absent                | no whitespace, does not start with `-`                | `base must be a branch name`                                |
-| `tasks[i].task` | `TaskID(_:)` form                                       | a task id of the bundle's project, unique in the file | `tasks[<i>].task must be a task of <projectID> listed once` |
+| Key             | Normalization                                           | Rule                                                    | Message                                                       |
+|-----------------|---------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------------|
+| `id`            | none                                                    | a bundle id equal to the file name without `.yml`       | `id <id> does not match the file name <file name>`            |
+| `name`          | leading and trailing whitespace and line breaks removed | not empty, no line break                                | `the name must not be empty and must be on one line`          |
+| `status`        | none                                                    | a `BundleStatus` value (checked by decoding)            | `status: invalid value`                                       |
+| `base`          | whitespace trimmed; empty becomes absent                | no whitespace, does not start with `-`                  | `base must be a branch name`                                  |
+| `tasks[i].task` | `TicketID(_:)` form                                     | a ticket id of the bundle's project, unique in the file | `tasks[<i>].task must be a ticket of <projectID> listed once` |
 
 `coordinator` and `tasks[i].session` are decoded as `UUID`s. A file that breaks a rule, cannot be read or is not valid
-YAML is skipped and logged when the bundles are loaded; the app never writes it. The tasks need not exist: a task
+YAML is skipped and logged when the bundles are loaded; the app never writes it. The tickets need not exist: a ticket
 deleted later stays listed, and the UI shows it as deleted.
 
-`BundleFile.loadAll(projectRoot:projectID:)` lists `.hephaestus/bundles/` like the task files
-([../data/task-yml.md](../data/task-yml.md#loading-the-tasks-of-a-project)) and sorts the bundles by number; each file
-it skips is logged with `Log.host` (`error`: the file name and the `DataError` message). The file watcher does not
+`BundleFile.loadAll(projectRoot:projectID:)` lists `.hephaestus/bundles/` like the ticket files
+([../data/ticket-yml.md](../data/ticket-yml.md#loading-the-tickets-of-a-project)) and sorts the bundles by number; each
+file it skips is logged with `Log.host` (`error`: the file name and the `DataError` message). The file watcher does not
 follow the folder: every change goes through `BundleService`.
 
-Errors, as those of `TaskFile` ([../data/task-yml.md](../data/task-yml.md#changes-made-by-the-app)):
+Errors, as those of `TicketFile` ([../data/ticket-yml.md](../data/ticket-yml.md#changes-made-by-the-app)):
 
 - `BundleFile.create` fails with `.invalid("<id> is not a bundle id")` when the file's `id` is not a bundle id, and
   with `.invalid("<id>.yml already exists")` when the bundle file exists.
@@ -100,7 +102,8 @@ tasks:
 ## Mapping to BundleItem
 
 `BundleItem` ([../protocol/types.md](../protocol/types.md#bundleitem)): `id`, `name`, `status`, `created`, `updated`,
-`base`, `coordinatorSessionID` = `coordinator`, `tasks` = one `BundleTask {taskID, sessionID}` per item.
+`base`, `coordinatorSessionID` = `coordinator`, `tickets` = one `BundleTicket {ticketID, sessionID}` per item of
+`tasks`.
 
 ## Worktrees
 
@@ -119,11 +122,12 @@ git that is not found gives `strerror(ENOENT)`, one that cannot be started the `
   they are equal). The code folder must be in a repository whose `HEAD` is a branch with a commit
   (`git symbolic-ref --short HEAD` and `git rev-parse --verify HEAD` succeed), else `badRequest` `Bundles need a git
   repository on a branch with a commit: <code folder path> is not in one.`
-- **Branch.** The branch of a task is `task/<task id>`, for example `task/HEPH-12`. It exists when
+- **Branch.** The branch of a ticket is `task/<ticket id>`, for example `task/HEPH-12`. It exists when
   `git rev-parse --verify --quiet refs/heads/task/<id>`, run in `<top>`, exits with status 0, and does not when it
-  exits with status 1; another status is a failure (`BundleGit.branchExists`).
-- **Worktree folder.** `<Application Support>/Hephaestus/Worktrees/<projectID>/<task id>/`
-  ([../data/app-storage.md](../data/app-storage.md#folder)). The **work folder** of the task is
+  exits with status 1; another status is a failure (`BundleGit.branchExists`). The prefix `task/` keeps the name it
+  had before tasks were renamed tickets, so the branches of existing bundles stay in use.
+- **Worktree folder.** `<Application Support>/Hephaestus/Worktrees/<projectID>/<ticket id>/`
+  ([../data/app-storage.md](../data/app-storage.md#folder)). The **work folder** of the ticket is
   `<worktree folder>/<rel>`: the code folder's place in the worktree.
 - **Creating.** When the worktree folder does not exist: `git worktree prune`, then, when the branch exists,
   `git worktree add <folder> task/<id>`, else `git worktree add -b task/<id> <folder> <base>`. The parent folders are
@@ -133,9 +137,9 @@ git that is not found gives `strerror(ENOENT)`, one that cannot be started the `
 - **Brought in.** A branch's work is on `<base>` when `git cherry <base> task/<id>` prints no line starting with `+`:
   every commit of the branch has an equal change on `<base>`. When `<base>` does not exist (`git rev-parse --verify
   --quiet refs/heads/<base>` exits with status 1), the work is not on it.
-- **Removing the work** (`bundles.delete`, `finish`). For each task of the bundle, in order, except a task that is in
-  another bundle of the project whose status is not `done` (its worktree and branch are that bundle's now): its
-  worktree is removed when its folder exists; then, when the bundle has a `base` and the task's branch exists, the
+- **Removing the work** (`bundles.delete`, `finish`). For each ticket of the bundle, in order, except a ticket that is
+  in another bundle of the project whose status is not `done` (its worktree and branch are that bundle's now): its
+  worktree is removed when its folder exists; then, when the bundle has a `base` and the ticket's branch exists, the
   branch is deleted (`git branch -D task/<id>`) when its work is on `base`, else kept. Without a `base` no branch is
   looked at; a branch that does not exist is neither deleted nor kept.
 
@@ -152,29 +156,30 @@ coordinators).
 
 A `bundleID` that `BundleID(_:)` does not parse with the project's identifier, or without a cached bundle: `notFound`
 `Bundle <id> does not exist.`; so is a bundle file that a change finds missing (`.notFound("bundle <id> not found")`).
-The other `DataError`s map as in [host.md](host.md#69-data-errors). A task id given to a method must name a task of the
-project that is not broken (`notFound` `Task <id> does not exist.`, `conflict` `The file is invalid: <parseError>`).
+The other `DataError`s map as in [host.md](host.md#69-data-errors). A ticket id given to a method must name a ticket of
+the project that is not broken (`notFound` `Ticket <id> does not exist.`, `conflict` `The file is invalid:
+<parseError>`).
 
 ### Methods
 
-| Method           | Statuses allowed                | Effect                                                                                                                  |
-|------------------|---------------------------------|-------------------------------------------------------------------------------------------------------------------------|
-| `bundles.create` | —                               | new file: `name`, `status` `draft`, the tasks in the given order, repeats removed (first kept); at least one task       |
-| `bundles.update` | `name`: any; `taskIDs`: `draft` | `name` replaced; `taskIDs` replaces the tasks, keeping the `session` of a task that stays                               |
-| `bundles.delete` | `draft`, `done`                 | Removing the work ([Worktrees](#worktrees)); file deleted                                                               |
-| `bundles.start`  | `draft`                         | Start (below)                                                                                                           |
-| `bundles.stop`   | `running`, `review`             | `sessions.stop` of the coordinator and of every task session of the bundle; status `draft`; worktrees and branches kept |
+| Method           | Statuses allowed                  | Effect                                                                                                                    |
+|------------------|-----------------------------------|---------------------------------------------------------------------------------------------------------------------------|
+| `bundles.create` | —                                 | new file: `name`, `status` `draft`, the tickets in the given order, repeats removed (first kept); at least one ticket     |
+| `bundles.update` | `name`: any; `ticketIDs`: `draft` | `name` replaced; `ticketIDs` replaces the tickets, keeping the `session` of a ticket that stays                           |
+| `bundles.delete` | `draft`, `done`                   | Removing the work ([Worktrees](#worktrees)); file deleted                                                                 |
+| `bundles.start`  | `draft`                           | Start (below)                                                                                                             |
+| `bundles.stop`   | `running`, `review`               | `sessions.stop` of the coordinator and of every ticket session of the bundle; status `draft`; worktrees and branches kept |
 
 A method in another status fails with `conflict`: `Stop <bundle id> first.` for `running` and `review`, `<bundle id> is
-done.` for `bundles.start` of a `done` bundle and for `bundles.update` with `taskIDs` of a `done` bundle (its tasks are
-frozen; a `name` alone still renames it), `<bundle id> is not running.` for `bundles.stop` of a `draft` or `done`
-bundle. The status is checked before the tasks. `bundles.create` and `bundles.update` without a task: `badRequest` `A
-bundle needs at least one task.` A name that is empty or holds a line break: `badRequest` `The name must not be empty
-and must be on one line.` The `taskIDs` of `bundles.update` are not deduplicated: a task given twice breaks the file's
-rule (`badRequest` `tasks[<i>].task must be a task of <projectID> listed once`). A task is in at most one bundle that is
-not `done`, since it has one worktree, which another bundle would remove: a task of `bundles.create`, or of the
-`taskIDs` of `bundles.update`, that is in another bundle of the project whose status is not `done` fails with `conflict`
-`<task id> is in <bundle id>.`, the first such task and bundle in order.
+done.` for `bundles.start` of a `done` bundle and for `bundles.update` with `ticketIDs` of a `done` bundle (its tickets
+are frozen; a `name` alone still renames it), `<bundle id> is not running.` for `bundles.stop` of a `draft` or `done`
+bundle. The status is checked before the tickets. `bundles.create` and `bundles.update` without a ticket: `badRequest`
+`A bundle needs at least one ticket.` A name that is empty or holds a line break: `badRequest` `The name must not be
+empty and must be on one line.` The `ticketIDs` of `bundles.update` are not deduplicated: a ticket given twice breaks
+the file's rule (`badRequest` `tasks[<i>].task must be a ticket of <projectID> listed once`). A ticket is in at most one
+bundle that is not `done`, since it has one worktree, which another bundle would remove: a ticket of `bundles.create`,
+or of the `ticketIDs` of `bundles.update`, that is in another bundle of the project whose status is not `done` fails
+with `conflict` `<ticket id> is in <bundle id>.`, the first such ticket and bundle in order.
 
 ### Start
 
@@ -183,7 +188,7 @@ not `done`, since it has one worktree, which another bundle would remove: a task
    takes at once, without an event and without writing the file: the coordinator's prompt reads it there in step 3
    ([../claude/prompts.md](../claude/prompts.md#bundle-part)).
 3. When `coordinator` names a session of the project: `sessions.send` to it with the text `Resume work on <bundle id>:
-   check the state of its tasks with get_bundle.` and this Main's id as `deviceID`. Otherwise
+   check the state of its tickets with get_bundle.` and this Main's id as `deviceID`. Otherwise
    `sessions.start(SessionStart(projectID:, kind: .bundle, bundleID: <id>, deviceID: <this Main>))`
    ([../claude/cli.md](../claude/cli.md#52-starting-a-session-sessionsstart)), and `coordinator` = its id. The
    coordinator is titled `Bundle <bundle id>` until the title generated from its first message replaces it with
@@ -193,18 +198,18 @@ not `done`, since it has one worktree, which another bundle would remove: a task
 
 When step 3 fails, nothing is written, the cached `base` set by step 2 is removed, and the error is returned.
 
-### Observing the task sessions
+### Observing the ticket sessions
 
 The host calls `sessionChanged(projectID:session:)` for every `session.changed` it emits
-([host.md](host.md#5-events)). For a `task` session whose `bundleID` names a bundle in `running` or `review`, a change
+([host.md](host.md#5-events)). For a `ticket` session whose `bundleID` names a bundle in `running` or `review`, a change
 of status sends one message to the bundle's coordinator with `sessions.send` (this Main's id as `deviceID`; errors
 logged):
 
-| New status          | Condition                                                             | Message                                                          |
-|---------------------|-----------------------------------------------------------------------|------------------------------------------------------------------|
-| `waitingPermission` | —                                                                     | `<task id> is waiting for a permission answer in its session.`   |
-| `idle`, `stopped`   | the session had `running` or `waitingPermission`, and its task exists | `<task id> ended its turn. Task status: <TaskStatus raw value>.` |
-| `failed`            | —                                                                     | `The session of <task id> failed: <SessionInfo.error>`           |
+| New status          | Condition                                                               | Message                                                                |
+|---------------------|-------------------------------------------------------------------------|------------------------------------------------------------------------|
+| `waitingPermission` | —                                                                       | `<ticket id> is waiting for a permission answer in its session.`       |
+| `idle`, `stopped`   | the session had `running` or `waitingPermission`, and its ticket exists | `<ticket id> ended its turn. Ticket status: <TicketStatus raw value>.` |
+| `failed`            | —                                                                       | `The session of <ticket id> failed: <SessionInfo.error>`               |
 
 The previous statuses are kept in memory per session. A message sent while the coordinator runs a turn is queued by the
 CLI ([../claude/cli.md](../claude/cli.md#55-statuses)).
@@ -216,44 +221,44 @@ The MCP tools of [../claude/mcp.md](../claude/mcp.md#621-get_bundle) call these 
 tool's arguments are checked.
 
 - `details(projectID:bundleID:)`: for `get_bundle`.
-- `startTask(projectID:bundleID:taskID:instructions:)`, for `start_bundle_task`:
-  1. The task is in the bundle (`badRequest` `<task id> is not in <bundle id>.`); the bundle is `running` or `review`
-     (`conflict` `<bundle id> is not running.`).
-  2. When the task's `session` names a session of the project: `instructions` must be given (`badRequest` `<task id>
+- `startTicket(projectID:bundleID:ticketID:instructions:)`, for `start_bundle_ticket`:
+  1. The ticket is in the bundle (`badRequest` `<ticket id> is not in <bundle id>.`); the bundle is `running` or
+     `review` (`conflict` `<bundle id> is not running.`).
+  2. When the ticket's `session` names a session of the project: `instructions` must be given (`badRequest` `<ticket id>
      already has a session: give instructions for it.`), and they are sent to it with `sessions.send`. Result: that
      `SessionInfo`.
-  3. Otherwise the number of task sessions of the bundle whose status is `starting`, `running` or `waitingPermission`
-     must be below `bundles.maxParallel` (`conflict` `<n> task sessions of <bundle id> are running, the limit of this
-     Main (Settings ▸ Claude ▸ Bundles). Start <task id> when one of them ends its turn.`).
+  3. Otherwise the number of ticket sessions of the bundle whose status is `starting`, `running` or `waitingPermission`
+     must be below `bundles.maxParallel` (`conflict` `<n> ticket sessions of <bundle id> are running, the limit of this
+     Main (Settings ▸ Claude ▸ Bundles). Start <ticket id> when one of them ends its turn.`).
   4. The worktree is created when missing ([Worktrees](#worktrees)), `<base>` being the bundle's `base`, or the
      current branch (`git symbolic-ref --short HEAD` in the code folder) when the bundle has none.
-  5. `sessions.start(SessionStart(projectID:, kind: .task, taskID:, mode: .implement, message: instructions,
-     deviceID: <this Main>, bundleID:))`; the item's `session` = its id. Result: the `SessionInfo`. The task's
-     status follows the turns of its session ([host.md](host.md#81-status-of-a-task-while-its-sessions-work)).
+  5. `sessions.start(SessionStart(projectID:, kind: .ticket, ticketID:, mode: .implement, message: instructions,
+     deviceID: <this Main>, bundleID:))`; the item's `session` = its id. Result: the `SessionInfo`. The ticket's
+     status follows the turns of its session ([host.md](host.md#81-status-of-a-ticket-while-its-sessions-work)).
 - `setStatus(projectID:bundleID:status:)`, for `update_bundle`: `status` must be `running` or `review` (`badRequest`
   `Invalid arguments: status must be one of running, review.`), and so must the bundle (`conflict` `<bundle id> is not
   running.`).
 - `finish(projectID:bundleID:)`, for `finish_bundle`, while the bundle is `running` or `review` (`conflict` `<bundle id>
   is not running.`): Removing the work
-  ([Worktrees](#worktrees)); the bundle becomes `done`. The statuses of its tasks are left as they are: the user sets
-  a task to `done` ([host.md](host.md#81-status-of-a-task-while-its-sessions-work)). Result:
+  ([Worktrees](#worktrees)); the bundle becomes `done`. The statuses of its tickets are left as they are: the user sets
+  a ticket to `done` ([host.md](host.md#81-status-of-a-ticket-while-its-sessions-work)). Result:
   `{"bundle":<BundleItem>,"keptBranches":[…]}`, the branches kept because their work is not on `base`.
 
-### Working folder of a task session
+### Working folder of a ticket session
 
-A `task` session with a `bundleID` runs in its task's work folder instead of the project root
-([../claude/cli.md](../claude/cli.md#3-the-session-process-claudeprocess)): `workFolder(projectID:taskID:)` returns
+A `ticket` session with a `bundleID` runs in its ticket's work folder instead of the project root
+([../claude/cli.md](../claude/cli.md#3-the-session-process-claudeprocess)): `workFolder(projectID:ticketID:)` returns
 it. When the worktree folder or the work folder does not exist (the bundle finished or was deleted), it throws
-`notFound` `the worktree of <task id> was removed with its bundle.`, and the process does not start: SessionService
+`notFound` `the worktree of <ticket id> was removed with its bundle.`, and the process does not start: SessionService
 adds `Could not start Claude: ` ([../claude/cli.md](../claude/cli.md#53-starting-the-process)), so the session fails
-with `Could not start Claude: the worktree of <task id> was removed with its bundle.`
+with `Could not start Claude: the worktree of <ticket id> was removed with its bundle.`
 
 ### Projects removed or moved
 
 - When a project is unregistered for good (removed, or moved to another Main, [host.md](host.md#65-unregister_forget)),
   `removeWorktrees(projectID:)` runs `git worktree remove --force` for each folder of `Worktrees/<projectID>/` while the
   repository is still there and `host.info` reports `gitAvailable`, then deletes `Worktrees/<projectID>/`. The
-  branches stay in the repository; a later `start_bundle_task` creates the worktree again.
+  branches stay in the repository; a later `start_bundle_ticket` creates the worktree again.
 - A sub project removed with `projects.remove` is unregistered by the reload of its parent, with `forget: false`
   ([host.md](host.md#76-projectsremove)): `removeWorktrees` does not run, and its worktrees stay.
 - `projects.migrate` is refused while a bundle of the tree is `running` or `review`: `conflict` `Stop the bundles of
@@ -276,9 +281,10 @@ public struct BundleID: Hashable, Comparable, Sendable, Codable, CustomStringCon
 
 public struct BundleFile: Codable, Sendable, Equatable {
     public struct Item: Codable, Sendable, Equatable {
-        public var task: String
+        /// The key task of the item, which keeps its name.
+        public var ticket: String
         public var session: UUID?
-        public init(task: String, session: UUID?)
+        public init(ticket: String, session: UUID?)
     }
     public var id: String
     public var name: String
@@ -287,13 +293,14 @@ public struct BundleFile: Codable, Sendable, Equatable {
     public var updated: Date
     public var base: String?
     public var coordinator: UUID?
-    public var tasks: [Item]
+    /// The key tasks of the file, which keeps its name.
+    public var tickets: [Item]
 
     /// The values as given.
     public init(id: String, name: String, status: BundleStatus, created: Date, updated: Date, base: String?,
-                coordinator: UUID?, tasks: [Item])
+                coordinator: UUID?, tickets: [Item])
 
-    public static let shape: YAMLShape    // as TaskFile.shape, "tasks" a list with identity "task"
+    public static let shape: YAMLShape    // as TicketFile.shape, "tasks" a list with identity "task"
     public static func folder(projectRoot: URL) -> URL
     public static func url(projectRoot: URL, id: BundleID) -> URL
     public static func decode(_ text: String, fileID: BundleID) throws -> BundleFile
@@ -317,17 +324,17 @@ actor BundleService: HostMethodHandler {
     func removeWorktrees(projectID: String) async          // errors logged
     func list(projectID: String) -> [BundleItem]          // by number
     func hasActiveBundle(projectID: String) -> Bool       // running or review
-    func workFolder(projectID: String, taskID: String) async throws -> URL
+    func workFolder(projectID: String, ticketID: String) async throws -> URL
     func sessionChanged(projectID: String, session: SessionInfo) async
     // methods
-    func create(projectID: String, name: String, taskIDs: [String]) async throws -> BundleItem
+    func create(projectID: String, name: String, ticketIDs: [String]) async throws -> BundleItem
     func update(projectID: String, bundleID: String, patch: BundlePatch) async throws -> BundleItem
     func delete(projectID: String, bundleID: String) async throws
     func start(projectID: String, bundleID: String) async throws -> BundleItem
     func stop(projectID: String, bundleID: String) async throws -> BundleItem
     // tools
     func details(projectID: String, bundleID: String) async throws -> BundleDetails
-    func startTask(projectID: String, bundleID: String, taskID: String, instructions: String?) async throws
+    func startTicket(projectID: String, bundleID: String, ticketID: String, instructions: String?) async throws
         -> SessionInfo
     func setStatus(projectID: String, bundleID: String, status: BundleStatus) async throws -> BundleItem
     func finish(projectID: String, bundleID: String) async throws -> BundleFinishResult
@@ -345,23 +352,23 @@ struct BundleGit: Sendable {
 }
 ```
 
-`BundleDetails` is the result of `get_bundle`: `bundle` (`BundleItem`), `maxParallel` (`Int`), and `tasks`, one
-`BundleDetails.Entry` per task in order: `task` (`TaskItem`, absent for a deleted task), `session` (`SessionInfo`,
-absent without one), `branch` (`String`, `task/<id>`), `workFolder` (`String`, the path of the work folder; absent
-while the worktree does not exist). `BundleFinishResult`: `bundle`, `keptBranches` (`[String]`). Both are `Codable`
-and encoded as the tool results.
+`BundleDetails` is the result of `get_bundle`: `bundle` (`BundleItem`), `maxParallel` (`Int`), and `tickets`, one
+`BundleDetails.Entry` per ticket in order: `ticket` (`TicketItem`, absent for a deleted ticket), `session`
+(`SessionInfo`, absent without one), `branch` (`String`, `task/<id>`), `workFolder` (`String`, the path of the work
+folder; absent while the worktree does not exist). `BundleFinishResult`: `bundle`, `keptBranches` (`[String]`). Both are
+`Codable` and encoded as the tool results.
 
 ## Depends on
 
 | Name                                                                                   | Defined in                                                                                               |
 |----------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| `BundleItem`, `BundleTask`, `BundleStatus`, `BundlePatch`, `SessionInfo.bundleID`      | [../protocol/types.md](../protocol/types.md)                                                             |
+| `BundleItem`, `BundleTicket`, `BundleStatus`, `BundlePatch`, `SessionInfo.bundleID`    | [../protocol/types.md](../protocol/types.md)                                                             |
 | `bundles.*`, `bundle.changed`, `bundle.removed`                                        | [../protocol/methods.md](../protocol/methods.md#bundles), [../protocol/events.md](../protocol/events.md) |
-| `HostService`, `registry.write`, `emit`, `TaskService`                                 | [host.md](host.md)                                                                                       |
+| `HostService`, `registry.write`, `emit`, `TicketService`                               | [host.md](host.md)                                                                                       |
 | `SessionService` (`start`, `send`, `stop`, `SessionStart.bundleID`), working directory | [../claude/cli.md](../claude/cli.md)                                                                     |
 | the coordinator's tools                                                                | [../claude/mcp.md](../claude/mcp.md)                                                                     |
-| the prompts of the coordinator and of its task sessions                                | [../claude/prompts.md](../claude/prompts.md)                                                             |
+| the prompts of the coordinator and of its ticket sessions                              | [../claude/prompts.md](../claude/prompts.md)                                                             |
 | `forge_push_docs` for bundles of the Forge source project                              | [../forge/pipeline.md](../forge/pipeline.md#mcp-tools)                                                   |
 | `bundles.maxParallel`, `Worktrees/`                                                    | [../data/app-storage.md](../data/app-storage.md)                                                         |
-| YAML coding, `YAMLShape`, `TaskID`                                                     | [../data/project-yml.md](../data/project-yml.md), [../data/task-yml.md](../data/task-yml.md)             |
+| YAML coding, `YAMLShape`, `TicketID`                                                   | [../data/project-yml.md](../data/project-yml.md), [../data/ticket-yml.md](../data/ticket-yml.md)         |
 | `ChildProcess`, login environment                                                      | [../claude/cli.md](../claude/cli.md)                                                                     |

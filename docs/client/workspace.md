@@ -41,7 +41,7 @@ code of this doc logs with `Log.client` ([architecture.md](../architecture.md#lo
 | `UploadSource`         | `enum`                               | `MainConnection+Transfers.swift` | What an upload reads: bytes in memory or a local file                        |
 | `TransferProgress`     | `struct`                             | `MainConnection+Transfers.swift` | Bytes done and total of an upload or a download                              |
 | `AttachmentCache`      | `struct`                             | `AttachmentCache.swift`          | The device's cache of downloaded files: folder and paths                     |
-| `ProjectStore`         | `@MainActor @Observable final class` | `ProjectStore.swift`             | One per opened project: project, tasks, sessions                             |
+| `ProjectStore`         | `@MainActor @Observable final class` | `ProjectStore.swift`             | One per opened project: project, tickets, sessions                           |
 | `Selection`            | `@MainActor @Observable final class` | `Selection.swift`                | What one window shows: Main, project, section, item                          |
 | `SidebarSection`       | `enum`                               | `Selection.swift`                | The sidebar sections                                                         |
 | `PresenceModel`        | `enum` of static functions           | `PresenceModel.swift`            | Registry merge and presence merge (pure functions)                           |
@@ -391,7 +391,7 @@ projects tree and the stores ([Projects list](#projects-list)).
   params types of [protocol/methods.md](../protocol/methods.md); a function whose method result is a wrapper with one
   field returns that field.
 - The requests that carry or return file content, or attach uploads, pass `timeout: .seconds(120)`:
-  `uploads.chunk`, `tasks.addComment`, `sessions.start`, `sessions.send`, `forge.feedback`, `files.write`,
+  `uploads.chunk`, `tickets.addComment`, `sessions.start`, `sessions.send`, `forge.feedback`, `files.write`,
   `files.read`, `attachments.read`, `sessions.readAttachment`, `skills.readFile` and `skills.writeFile`. A frame of up
   to 48 MiB can take longer than the default 30 s to cross a slow link, and a request that attaches uploads waits while
   the Main moves their files, which copies them when the project is on another volume
@@ -404,7 +404,7 @@ projects tree and the stores ([Projects list](#projects-list)).
 | The connection is not `connected`        | `ProtocolError(.unavailable, "<name> is offline.")`; nothing is sent                    |
 | Error response, timeout, connection lost | As thrown by `RPCPeer.request` ([protocol/envelope.md](../protocol/envelope.md#errors)) |
 
-- Results update client state only as follows: a `TaskItem` or `SessionInfo` returned for a project whose
+- Results update client state only as follows: a `TicketItem` or `SessionInfo` returned for a project whose
   store does not contain that id yet is inserted into the store (an existing element is never replaced: events bring
   updates); `listProjects()` and `listSkills()` replace `projects` and `skills` ([Projects list](#projects-list));
   `meshSnapshot()`, `renameDevice` and `setAddresses` results are merged into the registry; `hostInfo()` sets
@@ -417,70 +417,70 @@ projects tree and the stores ([Projects list](#projects-list)).
 All are `async throws` methods of `MainConnection` in `MainConnection+Requests.swift`. Optional parameters default to
 nil and `attachments` to `[]`.
 
-| Group    | Swift function                                                                                                                                                                                                        | Method                    |
-|----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
-| Mesh     | `meshSnapshot() -> MeshSnapshot`                                                                                                                                                                                      | `mesh.snapshot`           |
-| Mesh     | `renameDevice(_ deviceID: UUID, to name: String) -> DeviceRecord`                                                                                                                                                     | `mesh.renameDevice`       |
-| Mesh     | `revokeDevice(_ deviceID: UUID)`                                                                                                                                                                                      | `mesh.revokeDevice`       |
-| Mesh     | `setAddresses(_ addresses: [String]) -> DeviceRecord`                                                                                                                                                                 | `mesh.setAddresses`       |
-| Pairing  | `openPairing() -> PairingOpenResult`                                                                                                                                                                                  | `pairing.open`            |
-| Pairing  | `closePairing()`                                                                                                                                                                                                      | `pairing.close`           |
-| Host     | `hostInfo() -> HostInfoResult`                                                                                                                                                                                        | `host.info`               |
-| Host     | `listDirectories(path: String) -> HostListDirectoriesResult`                                                                                                                                                          | `host.listDirectories`    |
-| Projects | `listProjects() -> [ProjectSummary]`                                                                                                                                                                                  | `projects.list`           |
-| Projects | `projectSnapshot(projectID: String) -> ProjectsSnapshotResult`                                                                                                                                                        | `projects.snapshot`       |
-| Projects | `createProject(name: String, identifier: String, parentID: String?, folderName: String?, description: String?) -> ProjectSummary`                                                                                     | `projects.create`         |
-| Projects | `importProject(path: String, name: String?, identifier: String?) -> ProjectSummary`                                                                                                                                   | `projects.import`         |
-| Projects | `updateProject(projectID: String, patch: ProjectPatch) -> Project`                                                                                                                                                    | `projects.update`         |
-| Projects | `removeProject(projectID: String, moveToTrash: Bool)`                                                                                                                                                                 | `projects.remove`         |
-| Projects | `migrateProject(projectID: String, to targetDeviceID: UUID) -> UUID` (the migration id)                                                                                                                               | `projects.migrate`        |
-| Tasks    | `createTask(projectID: String, name: String, description: String?, status: TaskStatus?) -> TaskItem`                                                                                                                  | `tasks.create`            |
-| Tasks    | `updateTask(projectID: String, taskID: String, patch: TaskPatch) -> TaskItem`                                                                                                                                         | `tasks.update`            |
-| Tasks    | `deleteTask(projectID: String, taskID: String)`                                                                                                                                                                       | `tasks.delete`            |
-| Uploads  | `beginUpload(projectID: String, fileName: String, size: Int) -> UUID` (the upload id)                                                                                                                                 | `uploads.begin`           |
-| Uploads  | `uploadChunk(uploadID: UUID, offset: Int, data: Data)`                                                                                                                                                                | `uploads.chunk`           |
-| Uploads  | `cancelUpload(uploadID: UUID)`                                                                                                                                                                                        | `uploads.cancel`          |
-| Tasks    | `addComment(projectID: String, taskID: String, body: String, attachments: [UploadRef]) -> TaskItem`                                                                                                                   | `tasks.addComment`        |
-| Tasks    | `updateComment(projectID: String, taskID: String, commentID: UUID, body: String) -> TaskItem`                                                                                                                         | `tasks.updateComment`     |
-| Tasks    | `deleteComment(projectID: String, taskID: String, commentID: UUID) -> TaskItem`                                                                                                                                       | `tasks.deleteComment`     |
-| Tasks    | `readAttachment(projectID: String, taskID: String, fileName: String, offset: Int?, length: Int?) -> AttachmentsReadResult`                                                                                            | `attachments.read`        |
-| Bundles  | `createBundle(projectID: String, name: String, taskIDs: [String]) -> BundleItem`                                                                                                                                      | `bundles.create`          |
-| Bundles  | `updateBundle(projectID: String, bundleID: String, patch: BundlePatch) -> BundleItem`                                                                                                                                 | `bundles.update`          |
-| Bundles  | `deleteBundle(projectID: String, bundleID: String)`                                                                                                                                                                   | `bundles.delete`          |
-| Bundles  | `startBundle(projectID: String, bundleID: String) -> BundleItem`                                                                                                                                                      | `bundles.start`           |
-| Bundles  | `stopBundle(projectID: String, bundleID: String) -> BundleItem`                                                                                                                                                       | `bundles.stop`            |
-| Files    | `listFiles(projectID: String, path: String) -> [FileEntry]`                                                                                                                                                           | `files.list`              |
-| Files    | `readFile(projectID: String, path: String, offset: Int?, length: Int?) -> FilesReadResult` (a whole read when both are nil)                                                                                           | `files.read`              |
-| Files    | `writeFile(projectID: String, path: String, data: Data, baseRevision: String?) -> String` (the new revision)                                                                                                          | `files.write`             |
-| Files    | `createFile(projectID: String, path: String, isDirectory: Bool) -> FileEntry`                                                                                                                                         | `files.create`            |
-| Files    | `renameFile(projectID: String, from: String, to: String)`                                                                                                                                                             | `files.rename`            |
-| Files    | `deleteFile(projectID: String, path: String)`                                                                                                                                                                         | `files.delete`            |
-| Web tabs | `openTab(projectID: String, url: String, title: String?, locked: Bool?) -> WebTab`                                                                                                                                    | `tabs.open`               |
-| Web tabs | `updateTab(projectID: String, tabID: UUID, patch: WebTabPatch) -> WebTab`                                                                                                                                             | `tabs.update`             |
-| Web tabs | `closeTab(projectID: String, tabID: UUID)`                                                                                                                                                                            | `tabs.close`              |
-| Web tabs | `moveTab(projectID: String, tabID: UUID, toIndex: Int)`                                                                                                                                                               | `tabs.move`               |
-| Sessions | `startSession(projectID: String, kind: SessionKind, taskID: String?, mode: SessionMode?, title: String?, message: String?, attachments: [UploadRef], permissionMode: PermissionMode?, model: String?) -> SessionInfo` | `sessions.start`          |
-| Sessions | `sessionHistory(projectID: String, sessionID: UUID, before: Int?, limit: Int?) -> SessionsHistoryResult` (`events`, `firstIndex`, `total`)                                                                            | `sessions.history`        |
-| Sessions | `readSessionAttachment(projectID: String, sessionID: UUID, fileName: String, offset: Int?, length: Int?) -> AttachmentsReadResult`                                                                                    | `sessions.readAttachment` |
-| Sessions | `sendMessage(projectID: String, sessionID: UUID, text: String, attachments: [UploadRef])`                                                                                                                             | `sessions.send`           |
-| Sessions | `interruptSession(projectID: String, sessionID: UUID)`                                                                                                                                                                | `sessions.interrupt`      |
-| Sessions | `stopSession(projectID: String, sessionID: UUID)`                                                                                                                                                                     | `sessions.stop`           |
-| Sessions | `respondToPermission(projectID: String, sessionID: UUID, requestID: String, decision: PermissionDecision, message: String?)`                                                                                          | `sessions.respond`        |
-| Sessions | `updateSession(projectID: String, sessionID: UUID, patch: SessionPatch) -> SessionInfo`                                                                                                                               | `sessions.update`         |
-| Sessions | `deleteSession(projectID: String, sessionID: UUID)`                                                                                                                                                                   | `sessions.delete`         |
-| Search   | `search(query: String, scopes: [SearchScope]?, projectID: String?, limit: Int?) -> [SearchResult]`                                                                                                                    | `search.query`            |
-| Skills   | `listSkills() -> [SkillSummary]`                                                                                                                                                                                      | `skills.list`             |
-| Skills   | `createSkill(name: String, description: String) -> SkillSummary`                                                                                                                                                      | `skills.create`           |
-| Skills   | `skillFiles(name: String) -> [SkillFile]`                                                                                                                                                                             | `skills.files`            |
-| Skills   | `readSkillFile(name: String, path: String) -> Data`                                                                                                                                                                   | `skills.readFile`         |
-| Skills   | `writeSkillFile(name: String, path: String, data: Data)`                                                                                                                                                              | `skills.writeFile`        |
-| Skills   | `deleteSkillFile(name: String, path: String)`                                                                                                                                                                         | `skills.deleteFile`       |
-| Skills   | `renameSkill(name: String, to newName: String) -> SkillSummary`                                                                                                                                                       | `skills.rename`           |
-| Skills   | `deleteSkill(name: String)`                                                                                                                                                                                           | `skills.delete`           |
-| Forge    | `sendFeedback(screenshot: UploadRef?, comment: String, context: FeedbackContext) -> ForgeFeedbackResult`                                                                                                              | `forge.feedback`          |
-| Forge    | `forgeStatus() -> ForgeState`                                                                                                                                                                                         | `forge.status`            |
-| Forge    | `regenerate()`                                                                                                                                                                                                        | `forge.regenerate`        |
-| Forge    | `retryForge(itemTaskID: String)`                                                                                                                                                                                      | `forge.retry`             |
+| Group    | Swift function                                                                                                                                                                                                          | Method                    |
+|----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------|
+| Mesh     | `meshSnapshot() -> MeshSnapshot`                                                                                                                                                                                        | `mesh.snapshot`           |
+| Mesh     | `renameDevice(_ deviceID: UUID, to name: String) -> DeviceRecord`                                                                                                                                                       | `mesh.renameDevice`       |
+| Mesh     | `revokeDevice(_ deviceID: UUID)`                                                                                                                                                                                        | `mesh.revokeDevice`       |
+| Mesh     | `setAddresses(_ addresses: [String]) -> DeviceRecord`                                                                                                                                                                   | `mesh.setAddresses`       |
+| Pairing  | `openPairing() -> PairingOpenResult`                                                                                                                                                                                    | `pairing.open`            |
+| Pairing  | `closePairing()`                                                                                                                                                                                                        | `pairing.close`           |
+| Host     | `hostInfo() -> HostInfoResult`                                                                                                                                                                                          | `host.info`               |
+| Host     | `listDirectories(path: String) -> HostListDirectoriesResult`                                                                                                                                                            | `host.listDirectories`    |
+| Projects | `listProjects() -> [ProjectSummary]`                                                                                                                                                                                    | `projects.list`           |
+| Projects | `projectSnapshot(projectID: String) -> ProjectsSnapshotResult`                                                                                                                                                          | `projects.snapshot`       |
+| Projects | `createProject(name: String, identifier: String, parentID: String?, folderName: String?, description: String?) -> ProjectSummary`                                                                                       | `projects.create`         |
+| Projects | `importProject(path: String, name: String?, identifier: String?) -> ProjectSummary`                                                                                                                                     | `projects.import`         |
+| Projects | `updateProject(projectID: String, patch: ProjectPatch) -> Project`                                                                                                                                                      | `projects.update`         |
+| Projects | `removeProject(projectID: String, moveToTrash: Bool)`                                                                                                                                                                   | `projects.remove`         |
+| Projects | `migrateProject(projectID: String, to targetDeviceID: UUID) -> UUID` (the migration id)                                                                                                                                 | `projects.migrate`        |
+| Tickets  | `createTicket(projectID: String, name: String, description: String?, status: TicketStatus?) -> TicketItem`                                                                                                              | `tickets.create`          |
+| Tickets  | `updateTicket(projectID: String, ticketID: String, patch: TicketPatch) -> TicketItem`                                                                                                                                   | `tickets.update`          |
+| Tickets  | `deleteTicket(projectID: String, ticketID: String)`                                                                                                                                                                     | `tickets.delete`          |
+| Uploads  | `beginUpload(projectID: String, fileName: String, size: Int) -> UUID` (the upload id)                                                                                                                                   | `uploads.begin`           |
+| Uploads  | `uploadChunk(uploadID: UUID, offset: Int, data: Data)`                                                                                                                                                                  | `uploads.chunk`           |
+| Uploads  | `cancelUpload(uploadID: UUID)`                                                                                                                                                                                          | `uploads.cancel`          |
+| Tickets  | `addComment(projectID: String, ticketID: String, body: String, attachments: [UploadRef]) -> TicketItem`                                                                                                                 | `tickets.addComment`      |
+| Tickets  | `updateComment(projectID: String, ticketID: String, commentID: UUID, body: String) -> TicketItem`                                                                                                                       | `tickets.updateComment`   |
+| Tickets  | `deleteComment(projectID: String, ticketID: String, commentID: UUID) -> TicketItem`                                                                                                                                     | `tickets.deleteComment`   |
+| Tickets  | `readAttachment(projectID: String, ticketID: String, fileName: String, offset: Int?, length: Int?) -> AttachmentsReadResult`                                                                                            | `attachments.read`        |
+| Bundles  | `createBundle(projectID: String, name: String, ticketIDs: [String]) -> BundleItem`                                                                                                                                      | `bundles.create`          |
+| Bundles  | `updateBundle(projectID: String, bundleID: String, patch: BundlePatch) -> BundleItem`                                                                                                                                   | `bundles.update`          |
+| Bundles  | `deleteBundle(projectID: String, bundleID: String)`                                                                                                                                                                     | `bundles.delete`          |
+| Bundles  | `startBundle(projectID: String, bundleID: String) -> BundleItem`                                                                                                                                                        | `bundles.start`           |
+| Bundles  | `stopBundle(projectID: String, bundleID: String) -> BundleItem`                                                                                                                                                         | `bundles.stop`            |
+| Files    | `listFiles(projectID: String, path: String) -> [FileEntry]`                                                                                                                                                             | `files.list`              |
+| Files    | `readFile(projectID: String, path: String, offset: Int?, length: Int?) -> FilesReadResult` (a whole read when both are nil)                                                                                             | `files.read`              |
+| Files    | `writeFile(projectID: String, path: String, data: Data, baseRevision: String?) -> String` (the new revision)                                                                                                            | `files.write`             |
+| Files    | `createFile(projectID: String, path: String, isDirectory: Bool) -> FileEntry`                                                                                                                                           | `files.create`            |
+| Files    | `renameFile(projectID: String, from: String, to: String)`                                                                                                                                                               | `files.rename`            |
+| Files    | `deleteFile(projectID: String, path: String)`                                                                                                                                                                           | `files.delete`            |
+| Web tabs | `openTab(projectID: String, url: String, title: String?, locked: Bool?) -> WebTab`                                                                                                                                      | `tabs.open`               |
+| Web tabs | `updateTab(projectID: String, tabID: UUID, patch: WebTabPatch) -> WebTab`                                                                                                                                               | `tabs.update`             |
+| Web tabs | `closeTab(projectID: String, tabID: UUID)`                                                                                                                                                                              | `tabs.close`              |
+| Web tabs | `moveTab(projectID: String, tabID: UUID, toIndex: Int)`                                                                                                                                                                 | `tabs.move`               |
+| Sessions | `startSession(projectID: String, kind: SessionKind, ticketID: String?, mode: SessionMode?, title: String?, message: String?, attachments: [UploadRef], permissionMode: PermissionMode?, model: String?) -> SessionInfo` | `sessions.start`          |
+| Sessions | `sessionHistory(projectID: String, sessionID: UUID, before: Int?, limit: Int?) -> SessionsHistoryResult` (`events`, `firstIndex`, `total`)                                                                              | `sessions.history`        |
+| Sessions | `readSessionAttachment(projectID: String, sessionID: UUID, fileName: String, offset: Int?, length: Int?) -> AttachmentsReadResult`                                                                                      | `sessions.readAttachment` |
+| Sessions | `sendMessage(projectID: String, sessionID: UUID, text: String, attachments: [UploadRef])`                                                                                                                               | `sessions.send`           |
+| Sessions | `interruptSession(projectID: String, sessionID: UUID)`                                                                                                                                                                  | `sessions.interrupt`      |
+| Sessions | `stopSession(projectID: String, sessionID: UUID)`                                                                                                                                                                       | `sessions.stop`           |
+| Sessions | `respondToPermission(projectID: String, sessionID: UUID, requestID: String, decision: PermissionDecision, message: String?)`                                                                                            | `sessions.respond`        |
+| Sessions | `updateSession(projectID: String, sessionID: UUID, patch: SessionPatch) -> SessionInfo`                                                                                                                                 | `sessions.update`         |
+| Sessions | `deleteSession(projectID: String, sessionID: UUID)`                                                                                                                                                                     | `sessions.delete`         |
+| Search   | `search(query: String, scopes: [SearchScope]?, projectID: String?, limit: Int?) -> [SearchResult]`                                                                                                                      | `search.query`            |
+| Skills   | `listSkills() -> [SkillSummary]`                                                                                                                                                                                        | `skills.list`             |
+| Skills   | `createSkill(name: String, description: String) -> SkillSummary`                                                                                                                                                        | `skills.create`           |
+| Skills   | `skillFiles(name: String) -> [SkillFile]`                                                                                                                                                                               | `skills.files`            |
+| Skills   | `readSkillFile(name: String, path: String) -> Data`                                                                                                                                                                     | `skills.readFile`         |
+| Skills   | `writeSkillFile(name: String, path: String, data: Data)`                                                                                                                                                                | `skills.writeFile`        |
+| Skills   | `deleteSkillFile(name: String, path: String)`                                                                                                                                                                           | `skills.deleteFile`       |
+| Skills   | `renameSkill(name: String, to newName: String) -> SkillSummary`                                                                                                                                                         | `skills.rename`           |
+| Skills   | `deleteSkill(name: String)`                                                                                                                                                                                             | `skills.delete`           |
+| Forge    | `sendFeedback(screenshot: UploadRef?, comment: String, context: FeedbackContext) -> ForgeFeedbackResult`                                                                                                                | `forge.feedback`          |
+| Forge    | `forgeStatus() -> ForgeState`                                                                                                                                                                                           | `forge.status`            |
+| Forge    | `regenerate()`                                                                                                                                                                                                          | `forge.regenerate`        |
+| Forge    | `retryForge(itemTicketID: String)`                                                                                                                                                                                      | `forge.retry`             |
 
 Not in this API: `hello` (the handshake), `subscribe` and `unsubscribe` ([Subscriptions](#subscriptions)), the
 client-side `mesh.rekey`, and the Main↔Main methods `mesh.sync`, `skills.manifest` and `migration.*`. The Forge
@@ -510,8 +510,8 @@ extension MainConnection {
     /// Sends the file as an upload of `projectID`; returns the reference that a request attaches.
     public func upload(fileName: String, projectID: String, source: UploadSource,
                        progress: @escaping @MainActor (TransferProgress) -> Void) async throws -> UploadRef
-    /// A task attachment in the attachment cache, downloaded unless the cache has it with `size` bytes.
-    public func downloadAttachment(projectID: String, taskID: String, fileName: String, size: Int,
+    /// A ticket attachment in the attachment cache, downloaded unless the cache has it with `size` bytes.
+    public func downloadAttachment(projectID: String, ticketID: String, fileName: String, size: Int,
                                    progress: @escaping @MainActor (TransferProgress) -> Void) async throws -> URL
     /// A file attached to a session message, likewise.
     public func downloadSessionAttachment(projectID: String, sessionID: UUID, fileName: String, size: Int,
@@ -527,7 +527,7 @@ public struct AttachmentCache: Sendable {
     public init(root: URL)
     /// <Caches>/Hephaestus/Attachments (data/app-storage.md).
     public static func standard() -> AttachmentCache
-    public func taskAttachment(mainDeviceID: UUID, projectID: String, taskID: String, fileName: String) -> URL
+    public func ticketAttachment(mainDeviceID: UUID, projectID: String, ticketID: String, fileName: String) -> URL
     public func sessionAttachment(mainDeviceID: UUID, projectID: String, sessionID: UUID, fileName: String) -> URL
     public func projectFile(mainDeviceID: UUID, projectID: String, path: String) -> URL
 }
@@ -566,7 +566,7 @@ The three download functions fill a file of the attachment cache with ranged rea
 
 | Function                    | Ranged reads                                                             | Cached at                | Reused when                           |
 |-----------------------------|--------------------------------------------------------------------------|--------------------------|---------------------------------------|
-| `downloadAttachment`        | `readAttachment(projectID:taskID:fileName:offset:length: nil)`           | `taskAttachment(...)`    | a file exists there with `size` bytes |
+| `downloadAttachment`        | `readAttachment(projectID:ticketID:fileName:offset:length: nil)`         | `ticketAttachment(...)`  | a file exists there with `size` bytes |
 | `downloadSessionAttachment` | `readSessionAttachment(projectID:sessionID:fileName:offset:length: nil)` | `sessionAttachment(...)` | a file exists there with `size` bytes |
 | `downloadFile`              | `readFile(projectID:path:offset:length: nil)`                            | `projectFile(...)`       | never: the file is downloaded again   |
 
@@ -596,12 +596,13 @@ The cache paths take the connection's `id` as `mainDeviceID`.
 
 | Function            | Path                                                                       |
 |---------------------|----------------------------------------------------------------------------|
-| `taskAttachment`    | `<mainDeviceID>/<projectID>/tasks/<taskID>/<fileName>`                     |
+| `ticketAttachment`  | `<mainDeviceID>/<projectID>/tasks/<ticketID>/<fileName>`                   |
 | `sessionAttachment` | `<mainDeviceID>/<projectID>/sessions/<session id in lowercase>/<fileName>` |
 | `projectFile`       | `<mainDeviceID>/<projectID>/files/<path>`                                  |
 
-`<mainDeviceID>` is written in canonical uppercase form. `fileName` is a stored attachment name, one path component
-([data/task-yml.md](../data/task-yml.md#naming)); `path` is a project path
+`<mainDeviceID>` is written in canonical uppercase form. The folder `tasks` keeps the name it had before tasks were
+renamed tickets, so the files already downloaded stay in the cache. `fileName` is a stored attachment name, one path
+component ([data/ticket-yml.md](../data/ticket-yml.md#naming)); `path` is a project path
 ([protocol/methods.md](../protocol/methods.md#paths)).
 
 ## Projects list
@@ -633,13 +634,13 @@ public final class ProjectStore {
     public let projectID: String
     public private(set) var phase: Phase
     public private(set) var project: Project?
-    public private(set) var tasks: [TaskItem]        // by task number, ascending
+    public private(set) var tickets: [TicketItem]        // by ticket number, ascending
     public private(set) var bundles: [BundleItem]    // by bundle number, ascending
     public private(set) var sessions: [SessionInfo]  // by created, then id
     public private(set) var isRemoved: Bool
     public var connection: MainConnection? { get }
     public func reload() async
-    public func task(_ id: String) -> TaskItem?
+    public func ticket(_ id: String) -> TicketItem?
     public func bundle(_ id: String) -> BundleItem?
     public func session(_ id: UUID) -> SessionInfo?
 }
@@ -649,13 +650,13 @@ public final class ProjectStore {
   creating it with phase `idle` when missing; a new store starts loading when its Main is connected. A store stays
   until its project leaves its Main's tree or its Main leaves the registry; `reset()` drops every store.
 - `reload()` returns at once while a load runs. Otherwise: phase `loading` (the data stays visible) and request
-  `projects.snapshot`; events for this store that arrive meanwhile are queued. On success `project`, `tasks`, `bundles`
-  and `sessions` are replaced (sorted), the queued events are applied in order, phase `loaded`,
+  `projects.snapshot`; events for this store that arrive meanwhile are queued. On success `project`, `tickets`,
+  `bundles` and `sessions` are replaced (sorted), the queued events are applied in order, phase `loaded`,
   then `sessionCenter.handleSessions(mainDeviceID:projectID:sessions:)` gets the store's `sessions`
   ([ui/sessions.md](../ui/sessions.md#sessioncenter)). On failure the queued events are dropped; `notFound` sets
   `isRemoved = true` and drops the store; otherwise a store that never loaded gets phase `failed(message)`, and a store
   that had data returns to `loaded` and the failure is reported ([Error reports](#error-reports)).
-- Sorting: tasks by the number after the last `-` of the id (ids without a number last, by id); bundles by the number
+- Sorting: tickets by the number after the last `-` of the id (ids without a number last, by id); bundles by the number
   after the last `-B` of the id (ids without a number last, by id); sessions by `created`,
   then id.
 
@@ -671,8 +672,8 @@ of `(M, projectID of the event)` when it exists.
 | `mesh.changed`         | Registry merge of `snapshot.devices`; the connection's report becomes `snapshot.presence`                                 |                                           |
 | `projects.changed`     | `projects` of the connection of `deviceID` replaced                                                                       |                                           |
 | `project.changed`      | The store's `project` replaced; when `M`'s projects are loaded and the id is not in its tree, `projects.list` again       |                                           |
-| `task.changed`         | Upsert of `task` in the store                                                                                             |                                           |
-| `task.removed`         | The task removed from the store (nothing when absent)                                                                     |                                           |
+| `ticket.changed`       | Upsert of `ticket` in the store                                                                                           |                                           |
+| `ticket.removed`       | The ticket removed from the store (nothing when absent)                                                                   |                                           |
 | `bundle.changed`       | Upsert of `bundle` in the store                                                                                           |                                           |
 | `bundle.removed`       | The bundle removed from the store (nothing when absent)                                                                   |                                           |
 | `session.changed`      | Upsert of `session` in the store                                                                                          | `sessionCenter.handleSessionChanged`      |
@@ -754,7 +755,7 @@ public final class TopicSubscription {
 
 ```swift
 public enum SidebarSection: String, Codable, CaseIterable, Sendable {
-    case overview, tasks, code, docs, web, claude   // project sections, ⌘1–⌘6 in this order
+    case overview, tickets, code, docs, web, claude   // project sections, ⌘1–⌘6 in this order
     case devices, skills, forge                     // workspace sections
     public var isProjectSection: Bool { get }       // true for the first six
 }
@@ -781,14 +782,14 @@ public final class Selection {
 | Section    | `item`                                                                                                                  |
 |------------|-------------------------------------------------------------------------------------------------------------------------|
 | `overview` | none                                                                                                                    |
-| `tasks`    | Task id (`HEPH-12`) or bundle id (`HEPH-B3`, [services/bundles.md](../services/bundles.md#bundle-id))                   |
+| `tickets`  | Ticket id (`HEPH-12`) or bundle id (`HEPH-B3`, [services/bundles.md](../services/bundles.md#bundle-id))                 |
 | `code`     | Path of the active file, relative to the project root, optionally followed by `#L<line>` ([File items](#file-items))    |
 | `docs`     | Path of the shown document, relative to the project root, optionally followed by `#L<line>` ([File items](#file-items)) |
 | `web`      | Web tab id                                                                                                              |
 | `claude`   | Session id                                                                                                              |
 | `devices`  | Device id                                                                                                               |
 | `skills`   | `<skill name>` or `<skill name>/<file path>` ([ui/skills.md](../ui/skills.md))                                          |
-| `forge`    | Task id of the pipeline item                                                                                            |
+| `forge`    | Ticket id of the pipeline item                                                                                          |
 
 UUIDs are written in canonical uppercase form.
 
@@ -851,7 +852,7 @@ preview of every screen and the snapshot tests use it ([testing.md](../testing.m
 | `mesh.snapshot`                                  | The sample mesh                                                                                                                                                                                  |
 | `host.info`                                      | The Main's host info                                                                                                                                                                             |
 | `projects.list`                                  | The Main's projects                                                                                                                                                                              |
-| `projects.snapshot`                              | The project with its tasks and sessions                                                                                                                                                          |
+| `projects.snapshot`                              | The project with its tickets and sessions                                                                                                                                                        |
 | `sessions.history`                               | The session's events, paged as [protocol/methods.md](../protocol/methods.md#sessionshistory) says: with `before` and `limit` nil, `{events: <all of them>, firstIndex: 0, total: <their count>}` |
 | `files.list`, `files.read`                       | The sample files of `HEPH` (`revision` = first 16 hex characters of the SHA-256 of the content); `API` has none: its root lists no entries                                                       |
 | `attachments.read`, `sessions.readAttachment`    | The range asked of a 160 × 100 PNG filled with sRGB (0.95, 0.42, 0.18), `size` the PNG's size, `mimeType` `image/png`                                                                            |
@@ -895,12 +896,12 @@ Projects (on Studio, `created` 2026-10-01T09:00:00.000Z, `code` `.`, `docs` `doc
 | `HEPH` | Hephaestus     | Multi-device project workbench | `/Users/user/Developer/Hephaestus`              | `services/api` (`API`) |
 | `API`  | Hephaestus API | Sync service                   | `/Users/user/Developer/Hephaestus/services/api` |                        |
 
-`HEPH`: `taskCounter` 4, `feedbackCounter` 0, `claude` model `opus` and permission mode `acceptEdits`, web tabs
+`HEPH`: `ticketCounter` 4, `feedbackCounter` 0, `claude` model `opus` and permission mode `acceptEdits`, web tabs
 `#201` "GitHub" `https://github.com/Azavech/Hephaestus` locked and `#202` "Swift Forums" `https://forums.swift.org` not
-locked, `pendingPermissionCount` 1 in its `ProjectSummary`. `API`: `taskCounter` 1, `feedbackCounter` 0,
+locked, `pendingPermissionCount` 1 in its `ProjectSummary`. `API`: `ticketCounter` 1, `feedbackCounter` 0,
 `pendingPermissionCount` 0.
 
-Tasks:
+Tickets:
 
 | Id       | Name                    | Status       | Created  | Updated  | Description                                    |
 |----------|-------------------------|--------------|----------|----------|------------------------------------------------|
@@ -916,17 +917,17 @@ review.".
 
 Sessions of `HEPH` (permission mode `acceptEdits`, `updated` = the time of their last event):
 
-| Id     | Kind      | Task     | Mode        | Title            | Status              | Created  |
+| Id     | Kind      | Ticket   | Mode        | Title            | Status              | Created  |
 |--------|-----------|----------|-------------|------------------|---------------------|----------|
 | `#301` | `project` |          |             | Plan the release | `idle`              | 20:00:00 |
-| `#302` | `task`    | `HEPH-2` | `implement` | Implement HEPH-2 | `waitingPermission` | 20:30:00 |
+| `#302` | `ticket`  | `HEPH-2` | `implement` | Implement HEPH-2 | `waitingPermission` | 20:30:00 |
 
 `#302` has `pendingPermissions` = [the request of its `perm-1` event: `requestID` `perm-1`, `toolName` `Bash`, `input`
 `{"command":"./scripts/build.sh ios"}`, `suggestions` `[]`]; `#301` has none.
 
 Events of `#301`, ids `#401`–`#406`, one second apart from 20:00:01: `user` "Plan the 1.1 release and create the
-tasks." (device `#002`); `assistant` "I will create the missing task."; `toolUse` `toolu_1`
-`mcp__hephaestus__create_task` input `{"project":"HEPH","name":"Add Go highlighting"}`; `toolResult` `toolu_1`
+tickets." (device `#002`); `assistant` "I will create the missing ticket."; `toolUse` `toolu_1`
+`mcp__hephaestus__create_ticket` input `{"project":"HEPH","name":"Add Go highlighting"}`; `toolResult` `toolu_1`
 "Created HEPH-4", not an error; `assistant` "Created HEPH-4."; `result` not an error, `durationMS` 8200, `costUSD`
 0.04, `stopReason` `end_turn`.
 
@@ -941,13 +942,14 @@ Files of `HEPH` (folders `docs` and `Sources`; every entry modified at 20:00:00)
 | Path                | Content                                                                                                                         |
 |---------------------|---------------------------------------------------------------------------------------------------------------------------------|
 | `README.md`         | `# Hephaestus\n\nMulti-device project workbench.\n`                                                                             |
-| `docs/README.md`    | `# Documentation\n\n- [Tasks](tasks.md)\n- Code\n`                                                                              |
-| `docs/tasks.md`     | `# Tasks\n\nEvery task has an id, a name and a status.\n`                                                                       |
+| `docs/README.md`    | `# Documentation\n\n- [Tickets](tickets.md)\n- Code\n`                                                                          |
+| `docs/tickets.md`   | `# Tickets\n\nEvery ticket has an id, a name and a status.\n`                                                                   |
 | `Sources/App.swift` | `import SwiftUI\n\n@main\nstruct DemoApp: App {\n    var body: some Scene {\n        WindowGroup { Text("Hello") }\n    }\n}\n` |
 
 Skill (on both Mains, modified 2026-10-28T12:00:00.000Z): `release-notes`, description "Write release notes from the
-done tasks", one file `SKILL.md` with the content
-`---\nname: release-notes\ndescription: Write release notes from the done tasks\n---\n\nList the tasks done since the last release, one line per task.\n`.
+done tickets", one file `SKILL.md` with the content
+`---\nname: release-notes\ndescription: Write release notes from the done tickets\n---\n\nList the tickets done since
+the last release, one line per ticket.\n`.
 
 ## Swift API summary
 

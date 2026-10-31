@@ -332,7 +332,7 @@ The workflow, its logs and its releases are public. Every change to `.github/` k
   paths and names in the public logs, and pull requests from forks could run code on it.
 - Every job's token can only read, except in `build`, and no checkout keeps it.
 - The workflow artifact and the release asset are `Hephaestus-macOS.zip` only. Release titles and notes hold only the
-  run number, the commit SHA and the docs hash, never a commit message, a task title or feedback text.
+  run number, the commit SHA and the docs hash, never a commit message, a ticket title or feedback text.
 - The Forge finds the check jobs by their names `public-check` and `public-check-terms`
   ([pipeline.md](pipeline.md#polling)): they have no `name:` key.
 

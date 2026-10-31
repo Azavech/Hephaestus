@@ -21,7 +21,7 @@ Every item gets three inputs for matching (§2.2): an `id` for the exact id matc
 | Scope      | Item                                 | `id`       | `title`       | `fields`                                  |
 |------------|--------------------------------------|------------|---------------|-------------------------------------------|
 | `projects` | a hosted project or sub project      | identifier | name          | description                               |
-| `tasks`    | a task                               | task id    | name          | description                               |
+| `tickets`  | a ticket                             | ticket id  | name          | description                               |
 | `comments` | a comment                            | none       | none (`""`)   | body                                      |
 | `docs`     | a Markdown file of the docs folder   | none       | file name     | content                                   |
 | `code`     | any other file of the code folder    | none       | file name     | content                                   |
@@ -30,8 +30,8 @@ Every item gets three inputs for matching (§2.2): an `id` for the exact id matc
 | `sessions` | a Claude session                     | none       | session title | text of each `user` and `assistant` event |
 | `devices`  | a non-revoked device of the registry | none       | device name   | none                                      |
 
-- The id is also searched as content: "HEPH" matches every task of HEPH.
-- A broken task is searched by its id only (`title` and `fields` empty).
+- The id is also searched as content: "HEPH" matches every ticket of HEPH.
+- A broken ticket is searched by its id only (`title` and `fields` empty).
 - A skill's description is in the front matter of its `SKILL.md`, so it is searched as content.
 
 ## 2. SearchMatcher
@@ -98,7 +98,7 @@ sent over the wire.
 2. `date`, newest first; a result without `date` comes after those with one;
 3. `title` with `localizedStandardCompare`;
 4. then, as plain strings with an absent value read as `""`: `deviceID` (`uuidString`), `kind` (raw value),
-   `projectID`, `itemID`, `taskID`, `path`;
+   `projectID`, `itemID`, `ticketID`, `path`;
 5. then `line`, an absent value read as `0`.
 
 This is a total order on the results of every Main (`deviceID`, `kind` and `itemID` identify a result), so merged
@@ -106,17 +106,17 @@ lists are stable.
 
 ## 3. SearchResult
 
-| Kind       | Fields set                                                                                   | `title`       | `snippet` of a content match       | `date`                           |
-|------------|----------------------------------------------------------------------------------------------|---------------|------------------------------------|----------------------------------|
-| `projects` | `projectID`; `itemID` = the identifier                                                       | name          | description                        | project.yml modification date    |
-| `tasks`    | `projectID`, `taskID`; `itemID` = the task id                                                | name          | description                        | `updated`                        |
-| `comments` | `projectID`, `taskID`; `itemID` = the comment id (`uuidString`)                              | the task name | body                               | `edited`, else `created`         |
-| `docs`     | `projectID`, `path`, `line`; `itemID` = `path`, the project path                             | file name     | content                            | file modification date           |
-| `code`     | `projectID`, `path`, `line`; `itemID` = `path`, the project path                             | file name     | content                            | file modification date           |
-| `skills`   | `path`, `line`; `itemID` = the skill name                                                    | skill name    | content of the first matching file | latest modification of its files |
-| `webTabs`  | `projectID`; `itemID` = the tab id (`uuidString`)                                            | tab title     | URL                                | absent                           |
-| `sessions` | `projectID`, `taskID` (task and feedback sessions); `itemID` = the session id (`uuidString`) | session title | text of the first matching event   | session `updated`                |
-| `devices`  | `itemID` = the device id (`uuidString`)                                                      | device name   | none                               | absent                           |
+| Kind       | Fields set                                                                                       | `title`         | `snippet` of a content match       | `date`                           |
+|------------|--------------------------------------------------------------------------------------------------|-----------------|------------------------------------|----------------------------------|
+| `projects` | `projectID`; `itemID` = the identifier                                                           | name            | description                        | project.yml modification date    |
+| `tickets`  | `projectID`, `ticketID`; `itemID` = the ticket id                                                | name            | description                        | `updated`                        |
+| `comments` | `projectID`, `ticketID`; `itemID` = the comment id (`uuidString`)                                | the ticket name | body                               | `edited`, else `created`         |
+| `docs`     | `projectID`, `path`, `line`; `itemID` = `path`, the project path                                 | file name       | content                            | file modification date           |
+| `code`     | `projectID`, `path`, `line`; `itemID` = `path`, the project path                                 | file name       | content                            | file modification date           |
+| `skills`   | `path`, `line`; `itemID` = the skill name                                                        | skill name      | content of the first matching file | latest modification of its files |
+| `webTabs`  | `projectID`; `itemID` = the tab id (`uuidString`)                                                | tab title       | URL                                | absent                           |
+| `sessions` | `projectID`, `ticketID` (ticket and feedback sessions); `itemID` = the session id (`uuidString`) | session title   | text of the first matching event   | session `updated`                |
+| `devices`  | `itemID` = the device id (`uuidString`)                                                          | device name     | none                               | absent                           |
 
 - `kind` is the item's scope and `rank` is §2.2. `deviceID` is always the answering Main, for `devices` results too
   (the matched device is `itemID`). Fields not set by the table are absent: `projectID` for `skills` and `devices`.
@@ -145,7 +145,7 @@ actor SearchService: HostMethodHandler {
 1. `limit`: `nil` → `MethodLimits.maxSearchResults` (200); below 1 → 1; above 200 → 200.
 2. `scopes`: `nil` or empty → every scope.
 3. `projectID`: when set, it must be hosted here (`notFound`); only that project and its descendants are searched, in
-   the project scopes (`projects`, `tasks`, `comments`, `docs`, `code`, `webTabs`, `sessions`); `skills` and `devices`
+   the project scopes (`projects`, `tickets`, `comments`, `docs`, `code`, `webTabs`, `sessions`); `skills` and `devices`
    give no result. Without it, every hosted project is searched, and `skills` and `devices` too.
 4. `SearchQuery(query)` empty → `{results: []}`.
 5. Every item of every selected scope gets `SearchMatcher.rank`; a matching item gives a result with the fields of §3
@@ -160,13 +160,13 @@ line for 20 s answers at once with what it finds before the deadline (possibly n
 ### 4.2 Sources
 
 - `projects`, `webTabs`: `registry.all()` and each project's cached project.yml ([host.md](host.md) §6).
-- `tasks`, `comments`: `tasks.list(projectID:)` ([host.md](host.md) §8).
+- `tickets`, `comments`: `tickets.list(projectID:)` ([host.md](host.md) §8).
 - `docs`, `code`: the file walk of §4.3 through the content cache of §4.4.
 - `skills`: each folder of `appSupport.skillsFolder` ([../claude/skills.md](../claude/skills.md)) whose name does not
   start with `.` and that holds a `SKILL.md`. The skill name is the folder name. Its files are walked like §4.3 (hidden
   names and symbolic links skipped) and read through the content cache with the text rule of §4.3 step 5; `fields` are
   `SKILL.md` first, then the other files by path.
-- `sessions`: `sessions.sessions(projectID:)` for `id`, `title`, `taskID` and `updated`. The texts are the `text` of
+- `sessions`: `sessions.sessions(projectID:)` for `id`, `title`, `ticketID` and `updated`. The texts are the `text` of
   each `user` and `assistant` event, in order, read from the project's `SessionArchive` with
   `history(_:before: nil, limit: nil)` ([../data/sessions.md](../data/sessions.md#reading-events)), so every event of
   the log is read (the default and maximum page sizes of the `sessions.history` method do not apply). They are cached

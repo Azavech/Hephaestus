@@ -303,7 +303,7 @@ page starts by itself, are never written back.
 - While the Web section is shown, `selection.item` is the active tab's id as a UUID string (`uuidString`,
   [../client/workspace.md](../client/workspace.md#selection)).
 - When the view appears, and whenever the item changes while it is shown: an item naming a listed tab makes it active;
-  an item naming a tab not listed yet (just opened from the Docs section, a task or a message) becomes `pendingTabID`.
+  an item naming a tab not listed yet (just opened from the Docs section, a ticket or a message) becomes `pendingTabID`.
 - When `activeTabID` changes, `selection.item` is set to it (nil when there is no tab).
 - Search results of kind `webTabs` ([search.md](search.md)) arrive through the item.
 

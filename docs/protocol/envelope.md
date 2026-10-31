@@ -43,10 +43,10 @@ methods in [methods.md](methods.md), the events in [events.md](events.md).
 ## Envelope
 
 ```json
-{"id":7,"kind":"request","method":"tasks.create","params":{"name":"Fix the sidebar","projectID":"HEPH"}}
+{"id":7,"kind":"request","method":"tickets.create","params":{"name":"Fix the sidebar","projectID":"HEPH"}}
 {"id":7,"kind":"response","result":{"comments":[],"created":"2026-10-29T21:04:00.123Z","description":"","id":"HEPH-13","name":"Fix the sidebar","status":"todo","updated":"2026-10-29T21:04:00.123Z"}}
 {"error":{"code":"notFound","message":"Project HEPH is not hosted on this Main."},"id":7,"kind":"response"}
-{"event":"task.removed","kind":"event","params":{"projectID":"HEPH","taskID":"HEPH-13"}}
+{"event":"ticket.removed","kind":"event","params":{"projectID":"HEPH","ticketID":"HEPH-13"}}
 ```
 
 | Member   | JSON type | Present in         | Meaning                                                         |
@@ -114,7 +114,7 @@ The `error` member is `{"code": <code>, "message": <text>}`. The codes, with the
 | `internal`     | Any other failure: I/O error, process spawn failure, encoding failure     |
 
 - `message` is one short English sentence suitable for the error banner ([ui/shell.md](../ui/shell.md)), for example
-  "Task HEPH-12 does not exist." It never contains a stack trace.
+  "Ticket HEPH-12 does not exist." It never contains a stack trace.
 - Local errors, thrown by `RPCPeer.request` and never sent on the wire:
 
 | Situation                                                 | Thrown error                                                        |

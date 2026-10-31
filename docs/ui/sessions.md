@@ -25,8 +25,8 @@ files:
 
 ---
 
-This doc covers every view of a Claude session (project chats, task sessions, Forge sessions), the permission UI, the
-message composer shared with task comments, and the client models of sessions: `SessionModel` (one transcript) and
+This doc covers every view of a Claude session (project chats, ticket sessions, Forge sessions), the permission UI, the
+message composer shared with ticket comments, and the client models of sessions: `SessionModel` (one transcript) and
 `SessionCenter` (pending permissions across the app). The session process and the events it produces are in
 [../claude/cli.md](../claude/cli.md); the events' client rules in [../protocol/events.md](../protocol/events.md).
 
@@ -54,7 +54,7 @@ it with `navigate(mainDeviceID:projectID:section:item:)` ([shell.md](shell.md#52
 
 `SessionStatusIndicator(status:)` (internal, in `ClaudeLabels.swift`) draws the indicator: the dots are circles 8 pt
 wide, the `ProgressView` has `.controlSize(.small)`, and its accessibility label is the title. The session list and the
-session tabs of a task ([tasks.md](tasks.md#claude-segment)) use it.
+session tabs of a ticket ([tickets.md](tickets.md#claude-segment)) use it.
 
 A session has a live CLI process when its status is `idle`, `starting`, `running` or `waitingPermission`.
 
@@ -69,7 +69,7 @@ A session has a live CLI process when its status is `idle`, `starting`, `running
 | `SessionKind`  | Title        |
 |----------------|--------------|
 | `project`      | Chat         |
-| `task`         | Task         |
+| `ticket`       | Ticket       |
 | `feedback`     | Feedback     |
 | `regeneration` | Regeneration |
 | `bundle`       | Bundle       |
@@ -111,12 +111,12 @@ section appears, pushes its session at once.
 Sessions come from `store.sessions`, in groups; a group without sessions is hidden; inside a group, by `updated`
 descending.
 
-| Group   | Sessions                           | Row line 2 (caption, secondary)                          |
-|---------|------------------------------------|----------------------------------------------------------|
-| Chats   | kind `project`                     | relative `updated`                                       |
-| Tasks   | kind `task`                        | "<task id> · <mode> · <relative updated>"                |
-| Bundles | kind `bundle`                      | "<bundle id> · <relative updated>"                       |
-| Forge   | kind `feedback` and `regeneration` | "<kind title> · <task id when set> · <relative updated>" |
+| Group   | Sessions                           | Row line 2 (caption, secondary)                            |
+|---------|------------------------------------|------------------------------------------------------------|
+| Chats   | kind `project`                     | relative `updated`                                         |
+| Tickets | kind `ticket`                      | "<ticket id> · <mode> · <relative updated>"                |
+| Bundles | kind `bundle`                      | "<bundle id> · <relative updated>"                         |
+| Forge   | kind `feedback` and `regeneration` | "<kind title> · <ticket id when set> · <relative updated>" |
 
 - Row line 1: the title (one line) and, trailing, the status indicator.
 - Context menu: the [session context menu](#session-context-menu).
@@ -131,11 +131,11 @@ is pushed).
 
 - Header "New Chat" and an options menu with only Permission Mode (first choice "Project Default") and Model (first
   choice "Project Default", then the aliases, then "Other…"). Both start at Project Default, which passes nil.
-- Body: "Chat with Claude about <project name>. Claude can plan, create and update tasks, edit code and more."
+- Body: "Chat with Claude about <project name>. Claude can plan, create and update tickets, edit code and more."
   (secondary, centered).
 - A `MessageComposer` (placeholder "Message Claude", the project's Main and identifier), focused when the view
   appears.
-- Send: `startSession(projectID:kind: .project, taskID: nil, mode: nil, title: nil, message: <trimmed text, nil when
+- Send: `startSession(projectID:kind: .project, ticketID: nil, mode: nil, title: nil, message: <trimmed text, nil when
   empty>, attachments: draft.uploads, permissionMode:model:)`; the Main titles the session ("Chat <n>"), stores the
   attachments and starts Claude with the message and its files
   ([../protocol/methods.md](../protocol/methods.md#sessionsstart)). Once the first message with text is sent, the
@@ -149,10 +149,10 @@ is pushed).
 ### Session context menu
 
 `SessionContextMenu(store:session:)` (internal) is the context menu of the rows of the session list and of the session
-tabs of a task ([tasks.md](tasks.md#claude-segment)). It is a `ViewModifier`, so the sheets and the confirmation it
-presents stay attached to the row or the tab: it is applied with `.sessionContextMenu(store:session:)`, an extension of
-`View`, or `.modifier(SessionContextMenu(store:session:))`. A row or a tab has no `SessionModel`, so its items call the
-request functions of `store.connection` directly, through `banners.perform`:
+tabs of a ticket ([tickets.md](tickets.md#claude-segment)). It is a `ViewModifier`, so the sheets and the confirmation
+it presents stay attached to the row or the tab: it is applied with `.sessionContextMenu(store:session:)`, an extension
+of `View`, or `.modifier(SessionContextMenu(store:session:))`. A row or a tab has no `SessionModel`, so its items call
+the request functions of `store.connection` directly, through `banners.perform`:
 
 | Item                                                                 | Shown            | Request                                                                                    |
 |----------------------------------------------------------------------|------------------|--------------------------------------------------------------------------------------------|
@@ -169,10 +169,10 @@ confirmation dialog whose button sends one ([shell.md](shell.md#63-detail)).
 
 ## Session view
 
-`SessionView(store:sessionID:showsTaskLink:)` shows one session: header, transcript, status line and composer, top to
-bottom. The Claude section, the Claude segment of a task ([tasks.md](tasks.md#claude-segment)) and every session shown
-through the selection (the Forge feedback flow, [../forge/feedback.md](../forge/feedback.md)) use it. Each view creates
-its own `SessionModel` when it appears, calls `appear()` in `onAppear` and `disappear()` in `onDisappear`.
+`SessionView(store:sessionID:showsTicketLink:)` shows one session: header, transcript, status line and composer, top to
+bottom. The Claude section, the Claude segment of a ticket ([tickets.md](tickets.md#claude-segment)) and every session
+shown through the selection (the Forge feedback flow, [../forge/feedback.md](../forge/feedback.md)) use it. Each view
+creates its own `SessionModel` when it appears, calls `appear()` in `onAppear` and `disappear()` in `onDisappear`.
 
 - While `model.info` is nil and the store is not loaded, the header shows "Loading…" and the composer is disabled.
 - When `model.isRemoved` is true, the view shows only "This session was deleted." (secondary, centered).
@@ -180,10 +180,10 @@ its own `SessionModel` when it appears, calls `appear()` in `onAppear` and `disa
 ### Header
 
 - Title: the session title (headline, one line).
-- Context (secondary): task session "<task id> · <mode>", followed by " · <bundle id>" for a task session of a bundle;
-  feedback "Feedback · <task id>"; regeneration "Regeneration"; bundle "Bundle · <bundle id>". With `showsTaskLink` and
-  a task id, the task id is a link that calls `context.navigate(mainDeviceID: store.mainDeviceID, projectID:
-  store.projectID, section: .tasks, item: <task id>)`.
+- Context (secondary): ticket session "<ticket id> · <mode>", followed by " · <bundle id>" for a ticket session of a
+  bundle; feedback "Feedback · <ticket id>"; regeneration "Regeneration"; bundle "Bundle · <bundle id>". With
+  `showsTicketLink` and a ticket id, the ticket id is a link that calls `context.navigate(mainDeviceID:
+  store.mainDeviceID, projectID: store.projectID, section: .tickets, item: <ticket id>)`.
 - Capsules: the permission mode title; the model, or "Default model" when nil; "All Tools Allowed" when
   `allowsAllTools` is true.
 - Options: `SessionOptionsMenu` (button `ellipsis.circle`).
@@ -250,7 +250,7 @@ Rendering per item:
 
 - `.user`: a trailing bubble, at most 85 % of the width, accent color at 15 % opacity, corner radius 12, 12 pt
   horizontal and 8 pt vertical padding, holding the text (plain, selectable) and, under it in a wrapping flow, the
-  attachments. Each attachment (`TaskAttachment`) is an
+  attachments. Each attachment (`TicketAttachment`) is an
   `AttachmentView` of [media.md](media.md) with `fileName: file`, `mimeType: type`, `size: size`, the `cacheKey`
   "<projectID>/sessions/<session id>/<file>" and a `download` that calls
   `downloadSessionAttachment(projectID:sessionID:fileName:size:progress:)` on `store.connection`
@@ -259,7 +259,7 @@ Rendering per item:
   (`deviceID` resolved in `workspace.mains` and the mesh records, omitted when unknown; shortened time).
 - `.assistant`: a leading bubble, styled like the user's bubble (at most 85 % of the width, corner radius 12, 12 pt
   horizontal and 8 pt vertical padding) but filled with the neutral `Color.secondary.opacity(0.15)`, holding the
-  HephMarkdown view ([markdown.md](markdown.md)) with the link rules of [tasks.md](tasks.md#description) and
+  HephMarkdown view ([markdown.md](markdown.md)) with the link rules of [tickets.md](tickets.md#description) and
   `selection: .acrossBlocks`, so the user can select and copy any range of the reply up to a table
   ([markdown.md](markdown.md#selection-across-blocks)). No caption
   under it. Only `.assistant` and `.streaming` items of kind `text` have this bubble; thinking rows, tool rows,
@@ -347,7 +347,7 @@ any other input gives an empty summary.
 | `WebSearch`                          | `query`                                                                     |
 | `Task`, `Agent`                      | `description`                                                               |
 | `TodoWrite`                          | "<n> items", n = number of elements of `todos`                              |
-| `mcp__hephaestus__*`                 | the first string value among `task`, `project`, `name`, `query`, `url`      |
+| `mcp__hephaestus__*`                 | the first string value among `ticket`, `project`, `name`, `query`, `url`    |
 | any other                            | the first string value of the top-level keys in alphabetical order, else "" |
 
 - `file_path`, `notebook_path` and `path` values that start with `<projectRoot>/` are shown relative to it
@@ -502,9 +502,9 @@ phase is `.active`), a banner shows at the top center of the content:
 
 ## Message composer
 
-`MessageComposer` is the composer of sessions and of task comments ([tasks.md](tasks.md#composer)). It uploads each
-attachment to the project's Main as soon as it is added, so that Send only names the uploads. Layout, top to bottom:
-the attachment tray (when there are attachments), then a row with the `AttachmentPickerButton` of
+`MessageComposer` is the composer of sessions and of ticket comments ([tickets.md](tickets.md#composer)). It uploads
+each attachment to the project's Main as soon as it is added, so that Send only names the uploads. Layout, top to
+bottom: the attachment tray (when there are attachments), then a row with the `AttachmentPickerButton` of
 [media.md](media.md#attachment-picking) (`paperclip`), the text view, the Stop button (when given) and the Send button.
 The composer has no outer padding: the views that contain it add their own.
 
@@ -815,7 +815,7 @@ public struct TextItem: Equatable, Sendable {
 }
 public struct UserMessageItem: Equatable, Sendable {
     public let id: String; public let at: Date; public let text: String
-    public let attachments: [TaskAttachment]                // files of .hephaestus/sessions/<session id>/
+    public let attachments: [TicketAttachment]                // files of .hephaestus/sessions/<session id>/
     public let deviceID: UUID?
 }
 public struct ToolItem: Equatable, Sendable {
@@ -864,7 +864,7 @@ public struct TranscriptBuilder: Sendable {
 public struct ClaudeView: View { public init(store: ProjectStore) }
 
 public struct SessionView: View {
-    public init(store: ProjectStore, sessionID: UUID, showsTaskLink: Bool = true)
+    public init(store: ProjectStore, sessionID: UUID, showsTicketLink: Bool = true)
 }
 
 public struct PermissionIndicator: View { public init() }            // toolbar item of every window
@@ -922,7 +922,7 @@ public struct MessageComposer: View {
   (`mainDeviceID`, `projectID`, `sessions`, `session(_:)`, `phase`, `isRemoved`, `project`, `connection`),
   `Selection`.
 - [../protocol/types.md](../protocol/types.md): `SessionInfo` (`statusLine`, `error`, `pendingPermissions`),
-  `ProjectSummary` (`pendingPermissionCount`), `SessionEvent`, `SessionEventType`, `TaskAttachment`,
+  `ProjectSummary` (`pendingPermissionCount`), `SessionEvent`, `SessionEventType`, `TicketAttachment`,
   `PermissionRequest`, `PermissionDecision`, `SessionStatus`, `SessionKind`, `SessionMode`, `PermissionMode`,
   `SessionPatch`, `SessionDeltaKind`, `UploadRef`.
 - [../protocol/events.md](../protocol/events.md): `ServerEvent` and the `session.*` and `permission.*` payloads.

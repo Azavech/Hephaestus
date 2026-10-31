@@ -18,8 +18,8 @@ events of its method.
 | `mesh.changed`         | `meshChanged`         | `MeshChangedPayload`         | broadcast                            | every Main                       |
 | `projects.changed`     | `projectsChanged`     | `ProjectsChangedPayload`     | broadcast                            | the Main hosting the projects    |
 | `project.changed`      | `projectChanged`      | `ProjectChangedPayload`      | broadcast                            | the hosting Main                 |
-| `task.changed`         | `taskChanged`         | `TaskChangedPayload`         | broadcast                            | the hosting Main                 |
-| `task.removed`         | `taskRemoved`         | `TaskRemovedPayload`         | broadcast                            | the hosting Main                 |
+| `ticket.changed`       | `ticketChanged`       | `TicketChangedPayload`       | broadcast                            | the hosting Main                 |
+| `ticket.removed`       | `ticketRemoved`       | `TicketRemovedPayload`       | broadcast                            | the hosting Main                 |
 | `bundle.changed`       | `bundleChanged`       | `BundleChangedPayload`       | broadcast                            | the hosting Main                 |
 | `bundle.removed`       | `bundleRemoved`       | `BundleRemovedPayload`       | broadcast                            | the hosting Main                 |
 | `files.changed`        | `filesChanged`        | `FilesChangedPayload`        | broadcast                            | the hosting Main                 |
@@ -54,8 +54,8 @@ public enum ServerEvent: Sendable, Hashable {
     case meshChanged(MeshChangedPayload)
     case projectsChanged(ProjectsChangedPayload)
     case projectChanged(ProjectChangedPayload)
-    case taskChanged(TaskChangedPayload)
-    case taskRemoved(TaskRemovedPayload)
+    case ticketChanged(TicketChangedPayload)
+    case ticketRemoved(TicketRemovedPayload)
     case bundleChanged(BundleChangedPayload)
     case bundleRemoved(BundleRemovedPayload)
     case filesChanged(FilesChangedPayload)
@@ -138,30 +138,31 @@ public enum ServerEvent: Sendable, Hashable {
 - Client: replaces its `Project` mirror when it holds one for that project. Devices showing a web tab whose stored URL
   changed navigate to it ([ui/web.md](../ui/web.md)).
 
-### task.changed
+### ticket.changed
 
-`TaskChangedPayload`:
+`TicketChangedPayload`:
 
-| Field       | Type       | Meaning                   |
-|-------------|------------|---------------------------|
-| `projectID` | `String`   | Project                   |
-| `task`      | `TaskItem` | The task after the change |
+| Field       | Type         | Meaning                     |
+|-------------|--------------|-----------------------------|
+| `projectID` | `String`     | Project                     |
+| `ticket`    | `TicketItem` | The ticket after the change |
 
-- Emitted when a task file is created or changed, whatever changed it; a file that does not parse gives a broken task.
-- Client: inserts or replaces the task in its mirror of that project.
+- Emitted when a ticket file is created or changed, whatever changed it; a file that does not parse gives a broken
+  ticket.
+- Client: inserts or replaces the ticket in its mirror of that project.
 
-### task.removed
+### ticket.removed
 
-`TaskRemovedPayload`:
+`TicketRemovedPayload`:
 
-| Field       | Type     | Meaning      |
-|-------------|----------|--------------|
-| `projectID` | `String` | Project      |
-| `taskID`    | `String` | Removed task |
+| Field       | Type     | Meaning        |
+|-------------|----------|----------------|
+| `projectID` | `String` | Project        |
+| `ticketID`  | `String` | Removed ticket |
 
-- Emitted when a task file is deleted, whatever deleted it.
-- Client: removes the task from its mirror; a detail view showing it shows that the task was deleted
-  ([ui/tasks.md](../ui/tasks.md)).
+- Emitted when a ticket file is deleted, whatever deleted it.
+- Client: removes the ticket from its mirror; a detail view showing it shows that the ticket was deleted
+  ([ui/tickets.md](../ui/tickets.md)).
 
 ### bundle.changed
 

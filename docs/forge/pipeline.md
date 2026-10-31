@@ -14,13 +14,14 @@ files:
 
 ---
 
-The Forge turns feedback into a new build of Hephaestus. A feedback session rewrites its feedback as a task and
-changes no file; the user later implements the task in a task session or a task bundle of the source project, which
-updates `docs/` and commits; a regeneration session brings the code in line with the docs and commits; the Forge checks their commits for personal data and pushes them; GitHub Actions
-builds and publishes the release `build-<N>`; every Mac updates itself. One Main runs the pipeline: the **Forge
-host**, the Main that hosts the Hephaestus source project. Capture and sheet: [feedback.md](feedback.md). Regeneration
-procedure and docs hash: [generation.md](generation.md). Workflow: [ci.md](ci.md). Self-update:
-[update.md](update.md). Screen: [../ui/forge.md](../ui/forge.md).
+The Forge turns feedback into a new build of Hephaestus. A feedback session rewrites its feedback as a ticket and
+changes no file; the user later implements the ticket in a ticket session or a ticket bundle of the source project,
+which updates `docs/` and commits; a regeneration session brings the code in line with the docs and commits; the Forge
+checks their commits for personal data and pushes them; GitHub Actions builds and publishes the release `build-<N>`;
+every Mac updates itself. One Main runs the pipeline: the **Forge host**, the Main that hosts the Hephaestus source
+project. Capture and sheet: [feedback.md](feedback.md). Regeneration procedure and docs hash:
+[generation.md](generation.md). Workflow: [ci.md](ci.md). Self-update: [update.md](update.md). Screen:
+[../ui/forge.md](../ui/forge.md).
 
 The repository is public and holds no personal data ([../public-repository.md](../public-repository.md)). Claude never
 pushes: the two Forge push tools ([MCP tools](#mcp-tools)) are the only way the commits of a Forge session are meant to
@@ -237,7 +238,9 @@ Forge passes it as `HEPHAESTUS_PRIVATE_TERMS` to every check it runs ([MCP tools
 
 Wire types, declared in `HephCore/Protocol/Types/ForgeTypes.swift` ([../protocol/types.md](../protocol/types.md)) with
 exactly these fields. JSON coding follows [../protocol/envelope.md](../protocol/envelope.md) (field names = Swift
-names, ISO 8601 dates with milliseconds, `UUID` uppercase, nil members omitted). All are `Codable`, `Sendable`,
+names, ISO 8601 dates with milliseconds, `UUID` uppercase, nil members omitted), except `ForgeItem.ticketID`, coded
+`taskID`, and `ForgeCycle.itemTicketIDs`, coded `itemTaskIDs` through their `CodingKeys`: the names they had before
+tasks were renamed tickets, so that an existing `forge.json` decodes as it is. All are `Codable`, `Sendable`,
 `Hashable`. `ForgeConfig`, `ForgeRelease`, `FeedbackContext` and `FeedbackSelection` are as in types.md.
 
 ### ForgeState
@@ -276,7 +279,7 @@ String enum, in pipeline order: `discussing`, `docsPushed`, `regenerating`, `reg
 
 ### ForgeTrigger
 
-String enum: `tool` (`forge_push_docs` pushed the commits of a task or bundle session), `manual` (`forge.regenerate`),
+String enum: `tool` (`forge_push_docs` pushed the commits of a ticket or bundle session), `manual` (`forge.regenerate`),
 `automatic` (a check found the docs ahead of the code).
 
 ### ForgeCycle
@@ -284,42 +287,42 @@ String enum: `tool` (`forge_push_docs` pushed the commits of a task or bundle se
 A cycle is one pass of regeneration, CI and release; `Identifiable` by `id`. It is **active** while its state is
 `regenerating`, `regenPushed`, `building` or `released`.
 
-| Field          | Type            | Meaning                                                                                               |
-|----------------|-----------------|-------------------------------------------------------------------------------------------------------|
-| `id`           | `UUID`          | new for each cycle                                                                                    |
-| `trigger`      | `ForgeTrigger`  | what started it                                                                                       |
-| `state`        | `ForgeStage`    | `regenerating`, `regenPushed`, `building`, `released`, `done` or `failed`                             |
-| `failedState`  | `ForgeStage?`   | the state it failed in; set with `failed`, nil otherwise                                              |
-| `error`        | `String?`       | the failure message; set with `failed`, nil otherwise                                                 |
-| `started`      | `Date`          | creation                                                                                              |
-| `updated`      | `Date`          | last change                                                                                           |
-| `targetCommit` | `String`        | `head.commit` when its last regeneration step ran                                                     |
-| `sessionID`    | `UUID?`         | the last regeneration session; nil when no session was needed                                         |
-| `attempts`     | `Int`           | regeneration sessions started for this cycle                                                          |
-| `regenCommit`  | `String?`       | full SHA CI builds: the commit `forge_push_regen` pushed, or `head.commit` when no session was needed |
-| `pushedAt`     | `Date?`         | when `regenCommit` was recorded or polling for its run restarted                                      |
-| `run`          | `ForgeRun?`     | the CI run of `regenCommit`                                                                           |
-| `release`      | `ForgeRelease?` | the release of `run`                                                                                  |
-| `itemTaskIDs`  | `[String]`      | task ids of the items in the cycle                                                                    |
+| Field           | Type            | Meaning                                                                                               |
+|-----------------|-----------------|-------------------------------------------------------------------------------------------------------|
+| `id`            | `UUID`          | new for each cycle                                                                                    |
+| `trigger`       | `ForgeTrigger`  | what started it                                                                                       |
+| `state`         | `ForgeStage`    | `regenerating`, `regenPushed`, `building`, `released`, `done` or `failed`                             |
+| `failedState`   | `ForgeStage?`   | the state it failed in; set with `failed`, nil otherwise                                              |
+| `error`         | `String?`       | the failure message; set with `failed`, nil otherwise                                                 |
+| `started`       | `Date`          | creation                                                                                              |
+| `updated`       | `Date`          | last change                                                                                           |
+| `targetCommit`  | `String`        | `head.commit` when its last regeneration step ran                                                     |
+| `sessionID`     | `UUID?`         | the last regeneration session; nil when no session was needed                                         |
+| `attempts`      | `Int`           | regeneration sessions started for this cycle                                                          |
+| `regenCommit`   | `String?`       | full SHA CI builds: the commit `forge_push_regen` pushed, or `head.commit` when no session was needed |
+| `pushedAt`      | `Date?`         | when `regenCommit` was recorded or polling for its run restarted                                      |
+| `run`           | `ForgeRun?`     | the CI run of `regenCommit`                                                                           |
+| `release`       | `ForgeRelease?` | the release of `run`                                                                                  |
+| `itemTicketIDs` | `[String]`      | ticket ids of the items in the cycle                                                                  |
 
 ### ForgeItem
 
-One per feedback task, per task of the source project whose task session pushed its docs, and per task of a bundle of
-the source project whose coordinator pushed its docs ([../services/bundles.md](../services/bundles.md));
-`var id: String { taskID }`.
+One per feedback ticket, per ticket of the source project whose ticket session pushed its docs, and per ticket of a
+bundle of the source project whose coordinator pushed its docs ([../services/bundles.md](../services/bundles.md));
+`var id: String { ticketID }`.
 
-| Field               | Type         | Meaning                                                           |
-|---------------------|--------------|-------------------------------------------------------------------|
-| `taskID`            | `String`     | the feedback task                                                 |
-| `projectID`         | `String`     | the source project when the item was created                      |
-| `title`             | `String`     | the task name, kept current (Items)                               |
-| `state`             | `ForgeStage` | see Items                                                         |
-| `feedbackSessionID` | `UUID`       | the session that created the item: feedback, task or coordinator  |
-| `docsCommit`        | `String?`    | full SHA of the last commit `forge_push_docs` pushed for the item |
-| `cycleID`           | `UUID?`      | the cycle the item is in                                          |
-| `error`             | `String?`    | the cycle's error while the item is `failed`                      |
-| `created`           | `Date`       | creation                                                          |
-| `updated`           | `Date`       | last change                                                       |
+| Field               | Type         | Meaning                                                            |
+|---------------------|--------------|--------------------------------------------------------------------|
+| `ticketID`          | `String`     | the feedback ticket                                                |
+| `projectID`         | `String`     | the source project when the item was created                       |
+| `title`             | `String`     | the ticket name, kept current (Items)                              |
+| `state`             | `ForgeStage` | see Items                                                          |
+| `feedbackSessionID` | `UUID`       | the session that created the item: feedback, ticket or coordinator |
+| `docsCommit`        | `String?`    | full SHA of the last commit `forge_push_docs` pushed for the item  |
+| `cycleID`           | `UUID?`      | the cycle the item is in                                           |
+| `error`             | `String?`    | the cycle's error while the item is `failed`                       |
+| `created`           | `Date`       | creation                                                           |
+| `updated`           | `Date`       | last change                                                        |
 
 ### ForgeRun
 
@@ -365,7 +368,7 @@ types above is written):
 
 ## Feedback intake
 
-`forge.feedback {screenshot, comment, context}` (`ForgeFeedbackParams` → `ForgeFeedbackResult {projectID, taskID,
+`forge.feedback {screenshot, comment, context}` (`ForgeFeedbackParams` → `ForgeFeedbackResult {projectID, ticketID,
 sessionID}`), sent by the feedback sheet ([feedback.md](feedback.md#sending)):
 
 1. Checks: the Forge is enabled (`unavailable`, `This Main is not the Forge.`); the configuration checks pass;
@@ -373,12 +376,12 @@ sessionID}`), sent by the feedback sheet ([feedback.md](feedback.md#sending)):
    `host.uploads.check([screenshot], projectID: <source project>)` passes (the upload errors of
    [../protocol/methods.md](../protocol/methods.md#using-uploads): the screenshot is a complete upload of the source
    project, [../services/files.md](../services/files.md#7-uploads)). The screenshot has no size limit.
-2. The feedback task is created in the source project with
-   `host.tasks.create(projectID:name:description:status:feedback:)`, status `todo`, `feedback` true: its id is the
+2. The feedback ticket is created in the source project with
+   `host.tickets.create(projectID:name:description:status:feedback:)`, status `todo`, `feedback` true: its id is the
    next of the project's feedback series, `<projectID>-F<n>` (`HEPH-F1`, `HEPH-F2`, …), counted by `feedbackCounter`
-   in `project.yml` ([../services/host.md](../services/host.md), [../data/task-yml.md](../data/task-yml.md#task-id)).
-   Feedback tasks created before this series existed keep their `<projectID>-<n>` id, and their items go on as
-   before:
+   in `project.yml` ([../services/host.md](../services/host.md),
+   [../data/ticket-yml.md](../data/ticket-yml.md#ticket-id)). Feedback tickets created before this series existed keep
+   their `<projectID>-<n>` id, and their items go on as before:
    - `name`: `Feedback: ` + the first line of the trimmed comment, cut to its first 60 characters.
    - `description`: the trimmed comment, a blank line, a `---` line, a blank line, then the context block:
 
@@ -395,44 +398,44 @@ sessionID}`), sent by the feedback sheet ([feedback.md](feedback.md#sending)):
      The values are those of `context`; the `Main`, `Project`, `Section` and `Item` lines are present only when
      `context.selection` has the value; the Main line is `- Main: <mainDeviceID>` when the registry has no such
      device.
-3. When `screenshot` is set: `host.tasks.addComment(projectID:taskID:body:attachments:author:)` on the task, body
+3. When `screenshot` is set: `host.tickets.addComment(projectID:ticketID:body:attachments:author:)` on the ticket, body
    `Screenshot`, attachments `[UploadRef(uploadID: screenshot.uploadID, fileName: "screenshot.png")]`, which moves the
-   upload's file into the task's attachments folder; author = the registry name of the requesting device (`from`;
-   `context.deviceName` when the registry has none). When it fails, the error is returned (the task stays, without the
+   upload's file into the ticket's attachments folder; author = the registry name of the requesting device (`from`;
+   `context.deviceName` when the registry has none). When it fails, the error is returned (the ticket stays, without the
    screenshot, and the upload stays usable).
 4. The feedback session is started with `host.sessions.start(SessionStart(…))` ([../claude/cli.md](../claude/cli.md)):
-   `projectID` = the source project, `kind` `.feedback`, `taskID` = the new task, `permissionMode` `.acceptEdits`,
-   `deviceID` = this Main's id, no title, mode, message, attachments or model. The session is titled `Feedback <task
-   id>` until the title generated from its first message replaces it with `<task id> · <generated title>`
+   `projectID` = the source project, `kind` `.feedback`, `ticketID` = the new ticket, `permissionMode` `.acceptEdits`,
+   `deviceID` = this Main's id, no title, mode, message, attachments or model. The session is titled `Feedback <ticket
+   id>` until the title generated from its first message replaces it with `<ticket id> · <generated title>`
    (`HEPH-F1 · <generated title>`, [../claude/cli.md](../claude/cli.md#510-generated-titles-sessiontitler)), starts in
    `acceptEdits`, which the user can change like its Allow All Tools, its permission rules and
    environment are those of feedback sessions
    ([../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)), its model is the project's default,
-   and it starts with the generated feedback message of [../claude/prompts.md](../claude/prompts.md) (the task's
+   and it starts with the generated feedback message of [../claude/prompts.md](../claude/prompts.md) (the ticket's
    description and the absolute path of `screenshot.png`).
-5. The item is created: `state` `discussing`, `title` = the task name, `feedbackSessionID` = the session's id,
+5. The item is created: `state` `discussing`, `title` = the ticket name, `feedbackSessionID` = the session's id,
    `created` = `updated` = now; `forge.json` is written; `forge.changed` is sent.
-6. Result: `{projectID: <source project>, taskID, sessionID}`.
+6. Result: `{projectID: <source project>, ticketID, sessionID}`.
 
-When step 4 fails, no item is created, the task stays, and the error is returned.
+When step 4 fails, no item is created, the ticket stays, and the error is returned.
 
 ## Items
 
 | From                                         | Event                                             | To                | Effects                                                                       |
 |----------------------------------------------|---------------------------------------------------|-------------------|-------------------------------------------------------------------------------|
 | (none)                                       | `forge.feedback`                                  | `discussing`      | Feedback intake                                                               |
-| (none)                                       | `forge_push_docs` pushed `<sha>` for its task     | `docsPushed`      | created for a task without an item (MCP tools step 8)                         |
-| `discussing`, `docsPushed`, `done`, `failed` | `forge_push_docs` pushed `<sha>` for its task     | `docsPushed`      | `docsCommit` = `<sha>`; `cycleID`, `error` cleared; join rule; `tool` trigger |
-| `regenPushed`, `building`, `released`        | `forge_push_docs` pushed `<sha>` for its task     | unchanged         | `docsCommit` = `<sha>`                                                        |
-| `docsPushed`, `failed`                       | the join rule matches                             | the cycle's state | `cycleID` = the cycle; task id added to `itemTaskIDs`                         |
+| (none)                                       | `forge_push_docs` pushed `<sha>` for its ticket   | `docsPushed`      | created for a ticket without an item (MCP tools step 8)                       |
+| `discussing`, `docsPushed`, `done`, `failed` | `forge_push_docs` pushed `<sha>` for its ticket   | `docsPushed`      | `docsCommit` = `<sha>`; `cycleID`, `error` cleared; join rule; `tool` trigger |
+| `regenPushed`, `building`, `released`        | `forge_push_docs` pushed `<sha>` for its ticket   | unchanged         | `docsCommit` = `<sha>`                                                        |
+| `docsPushed`, `failed`                       | the join rule matches                             | the cycle's state | `cycleID` = the cycle; ticket id added to `itemTicketIDs`                     |
 | in a cycle                                   | the cycle changes state                           | the cycle's state | `error` = the cycle's error when `failed`, else nil                           |
-| `released`                                   | Completion writes its comment                     | `done`            | comment; the task's status is left as it is                                   |
-| any                                          | its task changes name (`task.changed`)            | unchanged         | `title` = the new name                                                        |
-| any                                          | its task is deleted (`task.removed`)              | (removed)         | removed from `items` and from its cycle's `itemTaskIDs`                       |
+| `released`                                   | Completion writes its comment                     | `done`            | comment; the ticket's status is left as it is                                 |
+| any                                          | its ticket changes name (`ticket.changed`)        | unchanged         | `title` = the new name                                                        |
+| any                                          | its ticket is deleted (`ticket.removed`)          | (removed)         | removed from `items` and from its cycle's `itemTicketIDs`                     |
 
-An item's task is the task of `projectID` whose id is `taskID`. Its feedback session renames it when it rewrites the
-feedback as a task ([../claude/prompts.md](../claude/prompts.md#feedback-part)); `task.changed` of a task whose name
-equals the item's `title` changes nothing.
+An item's ticket is the ticket of `projectID` whose id is `ticketID`. Its feedback session renames it when it rewrites
+the feedback as a ticket ([../claude/prompts.md](../claude/prompts.md#feedback-part)); `ticket.changed` of a ticket
+whose name equals the item's `title` changes nothing.
 
 **Join rule.** An item in `docsPushed` or `failed` joins the active cycle when its `docsCommit` is an ancestor of the
 cycle's reference commit (`git merge-base --is-ancestor <docsCommit> <reference>` exits 0; a commit is its own
@@ -477,10 +480,10 @@ from `building`.
    changes. Commit or discard them, then retry.`; and `git rev-list refs/remotes/origin/<branch>..HEAD` must print
    nothing, else `failed` with `Unpushed commits on <branch>: push or remove them, then retry.`, since
    `forge_push_regen` pushes only the regeneration's own commits. The project data the app writes under `.hephaestus/`
-   (the `feedbackCounter` of `project.yml` raised by each feedback task, the web tabs) never counts: git ignores that
+   (the `feedbackCounter` of `project.yml` raised by each feedback ticket, the web tabs) never counts: git ignores that
    folder.
 5. The join rule runs. Then `host.sessions.start(SessionStart(…))` with `projectID` = the source project, `kind`
-   `.regeneration`, no `taskID`, `title` `Regeneration <yyyy-MM-dd HH:mm>` (local time; ` (attempt <n>)` appended when
+   `.regeneration`, no `ticketID`, `title` `Regeneration <yyyy-MM-dd HH:mm>` (local time; ` (attempt <n>)` appended when
    `n` > 1), no message, no attachments, `deviceID` = this Main's id, and `regeneration` = a `RegenerationContext`
    ([../claude/prompts.md](../claude/prompts.md)):
 
@@ -489,7 +492,7 @@ from `building`.
    | `trigger`      | the cycle's `trigger` raw value                                                                                                                                                                                                    |
    | `attempt`      | `attempts` + 1                                                                                                                                                                                                                     |
    | `targetCommit` | `targetCommit`                                                                                                                                                                                                                     |
-   | `items`        | one `RegenerationItem {taskID, docsCommit}` per item of the cycle                                                                                                                                                                  |
+   | `items`        | one `RegenerationItem {ticketID, docsCommit}` per item of the cycle                                                                                                                                                                  |
    | `failedRun`    | with `fixRun`: `FailedCIRun {number, url, conclusion, jobs}`, `jobs` = the failed jobs (at most 3; none when the jobs request fails), each `{name, url, log}`, `log` = the last 300 lines of its log or `Log unavailable: <error>` |
 
    The session starts in the permission mode `acceptEdits`, its permission rules and environment are those of
@@ -595,17 +598,17 @@ they run can still drop that block ([../public-repository.md](../public-reposito
 tools are the only way their commits are meant to reach GitHub; commits that reach it another way are checked at the
 next check ([Checks and triggers](#checks-and-triggers)).
 
-`forge_push_docs` (task and bundle sessions) and `forge_push_regen` (regeneration sessions) run these steps in order, the
-**Forge push gate** ([../public-repository.md](../public-repository.md#forge-push-gate)); the first failure ends the
+`forge_push_docs` (ticket and bundle sessions) and `forge_push_regen` (regeneration sessions) run these steps in order,
+the **Forge push gate** ([../public-repository.md](../public-repository.md#forge-push-gate)); the first failure ends the
 call with its text. `<tool>` is the tool's name and `<branch>` the configured branch.
 
 1. **Session.**
-   - `forge_push_docs`: the session is a `task` session of the source project without a `bundleID`, or the
+   - `forge_push_docs`: the session is a `ticket` session of the source project without a `bundleID`, or the
      coordinator of a bundle of the source project in `running` or `review` (`coordinatorSessionID`,
-     [../services/bundles.md](../services/bundles.md)), else `forge_push_docs is only available in the task sessions
-     and the bundle sessions of the source project; the coordinator of a bundle pushes the work of its task
+     [../services/bundles.md](../services/bundles.md)), else `forge_push_docs is only available in the ticket sessions
+     and the bundle sessions of the source project; the coordinator of a bundle pushes the work of its ticket
      sessions.`; the cycle is not `regenerating`, else `A regeneration is working in this repository; call
-     forge_push_docs again when it has pushed.` (task and regeneration sessions share the working tree and the
+     forge_push_docs again when it has pushed.` (ticket and regeneration sessions share the working tree and the
      branch).
    - `forge_push_regen`: the session is `cycle.sessionID` and the cycle is `regenerating`, or `failed` with
      `failedState` `regenerating`, else `forge_push_regen is only available in the current Forge regeneration
@@ -680,18 +683,19 @@ call with its text. `<tool>` is the tool's name and `<branch>` the configured br
    is written: the Forge trusts what it checked on a trusted base, and leaves the commits pushed elsewhere to the next
    check ([Checks and triggers](#checks-and-triggers)).
    - `forge_push_docs`: the session's items take the event of [Items](#items); then, for those in `docsPushed`, the
-     join rule; then a check; then the `tool` trigger. The items of a task session are the item of its task; those of
-     a coordinator are the items of the tasks of its bundle, and `<task id>` below is then the bundle id. A task
-     without an item gets a new one first (`state` `docsPushed`, `title` = the task name, `feedbackSessionID` = the
-     calling session, `created` = `updated` = now), unless the task no longer exists. Result, the first matching row:
+     join rule; then a check; then the `tool` trigger. The items of a ticket session are the item of its ticket; those
+     of a coordinator are the items of the tickets of its bundle, and `<ticket id>` below is then the bundle id. A
+     ticket without an item gets a new one first (`state` `docsPushed`, `title` = the ticket name, `feedbackSessionID` =
+     the calling session, `created` = `updated` = now), unless the ticket no longer exists. Result, the first matching
+     row:
 
      | Situation                                                                                                            | Text                                                                                                                                                                                  |
      |----------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-     | the item is in the active cycle (it joined now or was in it already); for a coordinator, every item of its bundle is | `Pushed docs commit <sha8> for <task id>. It is part of the regeneration in progress.`                                                                                                |
-     | the `tool` trigger started a cycle                                                                                   | `Pushed docs commit <sha8> for <task id>. Regeneration started.`                                                                                                                      |
-     | a cycle is active                                                                                                    | `Pushed docs commit <sha8> for <task id>. It will be regenerated after the regeneration in progress.`                                                                                 |
-     | `forge.autoRegenerate` is off                                                                                        | `Pushed docs commit <sha8> for <task id>. Regenerate automatically is off: the user starts the regeneration from the Forge screen.`                                                   |
-     | `head` is not trusted                                                                                                | `Pushed docs commit <sha8> for <task id>. Commits pushed to <branch> outside the Forge are not trusted yet: the regeneration waits until they are (Forge screen).`                    |
+     | the item is in the active cycle (it joined now or was in it already); for a coordinator, every item of its bundle is | `Pushed docs commit <sha8> for <ticket id>. It is part of the regeneration in progress.`                                                                                                |
+     | the `tool` trigger started a cycle                                                                                   | `Pushed docs commit <sha8> for <ticket id>. Regeneration started.`                                                                                                                      |
+     | a cycle is active                                                                                                    | `Pushed docs commit <sha8> for <ticket id>. It will be regenerated after the regeneration in progress.`                                                                                 |
+     | `forge.autoRegenerate` is off                                                                                        | `Pushed docs commit <sha8> for <ticket id>. Regenerate automatically is off: the user starts the regeneration from the Forge screen.`                                                   |
+     | `head` is not trusted                                                                                                | `Pushed docs commit <sha8> for <ticket id>. Commits pushed to <branch> outside the Forge are not trusted yet: the regeneration waits until they are (Forge screen).`                    |
 
    - `forge_push_regen`: `regenCommit` = `<sha>`, `pushedAt` = now, state `regenPushed`, join rule, polling starts.
      Result: `Pushed regeneration commit <sha8>. The Forge now waits for the CI run and the release.`.
@@ -812,11 +816,11 @@ When the release of the cycle's run is found:
    `released`; `forge.json` is written and `forge.changed` sent. Every Mac checks for the update at once
    ([update.md](update.md#schedule)).
 2. For each item of the cycle still `released`, in order:
-   `host.tasks.addComment(projectID:taskID:body:attachments:author:)` with the body below, no attachment and author =
-   this Main's device name; the item becomes `done`; `forge.json` is written. The task's status is not changed: its
+   `host.tickets.addComment(projectID:ticketID:body:attachments:author:)` with the body below, no attachment and author
+   = this Main's device name; the item becomes `done`; `forge.json` is written. The ticket's status is not changed: its
    feedback session left it in `review`
-   ([../services/host.md](../services/host.md#81-status-of-a-task-while-its-sessions-work)), and the user sets it to
-   `done`. A task that no longer exists (`notFound`) removes its item. Any other error stops
+   ([../services/host.md](../services/host.md#81-status-of-a-ticket-while-its-sessions-work)), and the user sets it to
+   `done`. A ticket that no longer exists (`notFound`) removes its item. Any other error stops
    Completion: `lastError` is its message and the cycle stays `released`.
    Completion runs again from this step after every check while the cycle is `released`, whatever the check's outcome
    ([Checks and triggers](#checks-and-triggers)), and at the next enabling
@@ -844,7 +848,7 @@ alike ([../protocol/events.md](../protocol/events.md)). `configure(nil)` while t
 ## Methods
 
 The host decodes the `forge.*` params and calls `status()`, `feedback(screenshot:comment:context:from:)` (`from` = the
-requesting device), `regenerate()` and `retry(itemTaskID:)` ([../services/host.md](../services/host.md)). Params and
+requesting device), `regenerate()` and `retry(itemTicketID:)` ([../services/host.md](../services/host.md)). Params and
 results: [../protocol/methods.md](../protocol/methods.md). Every method except `forge.status` fails with `unavailable`
 `This Main is not the Forge.` while the Forge is not enabled.
 
@@ -853,7 +857,7 @@ results: [../protocol/methods.md](../protocol/methods.md). Every method except `
 | `forge.status`     | the current `ForgeState`; may start a background check (Checks and triggers). While the Forge is not enabled: a state with `enabled` false, `hostDeviceID` = this Main, `appDocsHash` = `DocsHash.embedded`, `items` empty and the other fields nil | —                                                                                                    |
 | `forge.feedback`   | Feedback intake                                                                                                                                                                                                                                     | `unavailable`, `locked`, `badRequest`, `notFound` and `conflict` (the screenshot upload), `internal` |
 | `forge.regenerate` | answers `{}` after the configuration checks and the conflict check, then works in the background: a check of its own (Checks and triggers), then Retry when the cycle is `failed`, else the `manual` trigger                                        | `unavailable`, `conflict` `A regeneration is already in progress (<state>).`                         |
-| `forge.retry`      | answers `{}` after the checks (the item must be `failed` and in the current cycle), then works in the background: a check of its own, as for `forge.regenerate`, then Retry                                                                         | `unavailable`, `notFound` `No Forge item for <task id>.`, `conflict` `<task id> has not failed.`     |
+| `forge.retry`      | answers `{}` after the checks (the item must be `failed` and in the current cycle), then works in the background: a check of its own, as for `forge.regenerate`, then Retry                                                                         | `unavailable`, `notFound` `No Forge item for <ticket id>.`, `conflict` `<ticket id> has not failed.` |
 
 Errors of the background work go to the cycle (`failed`) or to `lastError`.
 
@@ -879,11 +883,11 @@ operation is cancelled fails with `unavailable` `This Main is not the Forge.`. `
 ## Concurrency
 
 `ForgeService` is an actor. Every operation that changes state (enabling and disabling, checks, triggers, regeneration
-steps, Retry, tool calls, intake, polling steps, Completion, session and task notifications) runs one at a time, in
+steps, Retry, tool calls, intake, polling steps, Completion, session and ticket notifications) runs one at a time, in
 arrival order, through one internal queue, so no operation interleaves with another across its `await`s.
 `config()` and `status()` answer at once from the current state, without waiting for the queue.
 
-The notifications `sessionChanged`, `sessionRemoved`, `taskChanged` and `taskRemoved` add their operation to the
+The notifications `sessionChanged`, `sessionRemoved`, `ticketChanged` and `ticketRemoved` add their operation to the
 queue and return without waiting for it. `HostService.emit` awaits them, and an operation that starts a session
 (Feedback intake, a regeneration step) emits `session.changed` while it holds the queue: waiting there would deadlock.
 
@@ -909,7 +913,7 @@ public actor ForgeService {
     public func feedback(screenshot: UploadRef?, comment: String, context: FeedbackContext,
                          from deviceID: UUID) async throws -> ForgeFeedbackResult
     public func regenerate() async throws
-    public func retry(itemTaskID: String) async throws
+    public func retry(itemTicketID: String) async throws
     /// MCP tools forge_push_docs and forge_push_regen, through MCPHost: the tool result text, or a thrown ProtocolError
     /// whose message is the error text.
     public func pushDocs(sessionID: UUID) async throws -> String
@@ -929,11 +933,11 @@ public actor ForgeService {
     public func addPrivateTerm(_ term: String) async throws
     /// Private terms: adds the line "# not private: <term>" to the file (Settings "Dismiss"); throws as addPrivateTerm.
     public func dismissPrivateTerm(_ term: String) async throws
-    /// Called by HostService.emit for every session.changed, session.removed, task.changed and task.removed.
+    /// Called by HostService.emit for every session.changed, session.removed, ticket.changed and ticket.removed.
     public func sessionChanged(projectID: String, session: SessionInfo) async
     public func sessionRemoved(projectID: String, sessionID: String) async   // the session id's uuidString
-    public func taskChanged(projectID: String, task: TaskItem) async
-    public func taskRemoved(projectID: String, taskID: String) async
+    public func ticketChanged(projectID: String, ticket: TicketItem) async
+    public func ticketRemoved(projectID: String, ticketID: String) async
 }
 
 /// GitHub REST client of this doc; also used by UpdateService (update.md).
@@ -1039,7 +1043,7 @@ enum PrivateTerms {
 `browser_download_url`, `run_number`, `head_sha`, `head_branch`) and ISO 8601 dates without fractional seconds.
 
 Host members used ([../services/host.md](../services/host.md)): `registry.hosted(_:)` (root, project file),
-`registry.checkWritable(_:)` (the source project or one of its ancestors migrating), `tasks` (`create`, `addComment`,
+`registry.checkWritable(_:)` (the source project or one of its ancestors migrating), `tickets` (`create`, `addComment`,
 `update`), `sessions` (`SessionService.start(_:)`, `sessions(projectID:)`), `emit(_:)`, `mesh.localDevice()`,
 `mesh.snapshot()` (also the devices of Private terms), `registry.all()` and `registry.descendants(of:)` (the projects of
 Private terms), `hostInfo.claudePath` (nil: the Claude CLI is not available) and `hostInfo.gitAvailable`,
@@ -1069,7 +1073,7 @@ The actor's stored state is `internal`, so that the extensions in the other file
 |----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------|
 | `ForgeConfig` (`publicRepository`), `ForgeRelease`, `FeedbackContext`, `FeedbackSelection`, `ForgeFeedbackParams`, `ForgeFeedbackResult`, `ForgeRetryParams`, `ForgeChangedPayload`, `SessionInfo` | [../protocol/types.md](../protocol/types.md), [../protocol/methods.md](../protocol/methods.md) |
 | `ProtocolError`                                                                                                                                                                                    | [../protocol/envelope.md](../protocol/envelope.md)                                             |
-| `HostService` (`tasks`, `sessions`, `registry`, `mesh`, `hostInfo`, `emit`, `appSupport`), its calls of `configure`, `shutdown`, `config`, the `forge.*` functions and the notifications           | [../services/host.md](../services/host.md)                                                     |
+| `HostService` (`tickets`, `sessions`, `registry`, `mesh`, `hostInfo`, `emit`, `appSupport`), its calls of `configure`, `shutdown`, `config`, the `forge.*` functions and the notifications         | [../services/host.md](../services/host.md)                                                     |
 | `UploadRef` (the feedback screenshot)                                                                                                                                                              | [../protocol/types.md](../protocol/types.md#uploadref)                                         |
 | `UploadService.check` (`host.uploads`)                                                                                                                                                             | [../services/files.md](../services/files.md#7-uploads)                                         |
 | `SessionService`, `SessionStart`, `ChildProcess`, `CapturedOutput`, `LoginEnvironment`, the permission rules and environment of the sessions of 3.5                                                | [../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)                      |
@@ -1080,7 +1084,7 @@ The actor's stored state is `internal`, so that the extensions in the other file
 | the `public-check` and `public-check-terms` jobs                                                                                                                                                   | [ci.md](ci.md)                                                                                 |
 | `DeviceRecord` (names and addresses of Private terms)                                                                                                                                              | [../protocol/types.md](../protocol/types.md)                                                   |
 | `HostedProject`, `registry.all()`, `registry.descendants(of:)` (the projects of Private terms)                                                                                                     | [../services/host.md](../services/host.md#6-projectregistry)                                   |
-| task creation, comments, attachments, statuses                                                                                                                                                     | [../data/task-yml.md](../data/task-yml.md)                                                     |
+| ticket creation, comments, attachments, statuses                                                                                                                                                   | [../data/ticket-yml.md](../data/ticket-yml.md)                                                 |
 | `DeviceSettings.forge`, `DeviceSettings.projectsFolderURL`, `AppSupport`, `JSONFile`, `AtomicFile`, `private-terms.txt` in Application Support                                                     | [../data/app-storage.md](../data/app-storage.md)                                               |
 | the Forge pane writing the `forge` settings, its Source project and Private terms rows                                                                                                             | [../ui/settings.md](../ui/settings.md)                                                         |
 | `DocsHash`                                                                                                                                                                                         | [generation.md](generation.md)                                                                 |
