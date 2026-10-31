@@ -306,8 +306,9 @@ logged (`Log.ui`).
 ### Attach menu
 
 - `AttachmentPickerButton` is a `Menu` labeled `Label("Attach", systemImage: "paperclip")` with
-  `.labelStyle(.iconOnly)`. Its items set state: "Choose Files…" sets `isImporterPresented`; "Photo Library…" (iOS and
-  iPadOS) sets `isPhotosPickerPresented`.
+  `.labelStyle(.iconOnly)`. It keeps the platform's default menu style, chevron included: no `.menuStyle`,
+  `.buttonStyle`, padding or frame of its own. Its items set state: "Choose Files…" sets `isImporterPresented`; "Photo
+  Library…" (iOS and iPadOS) sets `isPhotosPickerPresented`.
 - The pickers are modifiers of the menu, not menu items:
   `.fileImporter(isPresented: $isImporterPresented, allowedContentTypes: [.item], allowsMultipleSelection: true)` and,
   on iOS and iPadOS, `.photosPicker(isPresented: $isPhotosPickerPresented, selection: $photoItems,

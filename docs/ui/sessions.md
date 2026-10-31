@@ -473,8 +473,11 @@ the attachment tray (when there are attachments), then a row with the `Attachmen
 [media.md](media.md#attachment-picking) (`paperclip`), the text view, the Stop button (when given) and the Send button.
 The composer has no outer padding: the views that contain it add their own.
 
-- Text view: `ComposerTextView`; it grows from 1 to 8 lines, then scrolls; placeholder in secondary color; Return
-  inserts a line break; ⌘↩ sends when Send is enabled.
+- Row: an `HStack(alignment: .bottom, spacing: 8)`. Its items have no padding of their own: the bottom of each button
+  (attach, Stop, Send) is the bottom of the text view's box, at every height of the text view.
+- Text view: `ComposerTextView` in a box: a rounded rectangle of corner radius 8, filled with the secondary color at
+  8 % opacity, with a 1 pt border in the separator color. It grows from 1 to 8 lines, then scrolls; placeholder in
+  secondary color; Return inserts a line break; ⌘↩ sends when Send is enabled.
 - Tray: a horizontal scroll of chips, one per attachment, in the order they were added. A chip has a 40 × 40 pt
   thumbnail (images: decoded from the source with `ImageDecoding`, [media.md](media.md#loading-and-caching)) or the
   `doc` symbol, the name (one line, middle truncation, at most 160 pt), then a line and buttons by state:
