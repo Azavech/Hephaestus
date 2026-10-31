@@ -61,7 +61,7 @@ Validation, applied as in [../data/task-yml.md](../data/task-yml.md#validation-a
 | `id`            | none                                                    | a bundle id equal to the file name without `.yml`     | `id <id> does not match the file name <file name>`          |
 | `name`          | leading and trailing whitespace and line breaks removed | not empty, no line break                              | `the name must not be empty and must be on one line`        |
 | `status`        | none                                                    | a `BundleStatus` value (checked by decoding)          | `status: invalid value`                                     |
-| `base`          | whitespace trimmed; empty becomes absent                | no whitespace                                         | `base must be a branch name`                                |
+| `base`          | whitespace trimmed; empty becomes absent                | no whitespace, does not start with `-`                | `base must be a branch name`                                |
 | `tasks[i].task` | `TaskID(_:)` form                                       | a task id of the bundle's project, unique in the file | `tasks[<i>].task must be a task of <projectID> listed once` |
 
 `coordinator` and `tasks[i].session` are decoded as `UUID`s. A file that breaks a rule, cannot be read or is not valid
@@ -131,11 +131,13 @@ git that is not found gives `strerror(ENOENT)`, one that cannot be started the `
 - **Removing.** `git worktree remove --force <folder>`; when it fails, its error is logged; when the folder is still
   there, it is deleted; then `git worktree prune`.
 - **Brought in.** A branch's work is on `<base>` when `git cherry <base> task/<id>` prints no line starting with `+`:
-  every commit of the branch has an equal change on `<base>`.
-- **Removing the work** (`bundles.delete`, `finish`). For each task of the bundle, in order: its worktree is removed
-  when its folder exists; then, when the bundle has a `base` and the task's branch exists, the branch is deleted
-  (`git branch -D task/<id>`) when its work is on `base`, else kept. Without a `base` no branch is looked at; a branch
-  that does not exist is neither deleted nor kept.
+  every commit of the branch has an equal change on `<base>`. When `<base>` does not exist (`git rev-parse --verify
+  --quiet refs/heads/<base>` exits with status 1), the work is not on it.
+- **Removing the work** (`bundles.delete`, `finish`). For each task of the bundle, in order, except a task that is in
+  another bundle of the project whose status is not `done` (its worktree and branch are that bundle's now): its
+  worktree is removed when its folder exists; then, when the bundle has a `base` and the task's branch exists, the
+  branch is deleted (`git branch -D task/<id>`) when its work is on `base`, else kept. Without a `base` no branch is
+  looked at; a branch that does not exist is neither deleted nor kept.
 
 ## BundleService
 
@@ -144,7 +146,9 @@ git that is not found gives `strerror(ENOENT)`, one that cannot be started the `
 a cache, loaded with the project and dropped with it, and runs every change inside `registry.write(projectID)`. Each
 change emits `bundleChanged {projectID, bundle}` (`bundleRemoved {projectID, bundleID}` for a deletion) when the
 bundle differs from the cached one. The event is emitted before the method or tool returns: the device that called a
-method receives it before the response.
+method receives it before the response. The methods and tools of one bundle run one at a time, in the order they
+arrive, so that two calls cannot both pass a status check (two `bundles.start` of a `draft` would start two
+coordinators).
 
 A `bundleID` that `BundleID(_:)` does not parse with the project's identifier, or without a cached bundle: `notFound`
 `Bundle <id> does not exist.`; so is a bundle file that a change finds missing (`.notFound("bundle <id> not found")`).
