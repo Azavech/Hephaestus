@@ -11,12 +11,14 @@ public struct MCPSessionContext: Sendable, Equatable {
     public var projectID: String
     public var kind: SessionKind
     public var taskID: String?
+    public var bundleID: String?
 
-    public init(sessionID: UUID, projectID: String, kind: SessionKind, taskID: String?) {
+    public init(sessionID: UUID, projectID: String, kind: SessionKind, taskID: String?, bundleID: String?) {
         self.sessionID = sessionID
         self.projectID = projectID
         self.kind = kind
         self.taskID = taskID
+        self.bundleID = bundleID
     }
 }
 

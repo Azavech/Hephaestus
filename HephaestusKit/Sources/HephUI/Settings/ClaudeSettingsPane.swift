@@ -5,8 +5,8 @@ import HephClient
 import HephCore
 import SwiftUI
 
-/// Settings ▸ Claude: the CLI path and status, the defaults of new sessions and the idle timeout (docs/ui/settings.md,
-/// "Claude").
+/// Settings ▸ Claude: the CLI path and status, the defaults of new sessions, the idle timeout and the parallel task
+/// sessions of a bundle (docs/ui/settings.md, "Claude").
 struct ClaudeSettingsPane: View {
     @Environment(AppModel.self) private var appModel
     @Environment(Workspace.self) private var workspace
@@ -19,7 +19,7 @@ struct ClaudeSettingsPane: View {
     @FocusState private var isPathFocused: Bool
 
     private enum Control: Hashable {
-        case path, model, permissionMode, idleMinutes
+        case path, model, permissionMode, idleMinutes, maxParallel
     }
 
     /// The idle choices: minutes and title.
@@ -97,6 +97,18 @@ struct ClaudeSettingsPane: View {
                 .pickerStyle(.menu)
                 errorText(.idleMinutes)
             }
+            Section {
+                LabeledContent("Parallel task sessions") {
+                    Stepper(value: maxParallel, in: 1...16) {
+                        Text(String(settings.settings.bundles.maxParallel) + " per bundle")
+                    }
+                }
+                errorText(.maxParallel)
+            } header: {
+                Text("Bundles")
+            } footer: {
+                Text("How many task sessions of a bundle run at the same time on this Mac.")
+            }
         }
         .formStyle(.grouped)
         .onChange(of: settings.settings.claudePath, initial: true) {
@@ -158,6 +170,15 @@ struct ClaudeSettingsPane: View {
         } set: { minutes in
             guard minutes != settings.settings.sessionIdleMinutes else { return }
             write(.idleMinutes) { $0.sessionIdleMinutes = minutes }
+        }
+    }
+
+    private var maxParallel: Binding<Int> {
+        Binding {
+            settings.settings.bundles.maxParallel
+        } set: { value in
+            guard value != settings.settings.bundles.maxParallel else { return }
+            write(.maxParallel) { $0.bundles.maxParallel = value }
         }
     }
 

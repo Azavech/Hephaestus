@@ -2,8 +2,8 @@ import HephClient
 import HephCore
 import SwiftUI
 
-/// The sessions of the project in groups: Chats, Tasks, Forge (docs/ui/sessions.md, "Session list"). A group without
-/// sessions is hidden; inside a group, by `updated` descending.
+/// The sessions of the project in groups: Chats, Tasks, Bundles, Forge (docs/ui/sessions.md, "Session list"). A group
+/// without sessions is hidden; inside a group, by `updated` descending.
 struct SessionListView: View {
     let store: ProjectStore
     /// The window is compact: the New Chat button sits in the navigation bar instead of the list header.
@@ -80,7 +80,7 @@ struct SessionListView: View {
 /// A group of the session list.
 private struct SessionListGroup: Identifiable {
     enum Kind {
-        case chats, tasks, forge
+        case chats, tasks, bundles, forge
     }
 
     let kind: Kind
@@ -92,16 +92,18 @@ private struct SessionListGroup: Identifiable {
         switch kind {
         case .chats: return "Chats"
         case .tasks: return "Tasks"
+        case .bundles: return "Bundles"
         case .forge: return "Forge"
         }
     }
 
-    /// Chats: kind `project`; Tasks: kind `task`; Forge: kinds `feedback` and `regeneration`.
+    /// Chats: kind `project`; Tasks: kind `task`; Bundles: kind `bundle`; Forge: kinds `feedback` and `regeneration`.
     static func groups(of sessions: [SessionInfo]) -> [SessionListGroup] {
         let sorted = sessions.sorted { $0.updated > $1.updated }
         let groups = [
             SessionListGroup(kind: .chats, sessions: sorted.filter { $0.kind == .project }),
             SessionListGroup(kind: .tasks, sessions: sorted.filter { $0.kind == .task }),
+            SessionListGroup(kind: .bundles, sessions: sorted.filter { $0.kind == .bundle }),
             SessionListGroup(kind: .forge,
                              sessions: sorted.filter { $0.kind == .feedback || $0.kind == .regeneration }),
         ]
@@ -132,8 +134,8 @@ private struct SessionListRow: View {
         .padding(.vertical, 2)
     }
 
-    /// Chats: relative `updated`; Tasks: "<task id> · <mode> · <relative updated>"; Forge: "<kind title> · <task id
-    /// when set> · <relative updated>".
+    /// Chats: relative `updated`; Tasks: "<task id> · <mode> · <relative updated>"; Bundles: "<bundle id> · <relative
+    /// updated>"; Forge: "<kind title> · <task id when set> · <relative updated>".
     private var caption: String {
         let updated = session.updated.formatted(.relative(presentation: .named))
         switch group {
@@ -142,6 +144,8 @@ private struct SessionListRow: View {
         case .tasks:
             return ([session.taskID, session.mode?.displayName].compactMap { $0 } + [updated])
                 .joined(separator: " · ")
+        case .bundles:
+            return ([session.bundleID].compactMap { $0 } + [updated]).joined(separator: " · ")
         case .forge:
             return ([ClaudeLabels.title(session.kind), session.taskID].compactMap { $0 } + [updated])
                 .joined(separator: " · ")

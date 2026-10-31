@@ -12,6 +12,10 @@ public protocol SessionHost: Sendable {
     func claudeProject(_ projectID: String) async throws -> ClaudeProjectContext
     /// Throws ProtocolError notFound when the task does not exist.
     func claudeTask(projectID: String, taskID: String) async throws -> ClaudeTaskContext
+    /// Throws ProtocolError notFound when the bundle does not exist (services/bundles.md).
+    func claudeBundle(projectID: String, bundleID: String) async throws -> ClaudeBundleContext
+    /// BundleService.workFolder: the working directory of a task session of a bundle.
+    func bundleWorkFolder(projectID: String, taskID: String) async throws -> URL
     /// ProjectRegistry.checkWritable: throws locked when the project or an ancestor is migrating.
     func checkWritable(_ projectID: String) async throws
     /// The project's SessionArchive (data/sessions.md).
@@ -43,12 +47,13 @@ public struct SessionStart: Sendable {
     public var permissionMode: PermissionMode?
     public var model: String?
     public var deviceID: UUID                        // requesting device; this Main's id for the Forge
+    public var bundleID: String?                     // bundle sessions, and the task sessions a bundle starts
     public var regeneration: RegenerationContext?    // regeneration sessions (prompts.md)
 
     public init(projectID: String, kind: SessionKind, taskID: String? = nil, mode: SessionMode? = nil,
                 title: String? = nil, message: String? = nil, attachments: [UploadRef] = [],
                 permissionMode: PermissionMode? = nil, model: String? = nil, deviceID: UUID,
-                regeneration: RegenerationContext? = nil) {
+                bundleID: String? = nil, regeneration: RegenerationContext? = nil) {
         self.projectID = projectID
         self.kind = kind
         self.taskID = taskID
@@ -59,6 +64,7 @@ public struct SessionStart: Sendable {
         self.permissionMode = permissionMode
         self.model = model
         self.deviceID = deviceID
+        self.bundleID = bundleID
         self.regeneration = regeneration
     }
 }
@@ -253,8 +259,9 @@ public actor SessionService: HostMethodHandler {
         let session = try await session(projectID, sessionID)
         try await host.checkWritable(projectID)
         let title = try patch.title.map(Self.validTitle)
-        // Feedback and regeneration sessions keep the permission mode acceptEdits (3.5).
-        if patch.permissionMode != nil, session.file.kind == .feedback || session.file.kind == .regeneration {
+        // Feedback and regeneration sessions keep the permission mode acceptEdits, and so do the sessions of 3.5 whose
+        // permission mode 5.2 fixed: bundle sessions and the task sessions of a bundle (3.5).
+        if patch.permissionMode != nil, try await hasFixedPermissionMode(session) {
             throw ProtocolError(.badRequest, "The permission mode of Forge sessions cannot be changed.")
         }
         let archive = try await host.sessionArchive(projectID)
@@ -337,7 +344,7 @@ public actor SessionService: HostMethodHandler {
                                          mode: request.mode, title: request.title, message: request.message,
                                          attachments: request.attachments ?? [],
                                          permissionMode: request.permissionMode, model: request.model,
-                                         deviceID: context.device.id, regeneration: nil)
+                                         deviceID: context.device.id, bundleID: nil, regeneration: nil)
                 return try WireCoding.encodeJSON(try await startSession(start, overWire: true))
             case .sessionsHistory:
                 let request = try Self.decode(SessionsHistoryParams.self, params, method)
@@ -393,12 +400,17 @@ public actor SessionService: HostMethodHandler {
         // 1. Hosted and writable.
         let project = try await host.claudeProject(projectID)
         try await host.checkWritable(projectID)
-        // 2. Over the wire, project and task sessions only.
+        // 2. Over the wire, project and task sessions only: the Forge starts feedback and regeneration sessions, and
+        // BundleService bundle sessions and the task sessions of a bundle, in process.
+        if overWire, request.kind == .bundle {
+            throw ProtocolError(.badRequest, "Bundle sessions are started with bundles.start.")
+        }
         if overWire, request.kind != .project, request.kind != .task {
             throw ProtocolError(.badRequest, "Only the Forge starts feedback and regeneration sessions.")
         }
         // 3 to 5. The kind's fields.
         var task: ClaudeTaskContext?
+        var bundle: ClaudeBundleContext?
         switch request.kind {
         case .project:
             guard request.taskID == nil, request.mode == nil else {
@@ -421,6 +433,14 @@ public actor SessionService: HostMethodHandler {
             guard request.taskID == nil else {
                 throw ProtocolError(.badRequest, "A regeneration session has no task.")
             }
+        case .bundle:
+            bundle = try await host.claudeBundle(projectID: projectID, bundleID: request.bundleID ?? "")
+            guard request.taskID == nil, request.mode == nil else {
+                throw ProtocolError(.badRequest, "A bundle session has no task and no mode.")
+            }
+        }
+        if request.bundleID != nil, request.kind != .bundle, request.kind != .task {
+            throw ProtocolError(.badRequest, "Only bundle and task sessions belong to a bundle.")
         }
         // 6. Title and model.
         let title = try request.title.map(Self.validTitle)
@@ -460,12 +480,19 @@ public actor SessionService: HostMethodHandler {
             defaultTitle = "Feedback \(task?.id ?? request.taskID ?? "")"
         case .regeneration:
             defaultTitle = "Regeneration"
+        case .bundle:
+            defaultTitle = "Bundle \(bundle?.id ?? request.bundleID ?? "")"
         }
+        let bundleID = bundle?.id ?? request.bundleID.map { BundleID($0)?.description ?? $0 }
         let permissionMode: PermissionMode
-        switch request.kind {
-        case .feedback, .regeneration:
+        if request.kind == .feedback || request.kind == .regeneration {
             permissionMode = .acceptEdits
-        case .project, .task:
+        } else if Self.belongsToBundle(request.kind, bundleID: bundleID),
+                  await isPublicRepositorySession(request.kind, project: project, settings: settings) {
+            // Bundle sessions and the task sessions of a bundle that are sessions of 3.5 work without waiting for
+            // the user.
+            permissionMode = .acceptEdits
+        } else {
             permissionMode = request.permissionMode ?? project.claude.permissionMode ?? settings.defaultPermissionMode
         }
         if model == nil {
@@ -473,7 +500,7 @@ public actor SessionService: HostMethodHandler {
         }
         let now = YAMLCoding.now()
         let file = SessionFile(id: id, kind: request.kind, taskID: task?.id ?? request.taskID, mode: request.mode,
-                               title: title ?? defaultTitle, created: now, updated: now,
+                               bundleID: bundleID, title: title ?? defaultTitle, created: now, updated: now,
                                permissionMode: permissionMode, model: model, status: .stopped)
 
         // The first message's files are moved in before the session file is created.
@@ -519,7 +546,7 @@ public actor SessionService: HostMethodHandler {
             let context = PromptContext(kind: request.kind, publicRepository: publicRepository, mainName: "",
                                         devices: [], project: project, task: task, mode: request.mode,
                                         instructions: request.message, regeneration: request.regeneration,
-                                        branch: settings.forge.branch)
+                                        bundle: bundle, workFolder: nil, branch: settings.forge.branch)
             text = Prompts.firstMessage(context) ?? ""
         }
         let firstStart = FirstStart(instructions: request.kind == .task ? request.message : nil,
@@ -590,7 +617,8 @@ public actor SessionService: HostMethodHandler {
             let executable = try await preflight()
             let registered = await host.mcp.register(MCPSessionContext(sessionID: sessionID, projectID: projectID,
                                                                        kind: session.file.kind,
-                                                                       taskID: session.file.taskID))
+                                                                       taskID: session.file.taskID,
+                                                                       bundleID: session.file.bundleID))
             token = registered
             // The project, read for steps 3 and 4.
             let project: ClaudeProjectContext
@@ -606,42 +634,46 @@ public actor SessionService: HostMethodHandler {
             } catch {
                 throw LaunchFailure(message: "Could not start Claude: \(Self.protocolError(error).message)")
             }
-            // 4. The system prompt, rendered from the data read now; whether the session is a session of 3.5.
+            // 4. The system prompt, rendered from the data read now; whether the session is a session of 3.5. A task
+            // session of a bundle works in its task's work folder.
             let settings = await host.settings()
             let kind = session.file.kind
             let publicRepository = await isPublicRepositorySession(kind, project: project, settings: settings)
             let promptFile = pluginFolder.deletingLastPathComponent()
                 .appendingPathComponent("system-prompt.md", isDirectory: false)
+            var workFolder: URL?
             do {
+                if kind == .task, session.file.bundleID != nil, let taskID = session.file.taskID {
+                    workFolder = try await host.bundleWorkFolder(projectID: projectID, taskID: taskID)
+                }
                 let context = try await promptContext(session, project: project, settings: settings,
-                                                      publicRepository: publicRepository, firstStart: firstStart)
+                                                      publicRepository: publicRepository, workFolder: workFolder,
+                                                      firstStart: firstStart)
                 try AtomicFile.write(Data(Prompts.systemPrompt(context).utf8), to: promptFile)
             } catch {
                 throw LaunchFailure(message: "Could not start Claude: \(Self.protocolError(error).message)")
             }
-            // 5.
+            // 5. The transcript is in the CLI's folder of the session's working directory.
+            let workingDirectory = workFolder ?? project.root
             let loginEnvironment = await LoginEnvironment.shared.environment()
-            let transcript = ClaudeLocator.transcriptURL(projectRoot: project.root, sessionID: sessionID,
+            let transcript = ClaudeLocator.transcriptURL(projectRoot: workingDirectory, sessionID: sessionID,
                                                          environment: loginEnvironment)
             let resume = FileManager.default.fileExists(atPath: transcript.path)
             // 6. The rules of 3.1: those of 3.5 for its sessions, which also get its environment.
-            let allowedTools = kind == .feedback || kind == .regeneration
-                ? ForgeSessionRules.allowedTools(regeneration: kind == .regeneration, branch: settings.forge.branch)
-                : ["mcp__hephaestus"]
-            let disallowedTools: [String]
-            if publicRepository {
-                // The repository root: the code folder of the project forge.sourceProjectID, read now; for a feedback
-                // or regeneration session, and when that project cannot be read, the session's own project's.
-                var repositoryRoot = project.codeFolder
-                if kind != .feedback, kind != .regeneration,
-                   let source = try? await host.claudeProject(settings.forge.sourceProjectID) {
-                    repositoryRoot = source.codeFolder
-                }
-                disallowedTools = ForgeSessionRules.disallowedTools(
-                    repositoryRoot: repositoryRoot.standardizedFileURL.path)
-            } else {
-                disallowedTools = ["Edit(**/.hephaestus/**)"]
+            let allowedTools: [String]
+            switch kind {
+            case .feedback:
+                allowedTools = ForgeSessionRules.allowedTools(.feedback, branch: settings.forge.branch)
+            case .regeneration:
+                allowedTools = ForgeSessionRules.allowedTools(.regeneration, branch: settings.forge.branch)
+            case .bundle where publicRepository:
+                allowedTools = ForgeSessionRules.allowedTools(.bundle, branch: settings.forge.branch)
+            case .task where publicRepository && session.file.bundleID != nil:
+                allowedTools = ForgeSessionRules.allowedTools(.feedback, branch: settings.forge.branch)
+            case .project, .task, .bundle:
+                allowedTools = ["mcp__hephaestus"]
             }
+            let disallowedTools = publicRepository ? ForgeSessionRules.disallowedTools : ["Edit(**/.hephaestus/**)"]
             let options = ClaudeProcess.Options(
                 executable: executable,
                 sessionID: sessionID,
@@ -654,7 +686,7 @@ public actor SessionService: HostMethodHandler {
                 pluginFolder: pluginFolder,
                 systemPromptFile: promptFile,
                 title: session.file.title,
-                workingDirectory: project.root,
+                workingDirectory: workingDirectory,
                 environment: publicRepository ? ForgeSessionRules.environment(loginEnvironment) : loginEnvironment)
             let process: ClaudeProcess
             do {
@@ -712,9 +744,10 @@ public actor SessionService: HostMethodHandler {
         }
     }
 
-    /// The prompt context of 5.3 step 4.
+    /// The prompt context of 5.3 step 4. `workFolder`: the work folder of a task session of a bundle.
     private func promptContext(_ session: Session, project: ClaudeProjectContext, settings: DeviceSettings,
-                               publicRepository: Bool, firstStart: FirstStart?) async throws -> PromptContext {
+                               publicRepository: Bool, workFolder: URL?,
+                               firstStart: FirstStart?) async throws -> PromptContext {
         let local = await host.localDevice()
         let devices = await host.devices().map { record in
             PromptDevice(name: record.name, platform: record.platform.rawValue, isMain: record.isMain,
@@ -723,6 +756,11 @@ public actor SessionService: HostMethodHandler {
         var task: ClaudeTaskContext?
         if session.file.kind == .task || session.file.kind == .feedback, let taskID = session.file.taskID {
             task = try await host.claudeTask(projectID: session.projectID, taskID: taskID)
+        }
+        var bundle: ClaudeBundleContext?
+        if let bundleID = session.file.bundleID, Self.belongsToBundle(session.file.kind, bundleID: bundleID) {
+            bundle = try await host.claudeBundle(projectID: session.projectID, bundleID: bundleID)
+            bundle?.maxParallel = settings.bundles.maxParallel
         }
         var instructions: String?
         if session.file.kind == .task {
@@ -734,8 +772,25 @@ public actor SessionService: HostMethodHandler {
         }
         return PromptContext(kind: session.file.kind, publicRepository: publicRepository, mainName: local.name,
                              devices: devices, project: project, task: task, mode: session.file.mode,
-                             instructions: instructions, regeneration: firstStart?.regeneration,
-                             branch: settings.forge.branch)
+                             instructions: instructions, regeneration: firstStart?.regeneration, bundle: bundle,
+                             workFolder: workFolder, branch: settings.forge.branch)
+    }
+
+    /// A bundle session, or a task session of a bundle.
+    private static func belongsToBundle(_ kind: SessionKind, bundleID: String?) -> Bool {
+        bundleID != nil && (kind == .bundle || kind == .task)
+    }
+
+    /// The permission mode that sessions.update cannot change: that of feedback and regeneration sessions, and of
+    /// the bundle sessions and task sessions of a bundle that are sessions of 3.5 (5.2), as read now.
+    private func hasFixedPermissionMode(_ session: Session) async throws -> Bool {
+        let kind = session.file.kind
+        if kind == .feedback || kind == .regeneration {
+            return true
+        }
+        guard Self.belongsToBundle(kind, bundleID: session.file.bundleID) else { return false }
+        let project = try await host.claudeProject(session.projectID)
+        return await isPublicRepositorySession(kind, project: project, settings: await host.settings())
     }
 
     /// A session of 3.5, which works in the public repository: a feedback or regeneration session, or, while the
@@ -1179,9 +1234,10 @@ public actor SessionService: HostMethodHandler {
 
     private func info(_ session: Session) -> SessionInfo {
         let file = session.file
-        return SessionInfo(id: file.id, kind: file.kind, taskID: file.taskID, mode: file.mode, title: file.title,
-                           created: file.created, updated: file.updated, permissionMode: file.permissionMode,
-                           model: file.model, status: session.status, statusLine: session.statusLine,
+        return SessionInfo(id: file.id, kind: file.kind, taskID: file.taskID, mode: file.mode,
+                           bundleID: file.bundleID, title: file.title, created: file.created, updated: file.updated,
+                           permissionMode: file.permissionMode, model: file.model, status: session.status,
+                           statusLine: session.statusLine,
                            error: session.status == .failed ? session.error : nil,
                            pendingPermissions: session.process == nil ? [] : broker.pending(sessionID: file.id))
     }

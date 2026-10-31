@@ -99,8 +99,7 @@ public actor ForgeService {
     }
 
     /// Answers once the configuration checks and the conflict check passed; then works in the background: a check of
-    /// its own, whose step 4 trusts the changes of the guardrail it finds (Checks and triggers), then Retry when the
-    /// cycle is failed, else the `manual` trigger.
+    /// its own (Checks and triggers), then Retry when the cycle is failed, else the `manual` trigger.
     public func regenerate() async throws {
         try await enabledOperation {
             try await self.regenerateNow()
@@ -121,7 +120,7 @@ public actor ForgeService {
             throw ProtocolError(.conflict, "A regeneration is already in progress (\(cycle.state.rawValue)).")
         }
         enqueue {
-            await self.checkTrustingGuardrail()
+            await self.checkOfItsOwn()
             guard !Task.isCancelled else { return }
             await self.retryOrManualTrigger()
         }
@@ -136,17 +135,16 @@ public actor ForgeService {
             throw ProtocolError(.conflict, "\(itemTaskID) has not failed.")
         }
         enqueue {
-            await self.checkTrustingGuardrail()
+            await self.checkOfItsOwn()
             guard !Task.isCancelled else { return }
             await self.retryCycle()
         }
     }
 
-    /// The check that `forge.regenerate` and `forge.retry` run first: its step 4 trusts the changes of the guardrail
-    /// it finds, since the user presses Regenerate Now or Retry after reviewing them. As after every check, a cycle
-    /// still `released` runs Completion again.
-    private func checkTrustingGuardrail() async {
-        await runCheck(trustGuardrail: true)
+    /// The check that `forge.regenerate` and `forge.retry` run first. As after every check, a cycle still `released`
+    /// runs Completion again.
+    private func checkOfItsOwn() async {
+        await runCheck()
         await resumeCompletion()
     }
 
@@ -191,6 +189,13 @@ public actor ForgeService {
     public func sessionRemoved(projectID: String, sessionID: String) async {
         enqueue {
             await self.observeSessionRemoval(sessionID)
+        }
+    }
+
+    /// Called by HostService.emit for every task.changed: an item whose task changed name takes the new name.
+    public func taskChanged(projectID: String, task: TaskItem) async {
+        enqueue {
+            await self.renameItem(projectID: projectID, task: task)
         }
     }
 
@@ -303,10 +308,15 @@ public actor ForgeService {
     // MARK: - Push tools (steps 1 and 8)
 
     private func pushDocsNow(sessionID: UUID) async throws -> String {
-        // 1. Session, configuration checks, private terms.
+        // 1. Session (the feedback session of an item, or the coordinator of a bundle of the source project in
+        // `running` or `review`), configuration checks, private terms.
         guard let config = configuration else { throw Self.notTheForge }
-        guard let taskID = items.first(where: { $0.feedbackSessionID == sessionID })?.taskID else {
-            throw ProtocolError(.conflict, "forge_push_docs is only available in Forge feedback sessions.")
+        let coordinates = await host.bundles.list(projectID: config.sourceProjectID).contains { bundle in
+            bundle.coordinatorSessionID == sessionID && Self.isActive(bundle.status)
+        }
+        guard coordinates || items.contains(where: { $0.feedbackSessionID == sessionID }) else {
+            throw ProtocolError(.conflict, "forge_push_docs is only available in Forge feedback sessions and in the "
+                                    + "bundle sessions of the source project.")
         }
         guard cycle?.state != .regenerating else {
             throw ProtocolError(.conflict, "A regeneration is working in this repository; call forge_push_docs again "
@@ -316,18 +326,26 @@ public actor ForgeService {
         try await checkPrivateTermsForPush(.pushDocs)
         // 2 to 7. The push gate.
         let pushed = try await pushThroughGate(.pushDocs, repository: repository, branch: config.branch)
-        // 8. Record: the trusted head, the item's event, the join rule, a check, then the tool trigger.
+        // 8. Record: the trusted head, the event of the session's items, the join rule, a check, then the tool trigger.
+        // A coordinator's items are those of the tasks of its bundle, and its result names the bundle.
         recordTrustedPush(pushed)
-        recordDocsPush(pushed.commit, taskID: taskID)
-        if items.first(where: { $0.taskID == taskID })?.state == .docsPushed {
-            await joinRule(taskIDs: [taskID])
+        let (label, taskIDs) = await pushedItems(sessionID: sessionID, projectID: config.sourceProjectID)
+        for taskID in taskIDs {
+            recordDocsPush(pushed.commit, taskID: taskID)
+        }
+        let docsPushed = taskIDs.filter { taskID in items.first { $0.taskID == taskID }?.state == .docsPushed }
+        if !docsPushed.isEmpty {
+            await joinRule(taskIDs: docsPushed)
         }
         saveStore()
         await broadcastIfChanged()
         await runCheck()
         await resumeCompletion()
-        let item = items.first { $0.taskID == taskID }
-        let inActiveCycle = cycle.map { cycle in Self.isActive(cycle.state) && item?.cycleID == cycle.id } ?? false
+        let inActiveCycle = cycle.map { cycle in
+            Self.isActive(cycle.state) && !taskIDs.isEmpty && taskIDs.allSatisfy { taskID in
+                items.first { $0.taskID == taskID }?.cycleID == cycle.id
+            }
+        } ?? false
         let cycleActive = cycle.map { Self.isActive($0.state) } ?? false
         let autoRegenerate = configuration?.autoRegenerate == true
         let trusted = headIsTrusted
@@ -336,7 +354,7 @@ public actor ForgeService {
             await startCycle(trigger: .tool)
             started = true
         }
-        let text = "Pushed docs commit \(ForgePushGate.short(pushed.commit)) for \(taskID)."
+        let text = "Pushed docs commit \(ForgePushGate.short(pushed.commit)) for \(label)."
         if inActiveCycle {
             return text + " It is part of the regeneration in progress."
         }
@@ -353,8 +371,38 @@ public actor ForgeService {
             + "waits until they are (Forge screen)."
     }
 
+    /// The items of a `forge_push_docs`, and the id its result names. For the coordinator of a bundle of the source
+    /// project, the items of the tasks of its bundle, in its order, a task without an item getting a new one
+    /// (`docsPushed`, the task's name, the coordinator as `feedbackSessionID`), and the bundle id; for a feedback
+    /// session, its item and its task id.
+    private func pushedItems(sessionID: UUID, projectID: String) async -> (label: String, taskIDs: [String]) {
+        let bundles = await host.bundles.list(projectID: projectID)
+        let coordinated = bundles.filter { $0.coordinatorSessionID == sessionID }
+        let bundle = coordinated.first { Self.isActive($0.status) } ?? coordinated.first
+        guard let bundle else {
+            let taskID = items.first { $0.feedbackSessionID == sessionID }?.taskID ?? ""
+            return (taskID, taskID.isEmpty ? [] : [taskID])
+        }
+        var taskIDs: [String] = []
+        for task in bundle.tasks {
+            if !items.contains(where: { $0.taskID == task.taskID }) {
+                // A task deleted since it joined the bundle has no item.
+                guard let item = try? await host.tasks.task(projectID: projectID, taskID: task.taskID) else {
+                    continue
+                }
+                let now = Date()
+                dropOldItemsForNewItem()
+                items.append(ForgeItem(taskID: item.id, projectID: projectID, title: item.name, state: .docsPushed,
+                                       feedbackSessionID: sessionID, created: now, updated: now))
+                Log.host.info("Forge item \(item.id, privacy: .public) created for bundle \(bundle.id, privacy: .public)")
+            }
+            taskIDs.append(task.taskID)
+        }
+        return (bundle.id, taskIDs)
+    }
+
     private func pushRegenNow(sessionID: UUID) async throws -> String {
-        // 1. Session, configuration checks (a change of the guardrail fails the cycle at once), private terms.
+        // 1. Session, configuration checks, private terms.
         guard let config = configuration else { throw Self.notTheForge }
         guard let current = cycle, current.sessionID == sessionID,
               current.state == .regenerating || (current.state == .failed && current.failedState == .regenerating)
@@ -362,17 +410,9 @@ public actor ForgeService {
             throw ProtocolError(.conflict,
                                 "forge_push_regen is only available in the current Forge regeneration session.")
         }
-        let repository: Repository
-        do {
-            repository = try await checkConfiguration()
-        } catch let failure as ConfigurationCheckFailure {
-            if !failure.guardrailPaths.isEmpty {
-                await failCycle(Self.guardrailCycleError(failure.guardrailPaths), failedState: .regenerating)
-            }
-            throw failure.error
-        }
+        let repository = try await configurationChecks()
         try await checkPrivateTermsForPush(.pushRegen)
-        // 2 to 7. The push gate; a change of the guardrail fails the cycle at once.
+        // 2 to 7. The push gate.
         let pushed = try await pushThroughGate(.pushRegen, repository: repository, branch: config.branch)
         // 8. Record: the trusted head, regenCommit, regenPushed, the join rule, polling.
         recordTrustedPush(pushed)
@@ -412,8 +452,7 @@ public actor ForgeService {
     }
 
     /// Steps 2 to 7 (`ForgePushGate`), called with `trustedHead`, whose published check step 6 runs: a refusal
-    /// becomes `conflict` with its text. A refusal of `forge_push_regen` that names guardrail paths also fails the
-    /// cycle at once (Session observation).
+    /// becomes `conflict` with its text.
     private func pushThroughGate(_ tool: ForgePushGate.Tool, repository: Repository,
                                  branch: String) async throws -> ForgePushGate.Pushed {
         let gate = ForgePushGate(git: repository.git, branch: branch, termsFile: privateTermsURL)
@@ -424,9 +463,6 @@ public actor ForgeService {
             return pushed
         } catch let refusal as ForgePushGate.Refusal {
             Log.host.notice("\(tool.rawValue, privacy: .public) refused a push")
-            if tool == .pushRegen, !refusal.guardrailPaths.isEmpty {
-                await failCycle(Self.guardrailCycleError(refusal.guardrailPaths), failedState: .regenerating)
-            }
             throw ProtocolError(.conflict, refusal.message)
         }
     }
@@ -437,12 +473,6 @@ public actor ForgeService {
         guard trustedHead == pushed.base else { return }
         trustedHead = pushed.commit
         saveStore()
-    }
-
-    /// The error of a cycle failed by a change of the guardrail in `forge_push_regen` (Session observation).
-    static func guardrailCycleError(_ paths: [String]) -> String {
-        "Guardrail files changed (\(paths.joined(separator: ", "))): review the unpushed commits, check them with "
-            + "origin's script (docs/public-repository.md#protected-paths), push them by hand, then press Retry."
     }
 
     // MARK: - Broadcasting
@@ -524,6 +554,11 @@ public actor ForgeService {
     // MARK: - Helpers
 
     static let notTheForge = ProtocolError(.unavailable, "This Main is not the Forge.")
+
+    /// A bundle in `running` or `review`, whose coordinator may push with forge_push_docs.
+    static func isActive(_ status: BundleStatus) -> Bool {
+        status == .running || status == .review
+    }
 
     /// A cycle is active while its state is `regenerating`, `regenPushed`, `building` or `released`.
     static func isActive(_ state: ForgeStage) -> Bool {

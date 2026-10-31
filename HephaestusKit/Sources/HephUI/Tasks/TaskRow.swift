@@ -3,10 +3,15 @@ import HephCore
 import SwiftUI
 
 /// A row of the task list (docs/ui/tasks.md, "Row"): the id and the indicators, then the name; a context menu with
-/// Status, Copy ID and Delete… (a broken task: Copy ID and Delete… only).
+/// Status, New Bundle from Selection…, Add to Bundle, Copy ID and Delete… (a broken task: Copy ID and Delete… only).
 struct TaskRow: View {
     let store: ProjectStore
     let task: TaskItem
+    /// The tasks of New Bundle from Selection… and Add to Bundle: the selected tasks, or this task when it is not
+    /// selected.
+    let bundleTaskIDs: [String]
+    /// Opens the New Bundle sheet with these tasks.
+    let onNewBundle: ([String]) -> Void
     /// Asks for the delete confirmation of this task.
     let onDelete: () -> Void
 
@@ -70,6 +75,11 @@ struct TaskRow: View {
             }
             .pickerStyle(.menu)
             .disabled(!TasksScreen.isConnected(store))
+            Button("New Bundle from Selection…") {
+                onNewBundle(bundleTaskIDs)
+            }
+            .disabled(bundleTaskIDs.isEmpty || !TasksScreen.isConnected(store))
+            AddToBundleMenu(store: store, taskIDs: bundleTaskIDs)
         }
         Button("Copy ID") {
             TasksScreen.copy(task.id)

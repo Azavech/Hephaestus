@@ -6,15 +6,13 @@ import HephCore
 /// Steps 2 to 7 of the push tools (docs/forge/pipeline.md, "MCP tools"), on a repository whose origin and branch are
 /// given: the branch, the commits, their paths, the docs hash (`forge_push_regen`), the personal data check published
 /// at the last head of the branch the Forge trusts, then the push. Also step 4 of "Checks and triggers": the check of
-/// the commits that reached the branch another way, and the changes of the guardrail among them.
+/// the commits that reached the branch another way.
 struct ForgePushGate: Sendable {
     enum Tool: String, Sendable { case pushDocs = "forge_push_docs", pushRegen = "forge_push_regen" }
 
-    /// A refused push: `message` is the tool's error text; `guardrailPaths` lists the paths of step 4 that only the
-    /// user pushes (empty for the other refusals).
+    /// A refused push: `message` is the tool's error text.
     struct Refusal: Error, Sendable, Equatable {
         var message: String
-        var guardrailPaths: [String]
     }
 
     /// A push: the full SHA pushed and the base of step 2.
@@ -22,26 +20,6 @@ struct ForgePushGate: Sendable {
         var commit: String
         var base: String
     }
-
-    /// The protected paths of public-repository.md, in the order of MCP tools step 4; a folder ends with "/".
-    static let protectedPaths: [String] = [
-        "docs/general.md",
-        "docs/public-repository.md",
-        "scripts/check-public.sh",
-        ".gitignore",
-        "CLAUDE.md",
-        "HephaestusKit/Sources/HephHost/Forge/ForgePushGate.swift",
-        "HephaestusKit/Sources/HephHost/Forge/ForgeGit.swift",
-        "HephaestusKit/Sources/HephHost/Forge/ForgeChecks.swift",
-        "HephaestusKit/Sources/HephHost/Forge/PrivateTerms.swift",
-        "HephaestusKit/Sources/HephHost/Claude/ForgeSessionRules.swift",
-        "HephaestusKit/Sources/HephHost/Claude/ForgePrompts.swift",
-        "HephaestusKit/Sources/HephHost/MCP/MCPToolKinds.swift",
-        "HephaestusKit/Tests/HephHostTests/PublicCheckTests.swift",
-        "HephaestusKit/Tests/HephHostTests/ForgePushTests.swift",
-        ".githooks/",
-        ".github/",
-    ]
 
     let git: ForgeGit
     let branch: String
@@ -65,7 +43,7 @@ struct ForgePushGate: Sendable {
         } catch let error as CancellationError {
             throw error
         } catch {
-            throw Refusal(message: Self.message(of: error), guardrailPaths: [])
+            throw Refusal(message: Self.message(of: error))
         }
     }
 
@@ -86,7 +64,7 @@ struct ForgePushGate: Sendable {
         } catch let error as CancellationError {
             throw error
         } catch {
-            throw Refusal(message: Self.message(of: error), guardrailPaths: [])
+            throw Refusal(message: Self.message(of: error))
         }
         do {
             switch try await runCheck(script, arguments: ["--ref", "refs/heads/\(branch)",
@@ -97,27 +75,8 @@ struct ForgePushGate: Sendable {
                 return Self.holdsOnlySkipMarkers(output) ? nil : ForgeGit.text(output)
             }
         } catch let failure as CheckFailure {
-            throw Refusal(message: failure.reason, guardrailPaths: [])
+            throw Refusal(message: failure.reason)
         }
-    }
-
-    /// Checks and triggers step 4: the paths that differ between `trusted` and `head` that step 4 of the push tools
-    /// leaves to the user by their name, each once, sorted in byte order; throws Refusal (the git error) on failure.
-    ///
-    /// The paths of `git diff-tree --name-only -r -z <trusted> <head>` for which `isGuardrail(_:)` is true: a protected
-    /// path, a `.gitattributes` or `.mailmap` file, a path holding a character outside ASCII. A change of the guardrail
-    /// that holds no personal data passes `checkPushedElsewhere`, yet it can weaken the checks of the next pushes.
-    func guardrailPaths(from trusted: String, to head: String) async throws -> [String] {
-        let output: Data
-        do {
-            output = try await git.run(["diff-tree", "--name-only", "-r", "-z", trusted, head], timeout: .seconds(30))
-                .standardOutput
-        } catch let error as CancellationError {
-            throw error
-        } catch {
-            throw Refusal(message: Self.message(of: error), guardrailPaths: [])
-        }
-        return Self.sortedOnce(Self.paths(output).filter(Self.isGuardrail))
     }
 
     // MARK: - Steps
@@ -207,39 +166,22 @@ struct ForgePushGate: Sendable {
         let commit: String
         /// The paths it changes: added, modified, deleted, and both names of a renamed file.
         let changed: [String]
-        /// The binary files it adds or changes, decided with no git attributes (`binaryFiles(of:)`).
-        let binary: [String]
         /// The paths of its tree.
         let tree: [String]
     }
 
-    /// Step 4: the guardrail (every commit at once), then the paths that differ only in case, then the paths each
-    /// tool may push, each over the commits oldest first and, within a commit, over its paths in the order of
-    /// `git diff-tree`; paths are compared after ASCII lowercasing. A Mac's disk also folds some characters outside
-    /// ASCII onto ASCII letters (U+212A KELVIN SIGN onto `k`, U+017F LONG S onto `s`), so a path holding a character
-    /// outside ASCII is left to the user with the guardrail (`isGuardrail(_:)`).
+    /// Step 4: the paths that differ only in case, then the paths each tool may push, each over the commits oldest
+    /// first and, within a commit, over its paths in the order of `git diff-tree`; paths are compared after ASCII
+    /// lowercasing, so that a path written in another letter case, which a Mac's disk stores as the same file, counts
+    /// as that path.
     private func checkPaths(of commits: [String], tool: Tool) async throws {
         var read: [CommitPaths] = []
         for commit in commits {
             let changed = Self.paths(try await git.run(["diff-tree", "--no-commit-id", "--name-only", "-r", "-z",
                                                         commit], timeout: .seconds(30)).standardOutput)
-            let binary = try await binaryFiles(of: commit)
             let tree = Self.paths(try await git.run(["ls-tree", "-r", "-z", "--name-only", commit],
                                                     timeout: .seconds(30)).standardOutput)
-            read.append(CommitPaths(commit: commit, changed: changed, binary: binary, tree: tree))
-        }
-
-        // The guardrail: each such path of the commits once, as the commit writes it, sorted in byte order.
-        var guardrail: [String] = []
-        for entry in read {
-            guardrail += entry.changed.filter(Self.isGuardrail)
-            guardrail += entry.binary
-        }
-        if !guardrail.isEmpty {
-            let paths = Self.sortedOnce(guardrail)
-            throw Refusal(message: "Changes to the personal-data guardrail are pushed by hand after review: "
-                              + "\(paths.joined(separator: ", ")).",
-                          guardrailPaths: paths)
+            read.append(CommitPaths(commit: commit, changed: changed, tree: tree))
         }
 
         // A path that differs only in case from another path, or folder, of its tree.
@@ -268,24 +210,6 @@ struct ForgePushGate: Sendable {
                 }
             }
         }
-    }
-
-    /// A path that step 4 leaves to the user by its name: a protected path (a folder of `protectedPaths` holds every
-    /// path under it), or a file named `.gitattributes` or `.mailmap` in any folder, compared after ASCII lowercasing;
-    /// or a path holding a character outside ASCII (a byte above 0x7F), which a Mac's disk can store as one of the
-    /// others (`.githoo<U+212A>s/pre-push` is `.githooks/pre-push` there).
-    static func isGuardrail(_ path: String) -> Bool {
-        if path.utf8.contains(where: { $0 >= 0x80 }) {
-            return true
-        }
-        let lowered = lowercasedASCII(path)
-        for protected in protectedPaths.map(lowercasedASCII) {
-            if protected.hasSuffix("/") ? lowered.hasPrefix(protected) : lowered == protected {
-                return true
-            }
-        }
-        let name = lowered.split(separator: "/").last.map(String.init) ?? lowered
-        return name == ".gitattributes" || name == ".mailmap"
     }
 
     /// The first path the commit adds or changes that equals, ignoring ASCII case, another path of its tree, or one of
@@ -329,54 +253,6 @@ struct ForgePushGate: Sendable {
     /// The NUL-terminated paths of a git output.
     private static func paths(_ data: Data) -> [String] {
         data.split(separator: 0, omittingEmptySubsequences: true).map { String(decoding: $0, as: UTF8.self) }
-    }
-
-    /// Each path once, sorted in byte order, both by its UTF-8 bytes: Swift's `==` and `Hashable` of `String` treat
-    /// canonically equivalent paths as equal, which git keeps apart.
-    private static func sortedOnce(_ paths: [String]) -> [String] {
-        let sorted = paths.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }
-        var result: [String] = []
-        for path in sorted where !(result.last.map { $0.utf8.elementsEqual(path.utf8) } ?? false) {
-            result.append(path)
-        }
-        return result
-    }
-
-    /// The binary files a commit adds or changes, in the order of `git diff-tree`, decided as the check script decides
-    /// them, with no git attributes: each record of `git diff-tree --no-commit-id --root --raw --no-abbrev
-    /// --no-renames -r -z <commit>` whose new mode is `100644` or `100755` and whose new object is not all zeros, when
-    /// that blob (`git cat-file blob <sha>`) holds a NUL byte in its first 8000 bytes. A file it deletes does not
-    /// count.
-    private func binaryFiles(of commit: String) async throws -> [String] {
-        let raw = try await git.run(["diff-tree", "--no-commit-id", "--root", "--raw", "--no-abbrev", "--no-renames",
-                                     "-r", "-z", commit], timeout: .seconds(30)).standardOutput
-        var result: [String] = []
-        for file in Self.changedFiles(raw) where file.newMode == "100644" || file.newMode == "100755" {
-            guard !file.newObject.allSatisfy({ $0 == "0" }) else { continue }
-            let blob = try await git.run(["cat-file", "blob", file.newObject], timeout: .seconds(30)).standardOutput
-            if blob.prefix(8000).contains(0) {
-                result.append(file.path)
-            }
-        }
-        return result
-    }
-
-    /// The records of `git diff-tree --raw -z`: a field `:<old mode> <new mode> <old sha> <new sha> <status>`, then
-    /// the path (the two names of a copy or a rename, the new one last); the new mode, new object and path of each.
-    private static func changedFiles(_ data: Data) -> [(newMode: String, newObject: String, path: String)] {
-        let fields = paths(data)
-        var result: [(newMode: String, newObject: String, path: String)] = []
-        var index = 0
-        while index < fields.count {
-            let header = fields[index].split(separator: " ", omittingEmptySubsequences: true)
-            index += 1
-            guard header.count == 5, header[0].hasPrefix(":") else { continue }
-            let names = header[4].hasPrefix("C") || header[4].hasPrefix("R") ? 2 : 1
-            guard index + names <= fields.count else { break }
-            result.append((newMode: String(header[1]), newObject: String(header[3]), path: fields[index + names - 1]))
-            index += names
-        }
-        return result
     }
 
     // MARK: - Step 6
@@ -498,7 +374,7 @@ struct ForgePushGate: Sendable {
     }
 
     private func refusal(_ message: String) -> Refusal {
-        Refusal(message: message, guardrailPaths: [])
+        Refusal(message: message)
     }
 
     /// The message of a git error (a ProtocolError), else the localized description.

@@ -3,8 +3,11 @@ import Foundation
 
 /// The rules and the environment of the sessions of cli.md 3.5.
 enum ForgeSessionRules {
-    /// --allowedTools of feedback (regeneration: false) and regeneration sessions; branch: the setting forge.branch.
-    static func allowedTools(regeneration: Bool, branch: String) -> [String] {
+    enum AllowedSet { case feedback, bundle, regeneration }
+
+    /// --allowedTools: .feedback for feedback sessions and the task sessions of a bundle, .bundle for bundle
+    /// sessions, .regeneration for regeneration sessions; branch: the setting forge.branch.
+    static func allowedTools(_ set: AllowedSet, branch: String) -> [String] {
         let feedback = [
             "mcp__hephaestus",
             "Bash(git status *)",
@@ -25,58 +28,45 @@ enum ForgeSessionRules {
             "Bash(git branch *)",
             "Bash(scripts/check-public.sh --staged)",
         ]
-        guard regeneration else { return feedback }
-        return feedback + [
-            "Bash(xcodebuild *)",
-            "Bash(swift *)",
-            "Bash(scripts/*)",
-            "Bash(./scripts/*)",
-        ]
+        switch set {
+        case .feedback:
+            return feedback
+        case .bundle:
+            // The coordinator brings the task branches in.
+            return feedback + [
+                "Bash(git cherry-pick *)",
+                "Bash(git cherry *)",
+            ]
+        case .regeneration:
+            return feedback + [
+                "Bash(xcodebuild *)",
+                "Bash(swift *)",
+                "Bash(scripts/*)",
+                "Bash(./scripts/*)",
+            ]
+        }
     }
 
-    /// --disallowedTools; repositoryRoot: the absolute path of the repository root (below), which starts with "/".
-    static func disallowedTools(repositoryRoot: String) -> [String] {
-        // The protected paths are absolute, from the repository root, so that each rule starts with Edit(//; Claude
-        // Code's settings and the project data folders stay relative to the project root.
-        let protectedPaths = [
-            "docs/general.md",
-            "docs/public-repository.md",
-            "scripts/check-public.sh",
-            ".githooks/**",
-            ".github/**",
-            ".gitignore",
-            "CLAUDE.md",
-            "HephaestusKit/Sources/HephHost/Forge/ForgePushGate.swift",
-            "HephaestusKit/Sources/HephHost/Forge/ForgeGit.swift",
-            "HephaestusKit/Sources/HephHost/Forge/ForgeChecks.swift",
-            "HephaestusKit/Sources/HephHost/Forge/PrivateTerms.swift",
-            "HephaestusKit/Sources/HephHost/Claude/ForgeSessionRules.swift",
-            "HephaestusKit/Sources/HephHost/Claude/ForgePrompts.swift",
-            "HephaestusKit/Sources/HephHost/MCP/MCPToolKinds.swift",
-            "HephaestusKit/Tests/HephHostTests/PublicCheckTests.swift",
-            "HephaestusKit/Tests/HephHostTests/ForgePushTests.swift",
-        ]
-        return [
-            "Bash(git push *)",
-            "Bash(git config *)",
-            "Bash(git -c *)",
-            "Bash(git remote *)",
-            "Bash(git update-ref *)",
-            "Bash(git filter-branch *)",
-            "Bash(git replace *)",
-            "Bash(git notes *)",
-            "Bash(git fetch *--upl*)",
-            "Bash(git pull *--upl*)",
-            "Bash(git diff *--output*)",
-            "Bash(git log *--output*)",
-            "Bash(git show *--output*)",
-            "Bash(git stash *--output*)",
-        ] + protectedPaths.map { "Edit(/" + repositoryRoot + "/" + $0 + ")" } + [
-            "Edit(.claude/**)",
-            "Edit(.mcp.json)",
-            "Edit(**/.hephaestus/**)",
-        ]
-    }
+    /// --disallowedTools.
+    static let disallowedTools = [
+        "Bash(git push *)",
+        "Bash(git config *)",
+        "Bash(git -c *)",
+        "Bash(git remote *)",
+        "Bash(git update-ref *)",
+        "Bash(git filter-branch *)",
+        "Bash(git replace *)",
+        "Bash(git notes *)",
+        "Bash(git fetch *--upl*)",
+        "Bash(git pull *--upl*)",
+        "Bash(git diff *--output*)",
+        "Bash(git log *--output*)",
+        "Bash(git show *--output*)",
+        "Bash(git stash *--output*)",
+        "Edit(.claude/**)",
+        "Edit(.mcp.json)",
+        "Edit(**/.hephaestus/**)",
+    ]
 
     /// The login environment with the changes below.
     static func environment(_ login: [String: String]) -> [String: String] {

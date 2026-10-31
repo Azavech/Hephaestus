@@ -189,6 +189,33 @@ extension MainConnection {
                        as: AttachmentsReadResult.self, timeout: Self.contentTimeout)
     }
 
+    // MARK: - Bundles
+
+    public func createBundle(projectID: String, name: String, taskIDs: [String]) async throws -> BundleItem {
+        try await send(.bundlesCreate, BundlesCreateParams(projectID: projectID, name: name, taskIDs: taskIDs),
+                       as: BundleItem.self)
+    }
+
+    public func updateBundle(projectID: String, bundleID: String, patch: BundlePatch) async throws -> BundleItem {
+        try await send(.bundlesUpdate, BundlesUpdateParams(projectID: projectID, bundleID: bundleID, patch: patch),
+                       as: BundleItem.self)
+    }
+
+    public func deleteBundle(projectID: String, bundleID: String) async throws {
+        _ = try await send(.bundlesDelete, BundlesDeleteParams(projectID: projectID, bundleID: bundleID),
+                           as: EmptyPayload.self)
+    }
+
+    public func startBundle(projectID: String, bundleID: String) async throws -> BundleItem {
+        try await send(.bundlesStart, BundlesStartParams(projectID: projectID, bundleID: bundleID),
+                       as: BundleItem.self)
+    }
+
+    public func stopBundle(projectID: String, bundleID: String) async throws -> BundleItem {
+        try await send(.bundlesStop, BundlesStopParams(projectID: projectID, bundleID: bundleID),
+                       as: BundleItem.self)
+    }
+
     // MARK: - Files
 
     public func listFiles(projectID: String, path: String) async throws -> [FileEntry] {

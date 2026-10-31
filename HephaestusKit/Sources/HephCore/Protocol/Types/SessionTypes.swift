@@ -12,6 +12,8 @@ public enum SessionKind: String, Codable, Sendable, Hashable, CaseIterable {
     case feedback
     /// Forge regeneration.
     case regeneration
+    /// Coordinator of a task bundle.
+    case bundle
 }
 
 /// The mode of a task session.
@@ -101,6 +103,8 @@ public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
     public var kind: SessionKind
     public var taskID: String?
     public var mode: SessionMode?
+    /// Bundle sessions, and task sessions started by a bundle: the bundle.
+    public var bundleID: String?
     public var title: String
     public var created: Date
     public var updated: Date
@@ -116,6 +120,7 @@ public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
         kind: SessionKind,
         taskID: String? = nil,
         mode: SessionMode? = nil,
+        bundleID: String? = nil,
         title: String,
         created: Date,
         updated: Date,
@@ -130,6 +135,7 @@ public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
         self.kind = kind
         self.taskID = taskID
         self.mode = mode
+        self.bundleID = bundleID
         self.title = title
         self.created = created
         self.updated = updated

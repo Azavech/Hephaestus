@@ -676,6 +676,10 @@ public final class Workspace {
             existingStore(mainDeviceID: mainDeviceID, projectID: payload.projectID)?.receive(event)
         case .taskRemoved(let payload):
             existingStore(mainDeviceID: mainDeviceID, projectID: payload.projectID)?.receive(event)
+        case .bundleChanged(let payload):
+            existingStore(mainDeviceID: mainDeviceID, projectID: payload.projectID)?.receive(event)
+        case .bundleRemoved(let payload):
+            existingStore(mainDeviceID: mainDeviceID, projectID: payload.projectID)?.receive(event)
         case .sessionChanged(let payload):
             existingStore(mainDeviceID: mainDeviceID, projectID: payload.projectID)?.receive(event)
             sessionCenter.handleSessionChanged(mainDeviceID: mainDeviceID, projectID: payload.projectID,

@@ -23,8 +23,8 @@ final class ProjectStoreTests: XCTestCase {
 
     private func snapshot(_ projectID: String = "HEPH", mainID: UUID, tasks: [TaskItem] = [],
                           sessions: [SessionInfo] = [], runs: [RunInfo] = []) -> ProjectsSnapshotResult {
-        ProjectsSnapshotResult(project: TestMesh.project(projectID, mainID: mainID), tasks: tasks, sessions: sessions,
-                               runs: runs)
+        ProjectsSnapshotResult(project: TestMesh.project(projectID, mainID: mainID), tasks: tasks, bundles: [],
+                               sessions: sessions, runs: runs)
     }
 
     /// A connected workspace whose Main hosts HEPH, and the loaded store of HEPH.

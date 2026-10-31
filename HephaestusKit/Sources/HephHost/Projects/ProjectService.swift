@@ -19,10 +19,12 @@ actor ProjectService: HostMethodHandler {
     func snapshot(projectID: String) async throws -> ProjectsSnapshotResult {
         let project = try await host.registry.project(projectID)
         let tasks = try await host.tasks.list(projectID: projectID)
+        let bundles = await host.bundles.list(projectID: projectID)
         let sessions = try await host.sessions.sessions(projectID: projectID)
             .sorted { $0.created < $1.created }
         let runs = await host.runs.list(projectID: projectID).reversed()
-        return ProjectsSnapshotResult(project: project, tasks: tasks, sessions: sessions, runs: Array(runs))
+        return ProjectsSnapshotResult(project: project, tasks: tasks, bundles: bundles, sessions: sessions,
+                                      runs: Array(runs))
     }
 
     /// projects.create (§7.3).

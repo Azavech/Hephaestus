@@ -75,6 +75,7 @@ public actor HostService {
     nonisolated var watcher: FileWatcher { objects.watcher }
     nonisolated var projects: ProjectService { objects.projects }
     nonisolated var tasks: TaskService { objects.tasks }
+    nonisolated var bundles: BundleService { objects.bundles }
     nonisolated var tabs: TabService { objects.tabs }
     nonisolated var hostInfo: HostInfoService { objects.hostInfo }
     nonisolated var files: FileService { objects.files }
@@ -562,6 +563,8 @@ public actor HostService {
         case .tasksCreate, .tasksUpdate, .tasksDelete, .tasksAddComment, .tasksUpdateComment, .tasksDeleteComment,
              .attachmentsRead:
             handler = tasks
+        case .bundlesCreate, .bundlesUpdate, .bundlesDelete, .bundlesStart, .bundlesStop:
+            handler = bundles
         case .filesList, .filesRead, .filesWrite, .filesCreate, .filesRename, .filesDelete:
             handler = files
         case .tabsOpen, .tabsUpdate, .tabsClose, .tabsMove:
@@ -614,10 +617,13 @@ public actor HostService {
         case .sessionChanged(let payload):
             await registry.setPendingPermissions(payload.projectID, sessionID: payload.session.id,
                                                  count: payload.session.pendingPermissions.count)
+            await bundles.sessionChanged(projectID: payload.projectID, session: payload.session)
             await forge.sessionChanged(projectID: payload.projectID, session: payload.session)
         case .sessionRemoved(let payload):
             await registry.setPendingPermissions(payload.projectID, sessionID: payload.sessionID, count: 0)
             await forge.sessionRemoved(projectID: payload.projectID, sessionID: payload.sessionID.uuidString)
+        case .taskChanged(let payload):
+            await forge.taskChanged(projectID: payload.projectID, task: payload.task)
         case .taskRemoved(let payload):
             await forge.taskRemoved(projectID: payload.projectID, taskID: payload.taskID)
         case .projectsChanged:
@@ -704,6 +710,25 @@ extension HostService: SessionHost {
         }
         return ClaudeTaskContext(id: item.id, name: item.name, description: item.description, yaml: yaml,
                                  attachments: attachments, parseError: item.parseError)
+    }
+
+    /// From the cached BundleItem and the cached TaskItem of each of its tasks.
+    public func claudeBundle(projectID: String, bundleID: String) async throws -> ClaudeBundleContext {
+        let id = BundleID(bundleID)?.description ?? bundleID
+        guard let bundle = await bundles.list(projectID: projectID).first(where: { $0.id == id }) else {
+            throw ProtocolError(.notFound, "Bundle \(id) does not exist.")
+        }
+        var tasks: [ClaudeBundleTask] = []
+        for task in bundle.tasks {
+            let item = try? await self.tasks.task(projectID: projectID, taskID: task.taskID)
+            tasks.append(ClaudeBundleTask(id: task.taskID, name: item?.name ?? "", status: item?.status))
+        }
+        return ClaudeBundleContext(id: bundle.id, name: bundle.name, base: bundle.base ?? "", tasks: tasks,
+                                   maxParallel: await settings().bundles.maxParallel)
+    }
+
+    public func bundleWorkFolder(projectID: String, taskID: String) async throws -> URL {
+        try await bundles.workFolder(projectID: projectID, taskID: taskID)
     }
 
     public func checkWritable(_ projectID: String) async throws {
@@ -811,6 +836,50 @@ extension HostService: MCPHost {
     public func forgePushRegen(sessionID: UUID) async throws -> String {
         try await forge.pushRegen(sessionID: sessionID)
     }
+
+    /// The BundleService function of a bundle tool, its result as JSON text. `instructions` of start_bundle_task empty
+    /// after trimming counts as absent.
+    public func bundleTool(_ name: String, projectID: String, bundleID: String, arguments: Data) async throws
+        -> String {
+        let result: Data
+        switch name {
+        case "get_bundle":
+            result = try WireCoding.encodeJSON(try await bundles.details(projectID: projectID, bundleID: bundleID))
+        case "start_bundle_task":
+            let request = try Self.decodeArguments(StartBundleTaskArguments.self, arguments, name)
+            let instructions = request.instructions.flatMap { text in
+                text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
+            }
+            result = try WireCoding.encodeJSON(try await bundles.startTask(projectID: projectID, bundleID: bundleID,
+                                                                           taskID: request.task,
+                                                                           instructions: instructions))
+        case "update_bundle":
+            let request = try Self.decodeArguments(UpdateBundleArguments.self, arguments, name)
+            result = try WireCoding.encodeJSON(try await bundles.setStatus(projectID: projectID, bundleID: bundleID,
+                                                                           status: request.status))
+        case "finish_bundle":
+            result = try WireCoding.encodeJSON(try await bundles.finish(projectID: projectID, bundleID: bundleID))
+        default:
+            throw ProtocolError(.badRequest, "Unknown tool: \(name)")
+        }
+        return String(decoding: result, as: UTF8.self)
+    }
+
+    /// The arguments of start_bundle_task.
+    private struct StartBundleTaskArguments: Decodable {
+        var task: String
+        var instructions: String?
+    }
+
+    /// The arguments of update_bundle.
+    private struct UpdateBundleArguments: Decodable {
+        var status: BundleStatus
+    }
+
+    /// WireCoding decoding of a tool's arguments; a failure is badRequest "Invalid params for <tool>: <coding path>.".
+    private static func decodeArguments<P: Decodable>(_ type: P.Type, _ arguments: Data, _ tool: String) throws -> P {
+        try InboundRequest(id: 1, method: tool, params: arguments).decodeParams(type)
+    }
 }
 
 // MARK: - Types (§2)
@@ -894,6 +963,7 @@ private struct HostObjects: Sendable {
     let watcher: FileWatcher
     let projects: ProjectService
     let tasks: TaskService
+    let bundles: BundleService
     let tabs: TabService
     let hostInfo: HostInfoService
     let files: FileService
@@ -914,6 +984,7 @@ private struct HostObjects: Sendable {
         watcher = FileWatcher(host: host)
         projects = ProjectService(host: host)
         tasks = TaskService(host: host)
+        bundles = BundleService(host: host)
         tabs = TabService(host: host)
         hostInfo = HostInfoService(host: host)
         files = FileService(host: host)

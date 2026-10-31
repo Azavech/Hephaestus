@@ -355,6 +355,7 @@ actor ProjectRegistry {
         queues[file.id] = ProjectWriteQueue()
         Log.host.info("Registered the project \(file.id, privacy: .public)")
         await host.tasks.load(projectID: file.id)
+        await host.bundles.load(projectID: file.id)
         for entry in Self.normalizedEntries(file.subprojects) {
             await registerSubproject(entry: entry, parentID: file.id)
         }
@@ -399,8 +400,13 @@ actor ProjectRegistry {
             queues[id] = nil
         }
         Log.host.info("Unregistered the project \(projectID, privacy: .public)")
+        // The worktrees are removed while BundleService still knows the code folder of each project.
         for id in removed {
             await host.tasks.unload(projectID: id)
+            if forget {
+                await host.bundles.removeWorktrees(projectID: id)
+            }
+            await host.bundles.unload(projectID: id)
         }
         if project.parentID == nil, forget {
             let before = projectsFile

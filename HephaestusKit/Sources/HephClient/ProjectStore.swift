@@ -2,9 +2,9 @@ import Foundation
 import HephCore
 import Observation
 
-/// The mirror of one opened project of one Main: the project, its tasks, sessions and runs (docs/client/workspace.md,
-/// "ProjectStore"). The Workspace creates it with `projectStore(mainDeviceID:projectID:)` and keeps it current from
-/// the events of its Main.
+/// The mirror of one opened project of one Main: the project, its tasks, bundles, sessions and runs
+/// (docs/client/workspace.md, "ProjectStore"). The Workspace creates it with `projectStore(mainDeviceID:projectID:)`
+/// and keeps it current from the events of its Main.
 @MainActor @Observable
 public final class ProjectStore {
     public enum Phase: Equatable, Sendable {
@@ -17,6 +17,8 @@ public final class ProjectStore {
     public private(set) var project: Project?
     /// By task number, ascending.
     public private(set) var tasks: [TaskItem] = []
+    /// By bundle number, ascending.
+    public private(set) var bundles: [BundleItem] = []
     /// By `created`, then id.
     public private(set) var sessions: [SessionInfo] = []
     /// By `startedAt`, then id; trimmed to 20 (running runs stay).
@@ -56,6 +58,7 @@ public final class ProjectStore {
             guard !isRemoved else { return }
             project = snapshot.project
             tasks = Self.sortedTasks(snapshot.tasks)
+            bundles = Self.sortedBundles(snapshot.bundles)
             sessions = Self.sortedSessions(snapshot.sessions)
             runs = Self.trimmedRuns(Self.sortedRuns(snapshot.runs))
             let queued = queuedEvents
@@ -91,6 +94,10 @@ public final class ProjectStore {
         tasks.first { $0.id == id }
     }
 
+    public func bundle(_ id: String) -> BundleItem? {
+        bundles.first { $0.id == id }
+    }
+
     public func session(_ id: UUID) -> SessionInfo? {
         sessions.first { $0.id == id }
     }
@@ -101,8 +108,8 @@ public final class ProjectStore {
 
     // MARK: - Workspace
 
-    /// Applies a store event (`project.changed`, `task.changed`, `task.removed`, `session.changed`,
-    /// `session.removed`, `run.changed`); queued while a load runs.
+    /// Applies a store event (`project.changed`, `task.changed`, `task.removed`, `bundle.changed`, `bundle.removed`,
+    /// `session.changed`, `session.removed`, `run.changed`); queued while a load runs.
     func receive(_ event: ServerEvent) {
         if isLoading {
             queuedEvents.append(event)
@@ -151,6 +158,7 @@ public final class ProjectStore {
     func applyPreview(_ snapshot: ProjectsSnapshotResult) {
         project = snapshot.project
         tasks = Self.sortedTasks(snapshot.tasks)
+        bundles = Self.sortedBundles(snapshot.bundles)
         sessions = Self.sortedSessions(snapshot.sessions)
         runs = Self.trimmedRuns(Self.sortedRuns(snapshot.runs))
         phase = .loaded
@@ -166,6 +174,10 @@ public final class ProjectStore {
             tasks = Self.upsert(payload.task, into: tasks, sorted: Self.sortedTasks)
         case .taskRemoved(let payload):
             tasks.removeAll { $0.id == payload.taskID }
+        case .bundleChanged(let payload):
+            bundles = Self.upsert(payload.bundle, into: bundles, sorted: Self.sortedBundles)
+        case .bundleRemoved(let payload):
+            bundles.removeAll { $0.id == payload.bundleID }
         case .sessionChanged(let payload):
             sessions = Self.upsert(payload.session, into: sessions, sorted: Self.sortedSessions)
         case .sessionRemoved(let payload):
@@ -195,6 +207,22 @@ public final class ProjectStore {
     static func sortedTasks(_ tasks: [TaskItem]) -> [TaskItem] {
         tasks.sorted { lhs, rhs in
             switch (taskNumber(lhs.id), taskNumber(rhs.id)) {
+            case let (left?, right?) where left != right:
+                return left < right
+            case (.some, nil):
+                return true
+            case (nil, .some):
+                return false
+            default:
+                return lhs.id < rhs.id
+            }
+        }
+    }
+
+    /// By the number after the last `-B` of the id; ids without a number last, by id.
+    static func sortedBundles(_ bundles: [BundleItem]) -> [BundleItem] {
+        bundles.sorted { lhs, rhs in
+            switch (bundleNumber(lhs.id), bundleNumber(rhs.id)) {
             case let (left?, right?) where left != right:
                 return left < right
             case (.some, nil):
@@ -242,7 +270,17 @@ public final class ProjectStore {
     /// The number after the last `-` of a task id; nil when there is none.
     private static func taskNumber(_ id: String) -> Int? {
         guard let dash = id.lastIndex(of: "-") else { return nil }
-        let digits = id[id.index(after: dash)...]
+        return number(id[id.index(after: dash)...])
+    }
+
+    /// The number after the last `-B` of a bundle id; nil when there is none.
+    private static func bundleNumber(_ id: String) -> Int? {
+        guard let marker = id.range(of: "-B", options: .backwards) else { return nil }
+        return number(id[marker.upperBound...])
+    }
+
+    /// Decimal digits as a number; nil when empty or not only digits.
+    private static func number(_ digits: Substring) -> Int? {
         guard !digits.isEmpty, digits.unicodeScalars.allSatisfy({ ("0"..."9").contains($0) }) else { return nil }
         return Int(digits)
     }

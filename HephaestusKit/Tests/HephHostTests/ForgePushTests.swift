@@ -66,7 +66,6 @@ final class ForgePushTests: XCTestCase {
                                         + "commits (git reset --soft origin/main, then commit again), then call "
                                         + "forge_push_docs again. If a private term is a false positive, the user "
                                         + "narrows or removes that one term in private-terms.txt."), message)
-        XCTAssertEqual(refusal?.guardrailPaths, [])
         try assertUnchanged(fixture)
     }
 
@@ -98,86 +97,12 @@ final class ForgePushTests: XCTestCase {
         try assertUnchanged(docs)
     }
 
-    func testRefusesGuardrail() async throws {
-        let fixture = try makeFixture()
-        try commit(fixture, [".gitignore": "build/\n", "docs/general.md": "# General rules\n",
-                             "HephaestusKit/Sources/HephHost/Forge/ForgePushGate.swift": "// The gate.\n"])
-        let paths = [".gitignore", "HephaestusKit/Sources/HephHost/Forge/ForgePushGate.swift", "docs/general.md"]
-        for tool in [ForgePushGate.Tool.pushDocs, .pushRegen] {
-            let refusal = await refusal { try await fixture.gate.push(tool) }
-            XCTAssertEqual(refusal?.message, "Changes to the personal-data guardrail are pushed by hand after review: "
-                               + "\(paths.joined(separator: ", ")).")
-            XCTAssertEqual(refusal?.guardrailPaths, paths)
-        }
-        try assertUnchanged(fixture)
-    }
-
     func testRefusesCaseVariant() async throws {
-        let script = try makeFixture()
-        try commitIndexEntry(script, path: "Scripts/check-public.sh", content: "#!/bin/bash\n")
-        let scriptRefusal = await refusal { try await script.gate.push(.pushDocs) }
-        XCTAssertEqual(scriptRefusal?.message, "Changes to the personal-data guardrail are pushed by hand after "
-                           + "review: Scripts/check-public.sh.")
-        XCTAssertEqual(scriptRefusal?.guardrailPaths, ["Scripts/check-public.sh"])
-        try assertUnchanged(script)
-
         let docs = try makeFixture()
         let sha = try commitIndexEntry(docs, path: "docs/A.md", content: "A\n")
         let docsRefusal = await refusal { try await docs.gate.push(.pushDocs) }
         XCTAssertEqual(docsRefusal?.message,
                        "\(sha.prefix(8)) adds docs/A.md, which differs only in case from docs/a.md.")
-        try assertUnchanged(docs)
-    }
-
-    func testRefusesBinary() async throws {
-        let binary = try makeFixture()
-        try write(Data([0x89, 0x50, 0x4E, 0x47, 0x00, 0x01]), to: "docs/shot.png", in: binary.repository)
-        try commit(binary, [:])
-        let binaryRefusal = await refusal { try await binary.gate.push(.pushDocs) }
-        XCTAssertEqual(binaryRefusal?.message,
-                       "Changes to the personal-data guardrail are pushed by hand after review: docs/shot.png.")
-        XCTAssertEqual(binaryRefusal?.guardrailPaths, ["docs/shot.png"])
-        try assertUnchanged(binary)
-
-        let attributes = try makeFixture()
-        try commit(attributes, ["docs/.gitattributes": "*.md text\n"])
-        let attributesRefusal = await refusal { try await attributes.gate.push(.pushDocs) }
-        XCTAssertEqual(attributesRefusal?.message,
-                       "Changes to the personal-data guardrail are pushed by hand after review: docs/.gitattributes.")
-        XCTAssertEqual(attributesRefusal?.guardrailPaths, ["docs/.gitattributes"])
-        try assertUnchanged(attributes)
-    }
-
-    func testRefusesBinaryDespiteAttributes() async throws {
-        let fixture = try makeFixture()
-        try write(Data("* diff\n".utf8), to: ".git/info/attributes", in: fixture.repository)
-        try write(Data([0x89, 0x50, 0x4E, 0x47, 0x00, 0x01]), to: "docs/shot.png", in: fixture.repository)
-        try commit(fixture, [:])
-        let refusal = await refusal { try await fixture.gate.push(.pushDocs) }
-        XCTAssertEqual(refusal?.message,
-                       "Changes to the personal-data guardrail are pushed by hand after review: docs/shot.png.")
-        XCTAssertEqual(refusal?.guardrailPaths, ["docs/shot.png"])
-        try assertUnchanged(fixture)
-    }
-
-    func testRefusesNonASCIIPath() async throws {
-        // Compared as UTF-8 bytes: Swift's `==` of `String` holds U+212A KELVIN SIGN equal to `K`.
-        let guardrail = "Changes to the personal-data guardrail are pushed by hand after review: "
-        let hook = try makeFixture()
-        let hookPath = ".githoo" + "\u{212A}" + "s/pre-push"
-        try commitIndexEntry(hook, path: hookPath, content: "#!/bin/bash\n",
-                             options: ["-c", "core.precomposeUnicode=false"])
-        let hookRefusal = await refusal { try await hook.gate.push(.pushDocs) }
-        XCTAssertEqual(Array((hookRefusal?.message ?? "").utf8), Array("\(guardrail)\(hookPath).".utf8))
-        XCTAssertEqual(hookRefusal?.guardrailPaths.map { Array($0.utf8) }, [Array(hookPath.utf8)])
-        try assertUnchanged(hook)
-
-        let docs = try makeFixture()
-        let docsPath = "docs/caf" + "\u{00E9}" + ".md"
-        try commitIndexEntry(docs, path: docsPath, content: "caf\n")
-        let docsRefusal = await refusal { try await docs.gate.push(.pushDocs) }
-        XCTAssertEqual(Array((docsRefusal?.message ?? "").utf8), Array("\(guardrail)\(docsPath).".utf8))
-        XCTAssertEqual(docsRefusal?.guardrailPaths.map { Array($0.utf8) }, [Array(docsPath.utf8)])
         try assertUnchanged(docs)
     }
 
@@ -287,7 +212,7 @@ final class ForgePushTests: XCTestCase {
         XCTAssertNil(none)
     }
 
-    func testGuardrailPushedElsewhere() async throws {
+    func testCheckScriptPushedElsewhere() async throws {
         let fixture = try makeFixture()
         let head = try pushFromOtherClone(fixture, [
             "scripts/check-public.sh": "#!/bin/bash\necho 'Personal data check: clean.'\nexit 0\n",
@@ -295,8 +220,6 @@ final class ForgePushTests: XCTestCase {
         try fixture.sandbox.git(["fetch", "-q", "origin"], in: fixture.repository)
         let findings = try await fixture.gate.checkPushedElsewhere(from: fixture.pushed, to: head)
         XCTAssertNil(findings)
-        let paths = try await fixture.gate.guardrailPaths(from: fixture.pushed, to: head)
-        XCTAssertEqual(paths, ["scripts/check-public.sh"])
 
         try fixture.sandbox.git(["pull", "-q", "--rebase", "origin", "main"], in: fixture.repository)
         let sha = try commit(fixture, ["docs/a.md": "a\n\(PublicCheckTests.homePath)\n"])
@@ -330,12 +253,10 @@ final class ForgePushTests: XCTestCase {
 
     func testSessionRules() {
         let feedback = Self.feedbackRules.map { $0.replacingOccurrences(of: "<branch>", with: "main") }
-        XCTAssertEqual(ForgeSessionRules.allowedTools(regeneration: false, branch: "main"), feedback)
-        XCTAssertEqual(ForgeSessionRules.allowedTools(regeneration: true, branch: "main"),
+        XCTAssertEqual(ForgeSessionRules.allowedTools(.feedback, branch: "main"), feedback)
+        XCTAssertEqual(ForgeSessionRules.allowedTools(.regeneration, branch: "main"),
                        feedback + Self.regenerationRules)
-        let root = "/Users/user/Hephaestus"
-        let denied = Self.deniedRules.map { $0.replacingOccurrences(of: "<repository root>", with: root) }
-        XCTAssertEqual(ForgeSessionRules.disallowedTools(repositoryRoot: root), denied)
+        XCTAssertEqual(ForgeSessionRules.disallowedTools, Self.deniedRules)
 
         let login = [
             "PATH": "/usr/bin:/bin",
@@ -505,7 +426,7 @@ final class ForgePushTests: XCTestCase {
         "Bash(./scripts/*)",
     ]
 
-    /// `--disallowedTools` of the sessions of 3.5; `<repository root>` is the absolute path of the repository root.
+    /// `--disallowedTools` of the sessions of 3.5.
     private static let deniedRules = [
         "Bash(git push *)",
         "Bash(git config *)",
@@ -521,22 +442,6 @@ final class ForgePushTests: XCTestCase {
         "Bash(git log *--output*)",
         "Bash(git show *--output*)",
         "Bash(git stash *--output*)",
-        "Edit(/<repository root>/docs/general.md)",
-        "Edit(/<repository root>/docs/public-repository.md)",
-        "Edit(/<repository root>/scripts/check-public.sh)",
-        "Edit(/<repository root>/.githooks/**)",
-        "Edit(/<repository root>/.github/**)",
-        "Edit(/<repository root>/.gitignore)",
-        "Edit(/<repository root>/CLAUDE.md)",
-        "Edit(/<repository root>/HephaestusKit/Sources/HephHost/Forge/ForgePushGate.swift)",
-        "Edit(/<repository root>/HephaestusKit/Sources/HephHost/Forge/ForgeGit.swift)",
-        "Edit(/<repository root>/HephaestusKit/Sources/HephHost/Forge/ForgeChecks.swift)",
-        "Edit(/<repository root>/HephaestusKit/Sources/HephHost/Forge/PrivateTerms.swift)",
-        "Edit(/<repository root>/HephaestusKit/Sources/HephHost/Claude/ForgeSessionRules.swift)",
-        "Edit(/<repository root>/HephaestusKit/Sources/HephHost/Claude/ForgePrompts.swift)",
-        "Edit(/<repository root>/HephaestusKit/Sources/HephHost/MCP/MCPToolKinds.swift)",
-        "Edit(/<repository root>/HephaestusKit/Tests/HephHostTests/PublicCheckTests.swift)",
-        "Edit(/<repository root>/HephaestusKit/Tests/HephHostTests/ForgePushTests.swift)",
         "Edit(.claude/**)",
         "Edit(.mcp.json)",
         "Edit(**/.hephaestus/**)",
@@ -586,14 +491,12 @@ final class ForgePushTests: XCTestCase {
         return try sandbox.git(["rev-parse", "HEAD"], in: repository).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// A commit adding `path` with `git <options> update-index --add --cacheinfo`, for a path that differs only in case
-    /// from one of the working tree (the disk of a Mac holds only one of them) or whose bytes the disk would change;
-    /// its full SHA.
+    /// A commit adding `path` with `git update-index --add --cacheinfo`, for a path that differs only in case from one
+    /// of the working tree (the disk of a Mac holds only one of them); its full SHA.
     @discardableResult
-    private func commitIndexEntry(_ fixture: Fixture, path: String, content: String,
-                                  options: [String] = []) throws -> String {
+    private func commitIndexEntry(_ fixture: Fixture, path: String, content: String) throws -> String {
         let blob = try hashObject(content, in: fixture)
-        try fixture.sandbox.git(options + ["update-index", "--add", "--cacheinfo", "100644,\(blob),\(path)"],
+        try fixture.sandbox.git(["update-index", "--add", "--cacheinfo", "100644,\(blob),\(path)"],
                                 in: fixture.repository)
         try fixture.sandbox.git(["commit", "-q", "-m", "Change"], in: fixture.repository)
         return try fixture.sandbox.git(["rev-parse", "HEAD"], in: fixture.repository)

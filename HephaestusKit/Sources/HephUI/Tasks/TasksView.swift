@@ -8,7 +8,7 @@ import AppKit
 import UIKit
 #endif
 
-/// The Tasks section of the project held by `store` (docs/ui/tasks.md): the task list and the selected task.
+/// The Tasks section of the project held by `store` (docs/ui/tasks.md): the task list and the selected task or bundle.
 ///
 /// | Width class     | Layout                                                                  |
 /// |-----------------|-------------------------------------------------------------------------|
@@ -26,6 +26,8 @@ public struct TasksView: View {
     /// The selected session tab of each task, remembered while this view exists.
     @State private var selectedSessions: [String: UUID] = [:]
     @State private var isNewTaskPresented = false
+    /// The tasks of the New Bundle sheet while it is shown.
+    @State private var newBundle: NewBundleRequest?
 
     public init(store: ProjectStore) {
         self.store = store
@@ -38,6 +40,17 @@ public struct TasksView: View {
                 NewTaskSheet(store: store) { task in
                     context.selection.item = task.id
                 }
+            }
+            .sheet(item: $newBundle) { request in
+                NewBundleSheet(store: store, taskIDs: request.taskIDs) { bundle in
+                    // The compact Select mode ends with its selection, so that the new bundle is pushed.
+                    listState.isSelecting = false
+                    listState.selectedIDs = []
+                    context.selection.item = bundle.id
+                }
+            }
+            .onChange(of: context.selection.item, initial: true) { _, item in
+                listState.follow(item: item)
             }
             .focusedSceneValue(\.newTaskAction, newTaskAction)
     }
@@ -63,8 +76,8 @@ public struct TasksView: View {
         if isCompact {
             NavigationStack {
                 list
-                    .navigationDestination(item: itemBinding) { taskID in
-                        TaskDetailDestination(store: store, taskID: taskID, isCompact: true,
+                    .navigationDestination(item: itemBinding) { itemID in
+                        TaskDetailDestination(store: store, itemID: itemID, isCompact: true,
                                               selectedSessions: $selectedSessions)
                     }
             }
@@ -83,14 +96,19 @@ public struct TasksView: View {
     private var list: some View {
         TaskListView(store: store, state: listState, isCompact: isCompact) {
             isNewTaskPresented = true
+        } onNewBundle: { taskIDs in
+            newBundle = NewBundleRequest(taskIDs: taskIDs)
         }
     }
 
-    /// The detail area of regular width.
+    /// The detail area of regular width: the selected task or bundle, the actions on several selected tasks, or
+    /// "Select a task".
     @ViewBuilder
     private var detail: some View {
-        if let taskID = context.selection.item {
-            TaskDetailDestination(store: store, taskID: taskID, isCompact: false, selectedSessions: $selectedSessions)
+        if let itemID = context.selection.item {
+            TaskDetailDestination(store: store, itemID: itemID, isCompact: false, selectedSessions: $selectedSessions)
+        } else if listState.selectedIDs.count > 1 {
+            multipleSelection
         } else {
             ContentUnavailableView {
                 Text("Select a task")
@@ -98,24 +116,50 @@ public struct TasksView: View {
         }
     }
 
-    /// `selection.item`, the selected task id. In compact width the pushed detail follows it; Back sets it to nil.
+    /// "<n> tasks selected", a New Bundle… button and the Add to Bundle menu.
+    private var multipleSelection: some View {
+        let taskIDs = listState.selectedTaskIDs(in: store.tasks)
+        return ContentUnavailableView {
+            Text(verbatim: "\(listState.selectedIDs.count) tasks selected")
+        } actions: {
+            Button("New Bundle…") {
+                newBundle = NewBundleRequest(taskIDs: taskIDs)
+            }
+            .disabled(taskIDs.isEmpty || !TasksScreen.isConnected(store))
+            AddToBundleMenu(store: store, taskIDs: taskIDs)
+                .fixedSize()
+        }
+    }
+
+    /// `selection.item`, the selected task or bundle id. In compact width the pushed detail follows it, except in the
+    /// Select mode, where rows are chosen without showing them; Back sets it to nil.
     private var itemBinding: Binding<String?> {
         Binding(
-            get: { context.selection.item },
+            get: { listState.isSelecting ? nil : context.selection.item },
             set: { context.selection.item = $0 }
         )
     }
 }
 
-/// The detail of the task `taskID`, or "<ID> was deleted." when the store has no such task.
+/// The tasks of a New Bundle sheet to show.
+private struct NewBundleRequest: Identifiable {
+    let id = UUID()
+    let taskIDs: [String]
+}
+
+/// The detail of the task or bundle `itemID`, or "<ID> was deleted." when the store has neither.
 private struct TaskDetailDestination: View {
     let store: ProjectStore
-    let taskID: String
+    let itemID: String
     let isCompact: Bool
     @Binding var selectedSessions: [String: UUID]
 
     var body: some View {
-        if let task = store.task(taskID) {
+        if let bundle = store.bundle(itemID) {
+            BundleDetailView(store: store, bundle: bundle)
+                .id(itemID)
+        } else if let task = store.task(itemID) {
+            let taskID = itemID
             TaskDetailView(
                 store: store,
                 task: task,
@@ -128,7 +172,7 @@ private struct TaskDetailDestination: View {
             .id(taskID)
         } else {
             ContentUnavailableView {
-                Text(verbatim: "\(taskID) was deleted.")
+                Text(verbatim: "\(itemID) was deleted.")
             }
         }
     }

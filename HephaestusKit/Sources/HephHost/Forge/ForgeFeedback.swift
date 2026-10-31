@@ -110,6 +110,19 @@ extension ForgeService {
         items[index] = item
     }
 
+    /// Its task changes name (`task.changed`): `title` = the new name; a task whose name equals the item's `title`
+    /// changes nothing.
+    func renameItem(projectID: String, task: TaskItem) async {
+        guard storeLoaded,
+              let index = items.firstIndex(where: { $0.taskID == task.id && $0.projectID == projectID }),
+              items[index].title != task.name
+        else { return }
+        items[index].title = task.name
+        items[index].updated = Date()
+        saveStore()
+        await broadcastIfChanged()
+    }
+
     /// Its task is deleted: removed from `items` and from its cycle's `itemTaskIDs`.
     func removeItem(projectID: String, taskID: String) async {
         guard storeLoaded,

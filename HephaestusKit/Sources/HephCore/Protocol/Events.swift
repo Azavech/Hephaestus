@@ -9,6 +9,8 @@ public enum EventName: String, CaseIterable, Sendable {
     case projectChanged = "project.changed"
     case taskChanged = "task.changed"
     case taskRemoved = "task.removed"
+    case bundleChanged = "bundle.changed"
+    case bundleRemoved = "bundle.removed"
     case filesChanged = "files.changed"
     case sessionChanged = "session.changed"
     case sessionRemoved = "session.removed"
@@ -47,6 +49,8 @@ public enum ServerEvent: Sendable, Hashable {
     case projectChanged(ProjectChangedPayload)
     case taskChanged(TaskChangedPayload)
     case taskRemoved(TaskRemovedPayload)
+    case bundleChanged(BundleChangedPayload)
+    case bundleRemoved(BundleRemovedPayload)
     case filesChanged(FilesChangedPayload)
     case sessionChanged(SessionChangedPayload)
     case sessionRemoved(SessionRemovedPayload)
@@ -67,6 +71,8 @@ public enum ServerEvent: Sendable, Hashable {
         case .projectChanged: return .projectChanged
         case .taskChanged: return .taskChanged
         case .taskRemoved: return .taskRemoved
+        case .bundleChanged: return .bundleChanged
+        case .bundleRemoved: return .bundleRemoved
         case .filesChanged: return .filesChanged
         case .sessionChanged: return .sessionChanged
         case .sessionRemoved: return .sessionRemoved
@@ -102,6 +108,8 @@ public enum ServerEvent: Sendable, Hashable {
         case .projectChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .taskChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .taskRemoved(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
+        case .bundleChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
+        case .bundleRemoved(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .filesChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .sessionChanged(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
         case .sessionRemoved(let payload): return try WireCoding.encodeEvent(name: name, params: payload)
@@ -127,6 +135,8 @@ public enum ServerEvent: Sendable, Hashable {
         case .projectChanged: return .projectChanged(try event.decodeParams())
         case .taskChanged: return .taskChanged(try event.decodeParams())
         case .taskRemoved: return .taskRemoved(try event.decodeParams())
+        case .bundleChanged: return .bundleChanged(try event.decodeParams())
+        case .bundleRemoved: return .bundleRemoved(try event.decodeParams())
         case .filesChanged: return .filesChanged(try event.decodeParams())
         case .sessionChanged: return .sessionChanged(try event.decodeParams())
         case .sessionRemoved: return .sessionRemoved(try event.decodeParams())
@@ -193,6 +203,28 @@ public struct TaskRemovedPayload: Codable, Sendable, Hashable {
     public init(projectID: String, taskID: String) {
         self.projectID = projectID
         self.taskID = taskID
+    }
+}
+
+/// `bundle.changed`: the bundle after the change.
+public struct BundleChangedPayload: Codable, Sendable, Hashable {
+    public var projectID: String
+    public var bundle: BundleItem
+
+    public init(projectID: String, bundle: BundleItem) {
+        self.projectID = projectID
+        self.bundle = bundle
+    }
+}
+
+/// `bundle.removed`.
+public struct BundleRemovedPayload: Codable, Sendable, Hashable {
+    public var projectID: String
+    public var bundleID: String
+
+    public init(projectID: String, bundleID: String) {
+        self.projectID = projectID
+        self.bundleID = bundleID
     }
 }
 

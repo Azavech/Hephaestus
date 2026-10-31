@@ -93,9 +93,9 @@ final class ValidationTests: XCTestCase {
         let sessionID = UUID()
         let fileName = SessionFile.fileStem(sessionID) + ".yml"
         func validatedSession(_ title: String) throws -> SessionFile {
-            var session = SessionFile(id: sessionID, kind: .project, taskID: nil, mode: nil, title: title,
-                                      created: Date(), updated: Date(), permissionMode: .acceptEdits, model: nil,
-                                      status: .stopped)
+            var session = SessionFile(id: sessionID, kind: .project, taskID: nil, mode: nil, bundleID: nil,
+                                      title: title, created: Date(), updated: Date(), permissionMode: .acceptEdits,
+                                      model: nil, status: .stopped)
             session.normalize()
             try session.validate(fileName: fileName)
             return session

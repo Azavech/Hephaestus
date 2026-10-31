@@ -37,7 +37,8 @@ struct SessionHeaderView: View {
         .padding(.vertical, 10)
     }
 
-    /// Task session "<task id> · <mode>"; feedback "Feedback · <task id>"; regeneration "Regeneration".
+    /// Task session "<task id> · <mode>", followed by " · <bundle id>" for a task session of a bundle; feedback
+    /// "Feedback · <task id>"; regeneration "Regeneration"; bundle "Bundle · <bundle id>".
     @ViewBuilder private func contextLine(_ info: SessionInfo) -> some View {
         switch info.kind {
         case .project:
@@ -49,6 +50,9 @@ struct SessionHeaderView: View {
                 }
                 if let mode = info.mode {
                     Text(info.taskID == nil ? mode.displayName : " · \(mode.displayName)")
+                }
+                if let bundleID = info.bundleID {
+                    Text(info.taskID == nil && info.mode == nil ? bundleID : " · \(bundleID)")
                 }
             }
             .font(.subheadline)
@@ -66,6 +70,11 @@ struct SessionHeaderView: View {
             .lineLimit(1)
         case .regeneration:
             Text("Regeneration")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        case .bundle:
+            Text(info.bundleID.map { "Bundle · \($0)" } ?? "Bundle")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

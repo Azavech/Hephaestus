@@ -32,6 +32,7 @@ public enum ClaudeLabels {
         case .task: return "Task"
         case .feedback: return "Feedback"
         case .regeneration: return "Regeneration"
+        case .bundle: return "Bundle"
         }
     }
 
@@ -53,7 +54,7 @@ public enum ClaudeLabels {
     /// `regeneration`.
     static func offersPermissionMode(_ kind: SessionKind) -> Bool {
         switch kind {
-        case .project, .task: return true
+        case .project, .task, .bundle: return true
         case .feedback, .regeneration: return false
         }
     }

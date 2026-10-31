@@ -294,10 +294,11 @@ public enum PreviewData {
     // MARK: - Snapshots
 
     /// `projects.snapshot` of HEPH: tasks by number, sessions by `created`, runs newest first.
-    static let hephaestusSnapshot = ProjectsSnapshotResult(project: hephaestus, tasks: tasks, sessions: sessions,
+    static let hephaestusSnapshot = ProjectsSnapshotResult(project: hephaestus, tasks: tasks, bundles: [],
+                                                           sessions: sessions,
                                                            runs: runs.sorted { $0.startedAt > $1.startedAt })
 
-    static let apiSnapshot = ProjectsSnapshotResult(project: api, tasks: apiTasks, sessions: [], runs: [])
+    static let apiSnapshot = ProjectsSnapshotResult(project: api, tasks: apiTasks, bundles: [], sessions: [], runs: [])
 
     // MARK: - Files
 

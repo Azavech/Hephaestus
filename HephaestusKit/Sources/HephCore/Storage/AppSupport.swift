@@ -52,4 +52,6 @@ public struct AppSupport: Sendable {
     public var uploadsFolder: URL { root.appendingPathComponent("Uploads", isDirectory: true) }
     /// Updates/
     public var updatesFolder: URL { root.appendingPathComponent("Updates", isDirectory: true) }
+    /// Worktrees/
+    public var worktreesFolder: URL { root.appendingPathComponent("Worktrees", isDirectory: true) }
 }

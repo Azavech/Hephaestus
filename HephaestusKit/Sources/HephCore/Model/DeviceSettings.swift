@@ -13,6 +13,12 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
         public init() {}
     }
 
+    public struct Bundles: Codable, Sendable, Equatable {
+        public var maxParallel: Int = 4
+
+        public init() {}
+    }
+
     public struct Updates: Codable, Sendable, Equatable {
         public var enabled: Bool = true
         public var signingIdentity: String = ""
@@ -31,6 +37,7 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
     public var sessionIdleMinutes: Int = 15
     public var autosave: Bool = true
     public var showHiddenFiles: Bool = false
+    public var bundles = Bundles()
     public var forge = Forge()
     public var updates = Updates()
 
@@ -82,6 +89,13 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
         }
         if let value = try? container.decodeIfPresent(Bool.self, forKey: .autosave) { autosave = value }
         if let value = try? container.decodeIfPresent(Bool.self, forKey: .showHiddenFiles) { showHiddenFiles = value }
+
+        if let bundlesContainer = try? container.nestedContainer(keyedBy: BundlesKeys.self, forKey: .bundles) {
+            if let value = try? bundlesContainer.decodeIfPresent(Int.self, forKey: .maxParallel),
+               Self.isValidMaxParallel(value) {
+                bundles.maxParallel = value
+            }
+        }
 
         if let forgeContainer = try? container.nestedContainer(keyedBy: ForgeKeys.self, forKey: .forge) {
             if let value = try? forgeContainer.decodeIfPresent(Bool.self, forKey: .enabled) { forge.enabled = value }
@@ -142,6 +156,9 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
         guard Self.isValidIdleMinutes(sessionIdleMinutes) else {
             throw DataError.invalid("the idle timeout must be between 1 and 1440 minutes")
         }
+        guard Self.isValidMaxParallel(bundles.maxParallel) else {
+            throw DataError.invalid("the parallel task sessions must be between 1 and 16")
+        }
         guard ProjectIdentifier.isValid(forge.sourceProjectID) else {
             throw DataError.invalid("the identifier must be 2 to 8 letters A to Z")
         }
@@ -165,6 +182,10 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
     }
 
     // MARK: - Rules
+
+    private enum BundlesKeys: String, CodingKey {
+        case maxParallel
+    }
 
     private enum ForgeKeys: String, CodingKey {
         case enabled, sourceProjectID, branch, autoRegenerate
@@ -215,6 +236,10 @@ public struct DeviceSettings: Codable, Sendable, Equatable {
 
     private static func isValidIdleMinutes(_ value: Int) -> Bool {
         (1...1440).contains(value)
+    }
+
+    private static func isValidMaxParallel(_ value: Int) -> Bool {
+        (1...16).contains(value)
     }
 
     /// Not empty, no whitespace.

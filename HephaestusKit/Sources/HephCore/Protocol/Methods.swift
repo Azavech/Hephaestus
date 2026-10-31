@@ -35,6 +35,11 @@ public enum RPCMethod: String, CaseIterable, Sendable {
     case tasksUpdateComment = "tasks.updateComment"
     case tasksDeleteComment = "tasks.deleteComment"
     case attachmentsRead = "attachments.read"
+    case bundlesCreate = "bundles.create"
+    case bundlesUpdate = "bundles.update"
+    case bundlesDelete = "bundles.delete"
+    case bundlesStart = "bundles.start"
+    case bundlesStop = "bundles.stop"
     case filesList = "files.list"
     case filesRead = "files.read"
     case filesWrite = "files.write"
@@ -95,6 +100,7 @@ public enum RPCMethod: String, CaseIterable, Sendable {
         switch self {
         case .projectsCreate, .projectsUpdate, .projectsRemove, .projectsMigrate,
              .tasksCreate, .tasksUpdate, .tasksDelete, .tasksAddComment, .tasksUpdateComment, .tasksDeleteComment,
+             .bundlesCreate, .bundlesUpdate, .bundlesDelete, .bundlesStart, .bundlesStop,
              .filesWrite, .filesCreate, .filesRename, .filesDelete,
              .tabsOpen, .tabsUpdate, .tabsClose, .tabsMove,
              .sessionsStart, .sessionsSend, .sessionsRespond, .sessionsUpdate, .sessionsDelete,
@@ -322,12 +328,14 @@ public struct ProjectsSnapshotParams: Codable, Sendable, Hashable {
 public struct ProjectsSnapshotResult: Codable, Sendable, Hashable {
     public var project: Project
     public var tasks: [TaskItem]
+    public var bundles: [BundleItem]
     public var sessions: [SessionInfo]
     public var runs: [RunInfo]
 
-    public init(project: Project, tasks: [TaskItem], sessions: [SessionInfo], runs: [RunInfo]) {
+    public init(project: Project, tasks: [TaskItem], bundles: [BundleItem], sessions: [SessionInfo], runs: [RunInfo]) {
         self.project = project
         self.tasks = tasks
+        self.bundles = bundles
         self.sessions = sessions
         self.runs = runs
     }
@@ -566,6 +574,65 @@ public struct AttachmentsReadResult: Codable, Sendable, Hashable {
         self.data = data
         self.size = size
         self.mimeType = mimeType
+    }
+}
+
+/// `bundles.create` params.
+public struct BundlesCreateParams: Codable, Sendable, Hashable {
+    public var projectID: String
+    public var name: String
+    public var taskIDs: [String]
+
+    public init(projectID: String, name: String, taskIDs: [String]) {
+        self.projectID = projectID
+        self.name = name
+        self.taskIDs = taskIDs
+    }
+}
+
+/// `bundles.update` params.
+public struct BundlesUpdateParams: Codable, Sendable, Hashable {
+    public var projectID: String
+    public var bundleID: String
+    public var patch: BundlePatch
+
+    public init(projectID: String, bundleID: String, patch: BundlePatch) {
+        self.projectID = projectID
+        self.bundleID = bundleID
+        self.patch = patch
+    }
+}
+
+/// `bundles.delete` params.
+public struct BundlesDeleteParams: Codable, Sendable, Hashable {
+    public var projectID: String
+    public var bundleID: String
+
+    public init(projectID: String, bundleID: String) {
+        self.projectID = projectID
+        self.bundleID = bundleID
+    }
+}
+
+/// `bundles.start` params.
+public struct BundlesStartParams: Codable, Sendable, Hashable {
+    public var projectID: String
+    public var bundleID: String
+
+    public init(projectID: String, bundleID: String) {
+        self.projectID = projectID
+        self.bundleID = bundleID
+    }
+}
+
+/// `bundles.stop` params.
+public struct BundlesStopParams: Codable, Sendable, Hashable {
+    public var projectID: String
+    public var bundleID: String
+
+    public init(projectID: String, bundleID: String) {
+        self.projectID = projectID
+        self.bundleID = bundleID
     }
 }
 

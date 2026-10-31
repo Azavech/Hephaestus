@@ -191,6 +191,9 @@ public actor MigrationService: HostMethodHandler {
         }
         let liveWork = ProtocolError(.conflict, "Stop the Claude sessions and runs of \(name) first.")
         guard await !hasLiveWork(projectID) else { throw liveWork }
+        guard await !hasActiveBundle(projectID) else {
+            throw ProtocolError(.conflict, "Stop the bundles of \(name) first.")
+        }
         // A concurrent projects.migrate of the same project may have passed the checks meanwhile.
         guard !isMoving(projectID) else {
             throw ProtocolError(.locked, "\(name) is already being moved.")
@@ -231,6 +234,17 @@ public actor MigrationService: HostMethodHandler {
                 return true
             }
             if await host.runs.activeRunCount(projectID: id) > 0 {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// A bundle in `running` or `review` in the project or one of its sub projects.
+    private func hasActiveBundle(_ projectID: String) async -> Bool {
+        let tree = [projectID] + (await host.registry.descendants(of: projectID))
+        for id in tree {
+            if await host.bundles.hasActiveBundle(projectID: id) {
                 return true
             }
         }

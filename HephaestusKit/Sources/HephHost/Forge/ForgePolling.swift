@@ -7,10 +7,9 @@ extension ForgeService {
     // MARK: - Checks
 
     /// A check: configuration checks, fetch, `head`, the commits pushed elsewhere, then `releases/latest`. Returns true
-    /// when steps 1 to 3 succeeded; `lastError` is cleared when every step succeeded. `trustGuardrail`: the check that
-    /// `forge.regenerate` and `forge.retry` run first, whose step 4 trusts the changes of the guardrail it finds.
+    /// when steps 1 to 3 succeeded; `lastError` is cleared when every step succeeded.
     @discardableResult
-    func runCheck(trustGuardrail: Bool = false) async -> Bool {
+    func runCheck() async -> Bool {
         guard let config = configuration else { return false }
         // 1. Configuration checks.
         let repository: Repository
@@ -36,8 +35,7 @@ extension ForgeService {
             return false
         }
         // 4. The commits pushed elsewhere; a failure keeps the new head.
-        let pushedElsewhereError = await checkCommitsPushedElsewhere(git: git, branch: config.branch, head: commit,
-                                                                     trustGuardrail: trustGuardrail)
+        let pushedElsewhereError = await checkCommitsPushedElsewhere(git: git, branch: config.branch, head: commit)
         guard !Task.isCancelled else { return false }
         // 5. The latest release, skipped while rate limited; a failure keeps the new head.
         var releaseError: String?
@@ -66,13 +64,10 @@ extension ForgeService {
     }
 
     /// Checks step 4, the commits pushed elsewhere: when `trustedHead` is nil, it becomes `head`; when it differs from
-    /// `head`, the published check as it was at `trustedHead` judges the commits it does not have, then, when they are
-    /// clean, the paths they change that step 4 of the push tools leaves to the user by their name are listed.
-    /// `trustedHead` becomes `head` when they are clean and change no such path, or, with `trustGuardrail`, when they
-    /// are clean. forge.json is written when `trustedHead` changes. Returns the step's error for `lastError`, nil when
-    /// none.
-    private func checkCommitsPushedElsewhere(git: ForgeGit, branch: String, head commit: String,
-                                             trustGuardrail: Bool) async -> String? {
+    /// `head`, the published check as it was at `trustedHead` judges the commits it does not have, and `trustedHead`
+    /// becomes `head` when they are clean. forge.json is written when `trustedHead` changes. Returns the step's error
+    /// for `lastError`, nil when none.
+    private func checkCommitsPushedElsewhere(git: ForgeGit, branch: String, head commit: String) async -> String? {
         guard let trusted = trustedHead else {
             trustedHead = commit
             saveStore()
@@ -86,26 +81,14 @@ extension ForgeService {
                 return "Commits pushed to \(branch) outside the Forge hold personal data: follow \"If personal data "
                     + "was pushed\" in docs/public-repository.md.\n\n" + findings
             }
-            let guardrail = try await gate.guardrailPaths(from: trusted, to: commit)
-            if !guardrail.isEmpty, !trustGuardrail {
-                Log.host.notice("Commits pushed outside the Forge change the personal-data guardrail")
-                return "Commits pushed to \(branch) outside the Forge change the personal-data guardrail: "
-                    + "\(guardrail.joined(separator: ", ")). Review them, then press Regenerate Now or Retry on the "
-                    + "Forge screen to trust them."
-            }
             trustedHead = commit
             saveStore()
-            if guardrail.isEmpty {
-                Log.host.notice("The commits pushed outside the Forge passed the personal data check")
-            } else {
-                Log.host.notice("The changes of the personal-data guardrail pushed outside the Forge are trusted")
-            }
+            Log.host.notice("The commits pushed outside the Forge passed the personal data check")
             return nil
         } catch is CancellationError {
             return nil
         } catch {
-            // The reason, without its final period: the git error of `git show` or `git diff-tree`, else that of MCP
-            // tools step 6.
+            // The reason, without its final period: the git error of `git show`, else that of MCP tools step 6.
             let reason = (error as? ForgePushGate.Refusal)?.message ?? Self.message(of: error)
             return "The commits pushed to \(branch) outside the Forge could not be checked: "
                 + "\(ForgePushGate.withoutFinalPeriod(reason))."

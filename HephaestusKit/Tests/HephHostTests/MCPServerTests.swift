@@ -189,9 +189,12 @@ final class MCPServerTests: XCTestCase {
                             "list_tasks", "get_task", "create_task", "update_task", "delete_task", "comment_task",
                             "start_task_session", "list_runs", "start_run", "stop_run", "get_run_output",
                             "list_web_tabs", "open_web_tab", "search", "list_skills", "get_skill", "save_skill"]
+        let bundleTools = projectTools.filter { !["start_task_session", "start_run", "stop_run"].contains($0) }
+            + ["forge_push_docs", "get_bundle", "start_bundle_task", "update_bundle", "finish_bundle"]
+        let feedbackTools = ["get_task", "update_task", "comment_task", "forge_push_docs"]
         let list = #"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#
-        for (kind, expected) in [(SessionKind.project, projectTools), (.task, projectTools),
-                                 (.feedback, ["get_task", "forge_push_docs"]), (.regeneration, ["forge_push_regen"])] {
+        for (kind, expected) in [(SessionKind.project, projectTools), (.task, projectTools), (.bundle, bundleTools),
+                                 (.feedback, feedbackTools), (.regeneration, ["forge_push_regen"])] {
             let response = await dispatcher.handle(body: Data(list.utf8), context: context(kind))
             XCTAssertEqual(response.status, 200)
             let tools = try XCTUnwrap((try object(response.body)["result"] as? NSDictionary)?["tools"] as? [NSDictionary])
@@ -214,15 +217,25 @@ final class MCPServerTests: XCTestCase {
         XCTAssertEqual(error["code"] as? Int, -32_602)
         XCTAssertEqual(error["message"] as? String, "Unknown tool: start_run")
 
-        // get_task of another task in a feedback session: a tool error.
-        let other = #"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_task","arguments":{"task":"heph-8"}}}"#
-        let response = try await exchange(port, postRequest(other, token: feedback))
-        XCTAssertEqual(response.status, 200)
-        let result = try XCTUnwrap(try object(response.body)["result"] as? NSDictionary)
-        XCTAssertEqual(result["isError"] as? Bool, true)
-        let content = try XCTUnwrap(result["content"] as? [NSDictionary])
-        XCTAssertEqual(content.first?["type"] as? String, "text")
-        XCTAssertEqual(content.first?["text"] as? String, "Forge sessions can only read their own feedback task.")
+        // get_task, update_task and comment_task of another task in a feedback session: a tool error.
+        let calls = [
+            (#"{"name":"get_task","arguments":{"task":"heph-8"}}"#,
+             "Forge sessions can only read their own feedback task."),
+            (#"{"name":"update_task","arguments":{"task":"heph-8","name":"Sidebar"}}"#,
+             "Forge sessions can only change their own feedback task."),
+            (#"{"name":"comment_task","arguments":{"task":"heph-8","body":"Done."}}"#,
+             "Forge sessions can only change their own feedback task."),
+        ]
+        for (index, (params, expected)) in calls.enumerated() {
+            let other = #"{"jsonrpc":"2.0","id":\#(5 + index),"method":"tools/call","params":\#(params)}"#
+            let response = try await exchange(port, postRequest(other, token: feedback))
+            XCTAssertEqual(response.status, 200)
+            let result = try XCTUnwrap(try object(response.body)["result"] as? NSDictionary)
+            XCTAssertEqual(result["isError"] as? Bool, true, params)
+            let content = try XCTUnwrap(result["content"] as? [NSDictionary])
+            XCTAssertEqual(content.first?["type"] as? String, "text")
+            XCTAssertEqual(content.first?["text"] as? String, expected, params)
+        }
     }
 
     func testJSONRPCErrors() async throws {
@@ -255,7 +268,8 @@ final class MCPServerTests: XCTestCase {
 
     private func context(_ kind: SessionKind, taskID: String? = nil) -> MCPSessionContext {
         MCPSessionContext(sessionID: UUID(), projectID: "HEPH", kind: kind,
-                          taskID: taskID ?? (kind == .task ? "HEPH-1" : nil))
+                          taskID: taskID ?? (kind == .task ? "HEPH-1" : nil),
+                          bundleID: kind == .bundle ? "HEPH-B1" : nil)
     }
 
     private func lengthRequest(_ body: String) -> String {
@@ -374,6 +388,10 @@ private struct TestMCPHost: MCPHost {
 
     func forgePushRegen(sessionID: UUID) async throws -> String {
         throw ProtocolError(.conflict, "Nothing to push: commit your change first.")
+    }
+
+    func bundleTool(_ name: String, projectID: String, bundleID: String, arguments: Data) async throws -> String {
+        throw ProtocolError(.notFound, "Bundle \(bundleID) does not exist.")
     }
 }
 #endif

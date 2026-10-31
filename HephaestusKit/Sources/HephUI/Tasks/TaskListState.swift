@@ -15,9 +15,10 @@ struct TaskListSection: Identifiable {
     var id: Kind { kind }
 }
 
-/// The filter and sort settings of the task list of one window (docs/ui/tasks.md, "Filter and sort"), in the state of
-/// its `TasksView`: they are kept while the Tasks section of the same project is shown, and reset when the window shows
-/// another section or selects another project (the shell gives every project its own `TasksView`).
+/// The filter and sort settings of the task list of one window (docs/ui/tasks.md, "Filter and sort") and the selection
+/// of its rows ("Multi-selection"), in the state of its `TasksView`: they are kept while the Tasks section of the same
+/// project is shown, and reset when the window shows another section or selects another project (the shell gives every
+/// project its own `TasksView`).
 @MainActor @Observable
 final class TaskListState {
     enum Sort: Hashable, CaseIterable {
@@ -39,6 +40,10 @@ final class TaskListState {
     var sort: Sort = .number
     /// The text of the search field.
     var text = ""
+    /// The selected rows: task ids, or one bundle id.
+    var selectedIDs: Set<String> = []
+    /// Compact width: the Select mode (`EditMode.active`) is on.
+    var isSelecting = false
 
     /// Every setting has its default value.
     var isDefault: Bool {
@@ -69,6 +74,66 @@ final class TaskListState {
             sections.append(TaskListSection(kind: .broken, tasks: broken))
         }
         return sections
+    }
+
+    /// The bundles of `bundles` (in the order of `store.bundles`) whose id or name holds every word of the text; the
+    /// status filter and the sort do not apply.
+    func shownBundles(of bundles: [BundleItem]) -> [BundleItem] {
+        let words = SearchQuery(text).words
+        return bundles.filter { bundle in
+            words.allSatisfy { word in
+                [bundle.id, bundle.name].contains { SearchMatcher.contains(word, in: $0) }
+            }
+        }
+    }
+
+    /// The tasks of `tasks` whose id, name or description holds every word of `text`, the text rule of the filter;
+    /// the Add Tasks sheet of a bundle uses it.
+    static func tasks(_ tasks: [TaskItem], matching text: String) -> [TaskItem] {
+        let words = SearchQuery(text).words
+        return tasks.filter { task in
+            words.allSatisfy { word in
+                [task.id, task.name, task.description].contains { SearchMatcher.contains(word, in: $0) }
+            }
+        }
+    }
+
+    // MARK: - Selection
+
+    /// The `selection.item` that `selectedIDs` gives: the id when one is selected, else nil.
+    var selectedItem: String? {
+        selectedIDs.count == 1 ? selectedIDs.first : nil
+    }
+
+    /// Applies a change of the list's selection and returns the new `selection.item`. Only tasks are selected
+    /// together: a change that adds a bundle id leaves that bundle id alone, and a selection of several rows holds
+    /// neither a bundle nor a broken task.
+    func select(_ ids: Set<String>, isBroken: (String) -> Bool) -> String? {
+        let added = ids.subtracting(selectedIDs)
+        if let bundleID = added.sorted().first(where: Self.isBundleID) {
+            selectedIDs = [bundleID]
+        } else if ids.count > 1 {
+            selectedIDs = ids.filter { !Self.isBundleID($0) && !isBroken($0) }
+        } else {
+            selectedIDs = ids
+        }
+        return selectedItem
+    }
+
+    /// `selection.item` was set from elsewhere: the selection becomes that id alone.
+    func follow(item: String?) {
+        guard item != selectedItem else { return }
+        selectedIDs = item.map { [$0] } ?? []
+    }
+
+    /// The selected task ids among `tasks`, broken tasks left out, by task number.
+    func selectedTaskIDs(in tasks: [TaskItem]) -> [String] {
+        tasks.filter { selectedIDs.contains($0.id) && $0.parseError == nil }.map(\.id)
+    }
+
+    /// A bundle id never looks like a task id (docs/services/bundles.md, "Bundle id").
+    nonisolated static func isBundleID(_ id: String) -> Bool {
+        BundleID(id) != nil
     }
 
     /// Every word of the query occurs, case- and diacritic-insensitive, in the task's id, name or description; a broken
@@ -107,8 +172,17 @@ final class TaskListState {
         }
     }
 
+    /// Task ids by task number, ascending.
+    nonisolated static func sortedByNumber(_ taskIDs: [String]) -> [String] {
+        taskIDs.sorted { lhs, rhs in
+            let lhsNumber = number(of: lhs)
+            let rhsNumber = number(of: rhs)
+            return lhsNumber != rhsNumber ? lhsNumber < rhsNumber : lhs < rhs
+        }
+    }
+
     /// The integer after the last `-` of a task id; 0 when there is none.
-    private static func number(of taskID: String) -> Int {
+    private nonisolated static func number(of taskID: String) -> Int {
         guard let dash = taskID.lastIndex(of: "-") else { return 0 }
         return Int(taskID[taskID.index(after: dash)...]) ?? 0
     }

@@ -8,6 +8,7 @@ public struct SessionFile: Codable, Sendable, Equatable {
     public var kind: SessionKind
     public var taskID: String?
     public var mode: SessionMode?
+    public var bundleID: String?
     public var title: String
     public var created: Date
     public var updated: Date
@@ -16,12 +17,13 @@ public struct SessionFile: Codable, Sendable, Equatable {
     public var status: SessionStatus
 
     /// The values as given, except `created` and `updated`, which pass through YAMLCoding.wholeSeconds(_:).
-    public init(id: UUID, kind: SessionKind, taskID: String?, mode: SessionMode?, title: String, created: Date,
-                updated: Date, permissionMode: PermissionMode, model: String?, status: SessionStatus) {
+    public init(id: UUID, kind: SessionKind, taskID: String?, mode: SessionMode?, bundleID: String?, title: String,
+                created: Date, updated: Date, permissionMode: PermissionMode, model: String?, status: SessionStatus) {
         self.id = id
         self.kind = kind
         self.taskID = taskID
         self.mode = mode
+        self.bundleID = bundleID
         self.title = title
         self.created = YAMLCoding.wholeSeconds(created)
         self.updated = YAMLCoding.wholeSeconds(updated)
@@ -30,10 +32,10 @@ public struct SessionFile: Codable, Sendable, Equatable {
         self.status = status
     }
 
-    /// .mapping of the ten keys, each .value.
+    /// .mapping of the eleven keys, each .value.
     public static let shape: YAMLShape = .mapping([
-        "id": .value, "kind": .value, "taskID": .value, "mode": .value, "title": .value, "created": .value,
-        "updated": .value, "permissionMode": .value, "model": .value, "status": .value,
+        "id": .value, "kind": .value, "taskID": .value, "mode": .value, "bundleID": .value, "title": .value,
+        "created": .value, "updated": .value, "permissionMode": .value, "model": .value, "status": .value,
     ])
 
     /// id.uuidString.lowercased(): the name of the files and folder, and the CLI session id.
@@ -77,6 +79,9 @@ public struct SessionFile: Codable, Sendable, Equatable {
         if let taskID, let parsed = TaskID(taskID) {
             self.taskID = parsed.description
         }
+        if let bundleID, let parsed = BundleID(bundleID) {
+            self.bundleID = parsed.description
+        }
         title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if let model = model?.trimmingCharacters(in: .whitespacesAndNewlines) {
             self.model = model.isEmpty ? nil : model
@@ -96,6 +101,16 @@ public struct SessionFile: Codable, Sendable, Equatable {
         }
         guard (kind == .task) == (mode != nil) else {
             throw DataError.invalid("mode must be set for task sessions only")
+        }
+        let hasValidBundle = bundleID.map { BundleID($0) != nil } ?? false
+        let bundleAllowed: Bool
+        switch kind {
+        case .bundle: bundleAllowed = hasValidBundle
+        case .task: bundleAllowed = bundleID == nil || hasValidBundle
+        case .project, .feedback, .regeneration: bundleAllowed = bundleID == nil
+        }
+        guard bundleAllowed else {
+            throw DataError.invalid("bundleID must be set for bundle sessions and allowed for task sessions only")
         }
         guard ProjectFile.isOneLineName(title) else {
             throw DataError.invalid("the title must not be empty and must be on one line")

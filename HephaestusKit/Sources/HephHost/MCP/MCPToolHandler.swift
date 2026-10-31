@@ -35,9 +35,9 @@ struct MCPToolHandler: Sendable {
             case "list_tasks": text = try await listTasks(arguments)
             case "get_task": text = try await getTask(arguments, context: context)
             case "create_task": text = try await createTask(arguments)
-            case "update_task": text = try await updateTask(arguments)
+            case "update_task": text = try await updateTask(arguments, context: context)
             case "delete_task": text = try await deleteTask(arguments)
-            case "comment_task": text = try await commentTask(arguments)
+            case "comment_task": text = try await commentTask(arguments, context: context)
             case "start_task_session": text = try await startTaskSession(arguments)
             case "list_runs": text = try await listRuns(arguments)
             case "start_run": text = try await startRun(arguments)
@@ -51,6 +51,8 @@ struct MCPToolHandler: Sendable {
             case "save_skill": text = try await saveSkill(arguments)
             case "forge_push_docs": text = try await forgePush(context: context, docs: true)
             case "forge_push_regen": text = try await forgePush(context: context, docs: false)
+            case "get_bundle", "start_bundle_task", "update_bundle", "finish_bundle":
+                text = try await bundleTool(name, arguments, context: context)
             default: throw ToolFailure.message("Unknown tool: \(name)")
             }
             return MCPToolResult(text: text, isError: false)
@@ -228,11 +230,12 @@ struct MCPToolHandler: Sendable {
         return try json(try await perform(.tasksCreate, params, on: main.id, as: TaskItem.self))
     }
 
-    private func updateTask(_ arguments: Arguments) async throws -> String {
+    private func updateTask(_ arguments: Arguments, context: MCPSessionContext) async throws -> String {
         let task = try arguments.task()
         let name = try arguments.optionalString("name", minLength: 1)
         let description = try arguments.optionalString("description")
         let status = try arguments.optionalEnum("status", TaskStatus.self)
+        try Self.checkOwnFeedbackTask(task.taskID, context: context)
         let main = try await locate(task.projectID)
         let params = TasksUpdateParams(projectID: task.projectID, taskID: task.taskID,
                                        patch: TaskPatch(name: name, description: description, status: status))
@@ -247,10 +250,11 @@ struct MCPToolHandler: Sendable {
         return try json(["deleted": task.taskID])
     }
 
-    private func commentTask(_ arguments: Arguments) async throws -> String {
+    private func commentTask(_ arguments: Arguments, context: MCPSessionContext) async throws -> String {
         let task = try arguments.task()
         let body = try arguments.requiredString("body", minLength: 1)
         let paths = try arguments.optionalStrings("files") ?? []
+        try Self.checkOwnFeedbackTask(task.taskID, context: context)
 
         // Each path: an absolute path of a readable regular file of this Main; nothing is sent otherwise.
         var files: [(path: String, size: Int)] = []
@@ -450,14 +454,63 @@ struct MCPToolHandler: Sendable {
         return try json(summary)
     }
 
+    /// In a `feedback` session, `task` uppercased must be the session's `taskID` (6.9, 6.11).
+    private static func checkOwnFeedbackTask(_ taskID: String, context: MCPSessionContext) throws {
+        if context.kind == .feedback, taskID != context.taskID?.uppercased() {
+            throw ToolFailure.message("Forge sessions can only change their own feedback task.")
+        }
+    }
+
     // MARK: - 6.23, 6.24
 
     private func forgePush(context: MCPSessionContext, docs: Bool) async throws -> String {
-        do {
+        try await Self.hookResult {
             if docs {
                 return try await host.forgePushDocs(sessionID: context.sessionID)
             }
             return try await host.forgePushRegen(sessionID: context.sessionID)
+        }
+    }
+
+    // MARK: - 6.25 to 6.28
+
+    /// The bundle tools: the arguments are checked, then `MCPHost.bundleTool` runs with the token's project and
+    /// bundle and the checked arguments (`task` uppercased; `instructions` empty after trimming left out).
+    private func bundleTool(_ name: String, _ arguments: Arguments, context: MCPSessionContext) async throws
+        -> String {
+        var checked: [String: Any] = [:]
+        switch name {
+        case "start_bundle_task":
+            checked["task"] = try arguments.task().taskID
+            if let instructions = try arguments.optionalString("instructions"),
+               !instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                checked["instructions"] = instructions
+            }
+        case "update_bundle":
+            guard let status = try arguments.optionalString("status") else {
+                throw ToolFailure.invalidArguments("status is missing")
+            }
+            let allowed = [BundleStatus.running, BundleStatus.review].map(\.rawValue)
+            guard allowed.contains(status) else {
+                throw ToolFailure.invalidArguments("status must be one of \(allowed.joined(separator: ", "))")
+            }
+            checked["status"] = status
+        default:
+            break
+        }
+        guard let bundleID = context.bundleID else {
+            throw ToolFailure.message("Only the coordinator of a bundle can use this tool.")
+        }
+        let data = try JSONSerialization.data(withJSONObject: checked, options: [.sortedKeys])
+        return try await Self.hookResult {
+            try await host.bundleTool(name, projectID: context.projectID, bundleID: bundleID, arguments: data)
+        }
+    }
+
+    /// A Forge or bundle tool's `MCPHost` call: a thrown error's message alone is the tool error (section 8).
+    private static func hookResult(_ call: () async throws -> String) async throws -> String {
+        do {
+            return try await call()
         } catch let error as ProtocolError {
             throw ToolFailure.message(error.message)
         } catch {

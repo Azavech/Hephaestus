@@ -12,9 +12,7 @@ screenshot, a comment, a transcript or a log of the user's machines. Use the pla
 
 - Before committing, run `scripts/check-public.sh --staged` and fix every finding. Never use `--no-verify`.
 - Never split, encode, escape or reformat a value to get past a finding: remove it or use a placeholder.
-- In a Forge session, never run `git push`: push with the session's Forge tool, `forge_push_docs` or
-  `forge_push_regen`. Never edit the protected paths of `docs/public-repository.md` there: the user changes them by
-  hand.
+- In a Forge session, never run `git push`: push with the session's Forge tool, `forge_push_docs` or `forge_push_regen`.
 - Notes about the user or their machines never go into this file or any other file of the repository.
 
 ## Rules

@@ -134,12 +134,32 @@ enum MCPTools {
         ),
         MCPToolDefinition(
             name: "forge_push_docs",
-            description: #"Check the documentation commits of this feedback that are not on GitHub yet for personal data, then push them. Commit first, once the user agrees. On an error, do what the message says, then call it again."#,
+            description: #"Check the documentation commits of this feedback or bundle that are not on GitHub yet for personal data, then push them. Commit first, once the user agrees. On an error, do what the message says, then call it again."#,
             inputSchema: #"{"type":"object","properties":{},"additionalProperties":false}"#
         ),
         MCPToolDefinition(
             name: "forge_push_regen",
             description: #"Check the regeneration commits that are not on GitHub yet for personal data, then push them; CI then builds them and the app updates itself. On an error, do what the message says, then call it again."#,
+            inputSchema: #"{"type":"object","properties":{},"additionalProperties":false}"#
+        ),
+        MCPToolDefinition(
+            name: "get_bundle",
+            description: #"Get the bundle this session coordinates: its tasks in order, each with the task, its task session, its branch and its work folder, and how many task sessions may run at once."#,
+            inputSchema: #"{"type":"object","properties":{},"additionalProperties":false}"#
+        ),
+        MCPToolDefinition(
+            name: "start_bundle_task",
+            description: #"Start the task session of a task of your bundle: it implements the task in its own git worktree, on the branch task/<task id>, commits there and sets the task to review. When the task already has a session, send that session instructions instead."#,
+            inputSchema: #"{"type":"object","properties":{"task":{"type":"string","pattern":"^[A-Za-z]{2,8}-[0-9]+$","description":"Task id of your bundle, for example HEPH-12."},"instructions":{"type":"string","description":"Added to the first message of a new session; sent to the existing session of the task, where they are required."}},"required":["task"],"additionalProperties":false}"#
+        ),
+        MCPToolDefinition(
+            name: "update_bundle",
+            description: #"Set the status of your bundle: review while you wait for the user's agreement on the combined work, running when work resumes."#,
+            inputSchema: #"{"type":"object","properties":{"status":{"type":"string","enum":["running","review"],"description":"New status."}},"required":["status"],"additionalProperties":false}"#
+        ),
+        MCPToolDefinition(
+            name: "finish_bundle",
+            description: #"Finish your bundle once the work of its tasks is on its base branch (and pushed, in the Forge repository): removes the worktrees, deletes the branches whose work is on the base branch, and marks the bundle done. Lists the branches it kept."#,
             inputSchema: #"{"type":"object","properties":{},"additionalProperties":false}"#
         )
     ]

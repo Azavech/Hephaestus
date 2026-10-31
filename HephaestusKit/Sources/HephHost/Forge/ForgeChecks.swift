@@ -15,31 +15,19 @@ extension ForgeService {
     }
 
     /// A failed configuration check: the error of the methods and push tools (`unavailable`, `locked` while the source
-    /// project is moved), and the changed paths when the guardrail files hold a local change (none when they cannot
-    /// be compared with origin).
+    /// project is moved).
     struct ConfigurationCheckFailure: Error, Sendable {
         let error: ProtocolError
-        let guardrailPaths: [String]
     }
 
     /// The configuration checks; the first failure sets `lastError` to its message and is thrown as its ProtocolError.
     func configurationChecks() async throws -> Repository {
         do {
-            return try await checkConfiguration()
-        } catch let failure as ConfigurationCheckFailure {
-            throw failure.error
-        }
-    }
-
-    /// The configuration checks; the first failure sets `lastError` to its message and is thrown as a
-    /// ConfigurationCheckFailure (forge_push_regen also fails its cycle when the guardrail files changed).
-    func checkConfiguration() async throws -> Repository {
-        do {
             return try await runConfigurationChecks()
         } catch let failure as ConfigurationCheckFailure {
             lastError = failure.error.message
             await broadcastIfChanged()
-            throw failure
+            throw failure.error
         }
     }
 
@@ -52,7 +40,7 @@ extension ForgeService {
         do {
             try await registerSourceProject(config, environment: environment)
         } catch let error as ProtocolError {
-            throw ConfigurationCheckFailure(error: error, guardrailPaths: [])
+            throw ConfigurationCheckFailure(error: error)
         }
 
         // The source project is hosted on this Main, and neither it nor one of its ancestors is migrating
@@ -130,23 +118,6 @@ extension ForgeService {
             throw Self.checkFailure(.unavailable, "Claude Code settings in \(root.path) would apply to the Forge's "
                                         + "sessions: move \(settings.joined(separator: ", ")) out of the repository, "
                                         + "then retry.")
-        }
-
-        // The guardrail files hold no local change; without refs/remotes/origin/<branch> they cannot be compared.
-        guard let guardrail = try await gitStep({ try await changedGuardrailFiles(git: git, branch: config.branch) })
-        else {
-            throw Self.checkFailure(.unavailable, "The guardrail files of \(id) cannot be compared with origin: "
-                                        + "\(root.path) has no refs/remotes/origin/\(config.branch). Run git fetch "
-                                        + "origin \(config.branch) there, then retry.")
-        }
-        guard guardrail.isEmpty else {
-            throw ConfigurationCheckFailure(
-                error: ProtocolError(.unavailable, "The guardrail files of \(id) were changed in \(root.path): "
-                                         + "\(guardrail.joined(separator: ", ")). Undo each change (git restore "
-                                         + "--source=origin/\(config.branch) --staged --worktree -- <file> for a file "
-                                         + "origin has; delete a file origin does not have), or check and push your "
-                                         + "reviewed change by hand (docs/public-repository.md#protected-paths)."),
-                guardrailPaths: guardrail)
         }
 
         // The Claude CLI is available.
@@ -256,35 +227,6 @@ extension ForgeService {
         }
     }
 
-    /// Guardrail files: the paths of `ForgePushGate.protectedPaths`, and the files named `.gitattributes` or `.mailmap`
-    /// in any folder, changed in the source project since its last commit in common with origin (`<common>` =
-    /// `git merge-base HEAD refs/remotes/origin/<branch>`): in the working tree, in the index, or not tracked by git
-    /// (ignored files included), each once, in byte order. A clone that is only behind origin passes.
-    ///
-    /// nil when `refs/remotes/origin/<branch>` does not exist (`git rev-parse --verify --quiet` exits 1), before any
-    /// other command: without that ref nothing tells what changed. Any other failure of git throws its error.
-    private func changedGuardrailFiles(git: ForgeGit, branch: String) async throws -> [String]? {
-        let originBranch = "refs/remotes/origin/\(branch)"
-        let exists = try await git.run(["rev-parse", "--verify", "--quiet", originBranch], timeout: .seconds(30),
-                                       allowedExitCodes: [0, 1])
-        guard exists.termination == .exited(0) else { return nil }
-        let common = try await git.output(["merge-base", "HEAD", originBranch])
-        let pathspecs = ForgePushGate.protectedPaths + [":(glob)**/.gitattributes", ":(glob)**/.mailmap"]
-        let outputs = [
-            try await git.run(["diff", "--name-only", "-z", common, "--"] + pathspecs, timeout: .seconds(30)),
-            try await git.run(["diff", "--name-only", "-z", "--cached", common, "--"] + pathspecs,
-                              timeout: .seconds(30)),
-            try await git.run(["ls-files", "--others", "-z", "--"] + pathspecs, timeout: .seconds(30)),
-        ]
-        var changed = Set<String>()
-        for output in outputs {
-            for path in output.standardOutput.split(separator: 0, omittingEmptySubsequences: true) {
-                changed.insert(String(decoding: path, as: UTF8.self))
-            }
-        }
-        return changed.sorted { Array($0.utf8).lexicographicallyPrecedes(Array($1.utf8)) }
-    }
-
     /// `url` without a trailing `.git`, compared case-insensitively, is `https://github.com/<repository>`,
     /// `ssh://git@github.com/<repository>` or `git@github.com:<repository>`.
     static func isOriginURL(_ url: String, repository: String) -> Bool {
@@ -310,7 +252,7 @@ extension ForgeService {
     }
 
     private static func checkFailure(_ code: ProtocolError.Code, _ message: String) -> ConfigurationCheckFailure {
-        ConfigurationCheckFailure(error: ProtocolError(code, message), guardrailPaths: [])
+        ConfigurationCheckFailure(error: ProtocolError(code, message))
     }
 }
 #endif

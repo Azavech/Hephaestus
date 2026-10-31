@@ -25,7 +25,7 @@ final class SessionModelTests: XCTestCase {
         ) { fakeMain in
             fakeMain.answer("projects.snapshot",
                             with: ProjectsSnapshotResult(project: TestMesh.project("HEPH", mainID: mainID), tasks: [],
-                                                         sessions: [session], runs: []))
+                                                         bundles: [], sessions: [session], runs: []))
             configure(fakeMain)
         }
         let store = workspace.projectStore(mainDeviceID: mainID, projectID: "HEPH")

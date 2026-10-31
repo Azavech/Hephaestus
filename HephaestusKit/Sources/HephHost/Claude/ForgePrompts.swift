@@ -39,14 +39,18 @@ enum ForgePrompts {
         case .regeneration:
             return "- forge_push_regen: check your regeneration commits for personal data and push them to GitHub."
         case .project, .task:
-            return Prompts.commonToolLines
+            return Prompts.toolLines(kind)
+        case .bundle:
+            return Prompts.toolLines(kind) + "\n"
+                + "- forge_push_docs: check the documentation commits of your bundle for personal data and push them "
+                + "to GitHub."
         }
     }
 
     /// `{pushLine}`.
     private static func pushLine(_ kind: SessionKind) -> String {
         switch kind {
-        case .feedback, .regeneration:
+        case .feedback, .regeneration, .bundle:
             return "Never push. The Forge checks your commits for personal data when you call its push tool below, "
                 + "and pushes them: when it refuses them, remove what it reports, rewrite the commits and call it "
                 + "again."
@@ -104,7 +108,6 @@ private enum ForgeTemplates {
         - Never split, encode, escape or reformat a value to get past a finding: remove it or use a placeholder.
         - Before committing, run scripts/check-public.sh --staged in {codeFolder} and remove what it reports. No git hook runs in this session. Never use --no-verify, and never change the configuration of git.
         - {pushLine}
-        - The personal-data guardrail is changed only by the user, by hand: the protected paths listed in {docsFolder}/public-repository.md (Protected paths), among them {docsFolder}/general.md and {docsFolder}/public-repository.md, and in {codeFolder} scripts/check-public.sh, .gitignore, CLAUDE.md, the files under .githooks/ and .github/, and the Swift files and tests of the Forge's push gate, session rules, prompts and tool kinds. Never edit them; the Forge refuses to push changes to them.
 
         ## Hephaestus tools
 
@@ -139,7 +142,7 @@ private enum ForgeTemplates {
         When the user asks you to implement it:
 
         1. Propose documentation changes that address the task, and refine them with the user. Describe the app in general terms: nothing of the comment, the screenshot or the context goes into the documentation (Public repository).
-        2. Edit only files under {docsFolder}, never {docsFolder}/general.md or {docsFolder}/public-repository.md: when the task needs a change there, write the change you propose in your reply, and the user makes it and pushes it by hand.
+        2. Edit only files under {docsFolder}.
         3. When the user agrees, commit only that folder with the message "docs: <summary> ({taskID})", <summary> being a one-line summary of the change that names nothing personal: git add -A -- {docsFolder}, then git commit -m "<message>" -- {docsFolder}.
         4. Call mcp__hephaestus__forge_push_docs. It checks the commits that are not on GitHub yet for personal data and pushes them to {branch}; when it returns an error, do what the error says, then call it again. The Forge then regenerates the code, CI builds it and the app updates itself on the user's Macs.
 
@@ -154,8 +157,6 @@ private enum ForgeTemplates {
         {regenerationLines}
 
         Once the build and the tests pass, the last steps of the procedure check the changes for personal data and commit them (step 11), then push them to {branch} with mcp__hephaestus__forge_push_regen (step 12). CI then builds the pushed commit and the app updates itself on the user's Macs.
-
-        When the documentation requires a change of a protected path ({docsFolder}/public-repository.md, Protected paths), you cannot make it: stop as the procedure says for a step you cannot carry out, and tell the user which change they must make by hand.
         """
 }
 #endif

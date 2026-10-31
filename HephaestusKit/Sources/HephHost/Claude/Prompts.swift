@@ -61,6 +61,36 @@ public struct ClaudeTaskContext: Sendable, Equatable {
     }
 }
 
+/// A task of a bundle, as the bundle prompts list it.
+public struct ClaudeBundleTask: Sendable, Equatable {
+    public var id: String
+    public var name: String                     // "" for a deleted task
+    public var status: TaskStatus?              // nil for a deleted task
+
+    public init(id: String, name: String, status: TaskStatus?) {
+        self.id = id
+        self.name = name
+        self.status = status
+    }
+}
+
+/// A bundle, as SessionService needs it. Built by the host from BundleService and TaskService.
+public struct ClaudeBundleContext: Sendable, Equatable {
+    public var id: String
+    public var name: String
+    public var base: String                     // BundleItem.base
+    public var tasks: [ClaudeBundleTask]        // in the bundle's order
+    public var maxParallel: Int                 // the setting bundles.maxParallel
+
+    public init(id: String, name: String, base: String, tasks: [ClaudeBundleTask], maxParallel: Int) {
+        self.id = id
+        self.name = name
+        self.base = base
+        self.tasks = tasks
+        self.maxParallel = maxParallel
+    }
+}
+
 /// A feedback item of a regeneration cycle.
 public struct RegenerationItem: Sendable, Equatable {
     public var taskID: String
@@ -144,11 +174,14 @@ public struct PromptContext: Sendable, Equatable {
     public var mode: SessionMode?               // task sessions
     public var instructions: String?            // task sessions (cli.md 5.3)
     public var regeneration: RegenerationContext?
+    public var bundle: ClaudeBundleContext?     // bundle sessions and the task sessions of a bundle
+    public var workFolder: URL?                 // the task sessions of a bundle: their work folder
     public var branch: String                   // the setting forge.branch (DeviceSettings.forge.branch)
 
     public init(kind: SessionKind, publicRepository: Bool, mainName: String, devices: [PromptDevice],
                 project: ClaudeProjectContext, task: ClaudeTaskContext?, mode: SessionMode?, instructions: String?,
-                regeneration: RegenerationContext?, branch: String) {
+                regeneration: RegenerationContext?, bundle: ClaudeBundleContext?, workFolder: URL?,
+                branch: String) {
         self.kind = kind
         self.publicRepository = publicRepository
         self.mainName = mainName
@@ -158,13 +191,15 @@ public struct PromptContext: Sendable, Equatable {
         self.mode = mode
         self.instructions = instructions
         self.regeneration = regeneration
+        self.bundle = bundle
+        self.workFolder = workFolder
         self.branch = branch
     }
 }
 
 /// The texts the Main gives Claude (docs/claude/prompts.md): the system prompt appended to Claude Code's own and the
-/// generated first message of task, feedback and regeneration sessions. The Forge common part, the feedback part and
-/// the regeneration part are in ForgePrompts.swift.
+/// generated first message of task, feedback and regeneration sessions, and of the sessions of a task bundle. The
+/// Forge common part, the feedback part and the regeneration part are in ForgePrompts.swift.
 public enum Prompts {
     /// Common part or Forge common part, a blank line, then the part of the session kind.
     public static func systemPrompt(_ context: PromptContext) -> String {
@@ -174,16 +209,22 @@ public enum Prompts {
         case .project:
             return common + "\n\n" + render(Templates.projectPart, values)
         case .task:
-            // The task part, a blank line, then the part of the session's mode.
+            // The task part, a blank line, then the part of the session's mode; for a task session of a bundle, a
+            // blank line and the bundle task part.
             var text = common + "\n\n" + render(Templates.taskPart, values)
             if let mode = modeTemplate(context) {
                 text += "\n\n" + render(mode, values)
+            }
+            if context.bundle != nil {
+                text += "\n\n" + render(Templates.bundleTaskPart, values)
             }
             return text
         case .feedback:
             return common + "\n\n" + ForgePrompts.feedbackPart(context)
         case .regeneration:
             return common + "\n\n" + ForgePrompts.regenerationPart(context)
+        case .bundle:
+            return common + "\n\n" + render(Templates.bundlePart, values)
         }
     }
 
@@ -230,26 +271,32 @@ public enum Prompts {
                 ])
             }
             return text
+        case .bundle:
+            return "Work on bundle \(context.bundle?.id ?? ""): \(context.bundle?.name ?? "")."
         }
     }
 
     // MARK: - Placeholders
 
     /// The values of the placeholders shared by the parts and the feedback first message. ForgePrompts adds
-    /// `{forgeToolLines}`, `{pushLine}` and `{regenerationLines}`.
+    /// `{forgeToolLines}`, `{pushLine}` and `{regenerationLines}`. In the task sessions of a bundle, `{codeFolder}`
+    /// and `{docsFolder}` are the folders of its worktree.
     static func placeholders(_ context: PromptContext) -> [String: String] {
         let project = context.project
         let taskYAML = withoutTrailingNewlines(context.task?.yaml ?? "")
-        return [
+        let (codeFolder, docsFolder) = folders(context)
+        let bundle = context.bundle
+        var values: [String: String] = [
             "mainName": context.mainName,
             "deviceLines": deviceLines(context.devices),
             "projectName": project.name,
             "projectID": project.id,
             "projectRoot": project.root.path,
-            "codeFolder": project.codeFolder.path,
-            "docsFolder": project.docsFolder.path,
+            "codeFolder": codeFolder.path,
+            "docsFolder": docsFolder.path,
             "parentLines": project.parent.map { "- Parent project: \($0.name) (\($0.id)), \($0.root.path)" } ?? "",
             "subprojectLines": subprojectLines(project.subprojects),
+            "toolLines": toolLines(context.kind),
             "taskID": context.task?.id ?? "",
             "taskName": context.task?.name ?? "",
             "taskYAML": taskYAML,
@@ -258,20 +305,69 @@ public enum Prompts {
             "fence": fence(for: taskYAML),
             "mode": context.mode?.rawValue ?? "",
             "instructions": trimmed(context.instructions),
+            "bundleID": bundle?.id ?? "",
+            "bundleName": bundle?.name ?? "",
+            "base": bundle?.base ?? "",
+            "maxParallel": bundle.map { String($0.maxParallel) } ?? "",
+            "bundleTaskLines": bundleTaskLines(bundle?.tasks ?? []),
+            "workFolder": context.workFolder?.path ?? "",
             "branch": context.branch,
         ]
+        // These two lines hold placeholders of their own, rendered first.
+        values["bundlePushLine"] = substitute(context.publicRepository
+            ? "5. Call mcp__hephaestus__forge_push_docs. It checks the commits that are not on GitHub yet for personal "
+                + "data and pushes them to {base}; when it returns an error, do what the error says, then call it "
+                + "again."
+            : "5. Do not push: tell the user that the commits are on {base} in {codeFolder}, ready for them to push.",
+            values)
+        values["bundleScopeLine"] = context.publicRepository
+            ? substitute("In this repository, change only the documentation in {docsFolder}, and do not build or "
+                             + "test: the Forge regenerates the code from the documentation.", values)
+            : ""
+        return values
     }
 
-    /// The nine tool lines of the Common part, from `- list_devices:` to `- list_skills, get_skill, save_skill:`
-    /// (`{forgeToolLines}` of project and task sessions in the Forge common part).
-    static let commonToolLines: String = {
-        let lines = Templates.common.components(separatedBy: "\n")
-        guard let first = lines.firstIndex(where: { $0.hasPrefix("- list_devices:") }),
-              let last = lines.firstIndex(where: { $0.hasPrefix("- list_skills, get_skill, save_skill:") }),
-              first <= last
-        else { return "" }
-        return lines[first...last].joined(separator: "\n")
-    }()
+    /// The code and documentation folders of the prompts: in the task sessions of a bundle, `workFolder` and
+    /// `workFolder` followed by the project's docs folder (its path relative to the code folder); otherwise the
+    /// project's.
+    private static func folders(_ context: PromptContext) -> (code: URL, docs: URL) {
+        let project = context.project
+        guard context.kind == .task, context.bundle != nil, let workFolder = context.workFolder else {
+            return (project.codeFolder, project.docsFolder)
+        }
+        let code = project.codeFolder.standardizedFileURL.pathComponents
+        let docs = project.docsFolder.standardizedFileURL.pathComponents
+        guard docs.starts(with: code) else { return (workFolder, project.docsFolder) }
+        let relative = docs.dropFirst(code.count)
+        return (workFolder, relative.reduce(workFolder) { $0.appendingPathComponent($1, isDirectory: true) })
+    }
+
+    /// `{toolLines}`: the tool lines of the session's kind. Bundle sessions get the lines of project and task
+    /// sessions without `start_task_session`, and their own `list_runs` line.
+    static func toolLines(_ kind: SessionKind) -> String {
+        switch kind {
+        case .project, .task:
+            return [
+                ToolLines.devices, ToolLines.projects, ToolLines.tasks, ToolLines.comments, ToolLines.taskSessions,
+                ToolLines.runs, ToolLines.webTabs, ToolLines.search, ToolLines.skills,
+            ].joined(separator: "\n")
+        case .bundle:
+            return [
+                ToolLines.devices, ToolLines.projects, ToolLines.tasks, ToolLines.comments, ToolLines.bundleRuns,
+                ToolLines.webTabs, ToolLines.search, ToolLines.skills,
+            ].joined(separator: "\n")
+        case .feedback, .regeneration:
+            return ""
+        }
+    }
+
+    /// One line per task of the bundle: `- <id>: <name> (<status raw value>)`, or `- <id>: deleted`.
+    private static func bundleTaskLines(_ tasks: [ClaudeBundleTask]) -> String {
+        tasks.map { task in
+            guard let status = task.status else { return "- \(task.id): deleted" }
+            return "- \(task.id): \(task.name) (\(status.rawValue))"
+        }.joined(separator: "\n")
+    }
 
     /// One line per device, sorted by name: `- <name>: <platform>, Main` or `, remote`, then ` (this Mac)`.
     private static func deviceLines(_ devices: [PromptDevice]) -> String {
@@ -396,9 +492,28 @@ public enum Prompts {
     }
 }
 
+/// The lines of `{toolLines}`, one per group of tools.
+private enum ToolLines {
+    static let devices = "- list_devices: the devices of the mesh and whether they are online."
+    static let projects = "- list_projects, get_project, create_project, update_project: the projects of every Main, "
+        + "with their sub projects and settings."
+    static let tasks = "- list_tasks, get_task, create_task, update_task, delete_task: the tasks of a project."
+    static let comments = "- comment_task: add a comment to a task, with files."
+    static let taskSessions = "- start_task_session: start a Claude session that works on a task (implement, debug, "
+        + "review, plan, or custom instructions)."
+    static let runs = "- list_runs, start_run, stop_run, get_run_output: the run configurations of a project and their "
+        + "runs."
+    static let bundleRuns = "- list_runs, get_run_output: the run configurations of a project and the output of their "
+        + "runs."
+    static let webTabs = "- list_web_tabs, open_web_tab: the web tabs of a project."
+    static let search = "- search: search projects, tasks, comments, docs, code, skills, web tabs, sessions and "
+        + "devices."
+    static let skills = "- list_skills, get_skill, save_skill: the Hephaestus skills library."
+}
+
 /// The templates of docs/claude/prompts.md held by this file, without their fences.
 private enum Templates {
-    /// Common part: `project` and `task` sessions.
+    /// Common part: `project`, `task` and `bundle` sessions.
     static let common = """
         # Hephaestus
 
@@ -455,15 +570,7 @@ private enum Templates {
 
         The mcp__hephaestus__ tools act on the data of every Main of the mesh, and every device of the user shows their changes at once:
 
-        - list_devices: the devices of the mesh and whether they are online.
-        - list_projects, get_project, create_project, update_project: the projects of every Main, with their sub projects and settings.
-        - list_tasks, get_task, create_task, update_task, delete_task: the tasks of a project.
-        - comment_task: add a comment to a task, with files.
-        - start_task_session: start a Claude session that works on a task (implement, debug, review, plan, or custom instructions).
-        - list_runs, start_run, stop_run, get_run_output: the run configurations of a project and their runs.
-        - list_web_tabs, open_web_tab: the web tabs of a project.
-        - search: search projects, tasks, comments, docs, code, skills, web tabs, sessions and devices.
-        - list_skills, get_skill, save_skill: the Hephaestus skills library.
+        {toolLines}
 
         Rules:
 
@@ -542,6 +649,35 @@ private enum Templates {
         ## Mode: custom
 
         Follow the instructions the user gave in the first message of this session.
+        """
+
+    /// Bundle part: `kind` = `bundle`, the coordinator of a bundle.
+    static let bundlePart = """
+        ## Bundle {bundleID}
+
+        This session coordinates bundle {bundleID} of {projectName}, "{bundleName}". Its tasks are implemented in parallel, each by its own task session in its own git worktree, on the branch task/<task id> made from {base}; you bring their work together. Call mcp__hephaestus__get_bundle for its current state.
+
+        Tasks of the bundle when this session started:
+        {bundleTaskLines}
+
+        Bundle tools: get_bundle, start_bundle_task (start the session of a task, or send instructions to it), update_bundle (set the status to review or running), finish_bundle (remove the worktrees and branches once the work is brought in).
+
+        1. Start the task sessions with mcp__hephaestus__start_bundle_task, in the bundle's order, at most {maxParallel} at a time. Each one implements its task, commits on its branch, comments a summary on its task and sets it to review.
+        2. Hephaestus sends you a message when a task session ends its turn, fails or waits for a permission answer. Then read the task's comments with mcp__hephaestus__get_task and its work with git log and git diff {base}...task/<task id>, start the next waiting task, and send instructions with start_bundle_task when the work is incomplete. Tell the user when a session waits for them.
+        3. When every task is in review, call mcp__hephaestus__update_bundle with the status review, show the user a summary of each task and of the combined changes, and wait for their agreement. Send the changes they ask for to the task sessions, with the status running while they work.
+        4. When the user agrees, bring the work into {codeFolder} on {base}, one task at a time in the bundle's order: git cherry-pick {base}..task/<task id>. Resolve conflicts yourself, then git cherry-pick --continue; ask the user when a conflict needs a decision.
+        {bundlePushLine}
+        6. Call mcp__hephaestus__finish_bundle and tell the user which branches it kept.
+
+        Never edit the files of a task yourself, except to resolve a conflict while bringing its work in.
+        """
+
+    /// Bundle task part: appended to the task part of a `task` session of a bundle.
+    static let bundleTaskPart = """
+        ## Bundle {bundleID}
+
+        This session is one of the parallel sessions of bundle {bundleID}. Work only in {workFolder}, a git worktree on the branch task/{taskID}: never change files elsewhere and never switch branches. Commit your changes on task/{taskID} without pushing, and do not wait for the user's agreement first: the coordinator of the bundle reviews the work with the user. When you are blocked, say why in a comment on {taskID} and end your turn.
+        {bundleScopeLine}
         """
 
     /// First message of a feedback session.

@@ -18,6 +18,9 @@ public protocol MCPHost: Sendable {
     /// ProtocolError whose message is the error text.
     func forgePushDocs(sessionID: UUID) async throws -> String
     func forgePushRegen(sessionID: UUID) async throws -> String
+    /// The BundleService function of a bundle tool (6.25–6.28): its result as JSON text, or a thrown ProtocolError
+    /// whose message is the error text.
+    func bundleTool(_ name: String, projectID: String, bundleID: String, arguments: Data) async throws -> String
 }
 
 /// A Main of the mesh, as the MCP tools see it.
