@@ -157,17 +157,18 @@ project that is not broken (`notFound` `Task <id> does not exist.`, `conflict` `
 
 ### Methods
 
-| Method           | Statuses allowed                        | Effect                                                                                                                            |
-|------------------|-----------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| `bundles.create` | —                                       | new file: `name`, `status` `draft`, the tasks in the given order, repeats removed (first kept); at least one task                 |
-| `bundles.update` | `name`: any; `taskIDs`: `draft`, `done` | `name` replaced; `taskIDs` replaces the tasks, keeping the `session` of a task that stays, and turns a `done` bundle into `draft` |
-| `bundles.delete` | `draft`, `done`                         | Removing the work ([Worktrees](#worktrees)); file deleted                                                                         |
-| `bundles.start`  | `draft`                                 | Start (below)                                                                                                                     |
-| `bundles.stop`   | `running`, `review`                     | `sessions.stop` of the coordinator and of every task session of the bundle; status `draft`; worktrees and branches kept           |
+| Method           | Statuses allowed                | Effect                                                                                                                  |
+|------------------|---------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| `bundles.create` | —                               | new file: `name`, `status` `draft`, the tasks in the given order, repeats removed (first kept); at least one task       |
+| `bundles.update` | `name`: any; `taskIDs`: `draft` | `name` replaced; `taskIDs` replaces the tasks, keeping the `session` of a task that stays                               |
+| `bundles.delete` | `draft`, `done`                 | Removing the work ([Worktrees](#worktrees)); file deleted                                                               |
+| `bundles.start`  | `draft`                         | Start (below)                                                                                                           |
+| `bundles.stop`   | `running`, `review`             | `sessions.stop` of the coordinator and of every task session of the bundle; status `draft`; worktrees and branches kept |
 
 A method in another status fails with `conflict`: `Stop <bundle id> first.` for `running` and `review`, `<bundle id>
-is done.` for `bundles.start` of a `done` bundle, `<bundle id> is not running.` for `bundles.stop` of a `draft` or
-`done` bundle. `bundles.create` and `bundles.update` without a task: `badRequest` `A bundle needs at least one task.`
+is done.` for `bundles.start` of a `done` bundle and for `bundles.update` with `taskIDs` of a `done` bundle (its tasks
+are frozen; a `name` alone still renames it), `<bundle id> is not running.` for `bundles.stop` of a `draft` or `done`
+bundle. The status is checked before the tasks. `bundles.create` and `bundles.update` without a task: `badRequest` `A bundle needs at least one task.`
 A name that is empty or holds a line break: `badRequest` `The name must not be empty and must be on one line.` The
 `taskIDs` of `bundles.update` are not deduplicated: a task given twice breaks the file's rule (`badRequest`
 `tasks[<i>].task must be a task of <projectID> listed once`). A task is in at most one bundle that is not `done`, since

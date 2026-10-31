@@ -81,7 +81,8 @@ In compact width the New Task button is in the navigation bar.
 - One id selected: `selection.item` = that id. Several: `selection.item` = nil and the detail area shows
   "<n> tasks selected", a "New Bundle…" button and the "Add to Bundle" menu. None: `selection.item` = nil. When
   `selection.item` is set from elsewhere, `selectedIDs` becomes that id alone.
-- "Add to Bundle" is a `Menu` listing the bundles in `draft` or `done` status (name and id); choosing one calls
+- "Add to Bundle" is a `Menu` listing the bundles in `draft` status (name and id), in the order of the Bundles section
+  ([Sections](#sections)); a `done` bundle's tasks are frozen ([Bundle detail](#bundle-detail)). Choosing one calls
   `updateBundle` with `BundlePatch(taskIDs:)`: its tasks, then the selected tasks that are not in it, by task number.
   Without such a bundle the menu holds the disabled item "No bundle to add to".
 
@@ -106,9 +107,11 @@ section of the same project is shown, and reset when the window shows another se
 ### Sections
 
 A Bundles section first, then sections in `TaskStatus.allCases` order (To Do, In Progress, Review, Done), then
-Broken. The Bundles section lists `store.bundles` by number, filtered by the text only (every word in the bundle's id
-or name); its header is `square.stack.3d.up`, "Bundles" and the count; its row is [Bundle row](#bundle-row). A task in a
-bundle is also listed in its status section. A broken task is only in the
+Broken. The Bundles section lists `store.bundles` most recently updated first, whatever the Sort setting: by update
+time descending, ties by number descending. A bundle's update time is the latest of its own `updated` and the
+`updated` of its tasks found in `store.tasks` (a deleted task does not count). The section is filtered by the text only
+(every word in the bundle's id or name); its header is `square.stack.3d.up`, "Bundles" and the count; its row is
+[Bundle row](#bundle-row). A task in a bundle is also listed in its status section. A broken task is only in the
 Broken section. A section with no task after filtering is hidden. Header: `TaskStatusBadge` and the count; the Broken
 header is `exclamationmark.triangle`, "Broken" and the count.
 
@@ -190,8 +193,7 @@ requests are `createBundle`, `updateBundle`, `deleteBundle`, `startBundle` and `
 
 - Header: the id (monospaced, selectable); the name, a plain text field that commits like the task name (`.title2`
   semibold, `BundlePatch(name:)`); the `BundleStatusBadge`; "Created <date>" · "Updated <relative time>" as for a
-  task; the actions menu `ellipsis.circle` with Add Tasks… (`draft`, `done`), Copy ID and Delete Bundle… (`draft`,
-  `done`).
+  task; the actions menu `ellipsis.circle` with Add Tasks… (`draft`), Copy ID and Delete Bundle… (`draft`, `done`).
 - Buttons under the header: "Work on Bundle" (`play.fill`, `.borderedProminent`) in `draft`, calling `startBundle`;
   "Stop" (`stop.fill`) in `running` and `review`, calling `stopBundle`; "Open Coordinator" when `coordinatorSessionID`
   is set, which calls `context.navigate(mainDeviceID: store.mainDeviceID, projectID: store.projectID, section:
@@ -202,8 +204,9 @@ requests are `createBundle`, `updateBundle`, `deleteBundle`, `startBundle` and `
 - Tasks, in the bundle's order. Each row: the id (monospaced), the name (a deleted task: "Deleted task", secondary),
   its `TaskStatusBadge`, and, when its `sessionID` names a session of the store, its `SessionStatusIndicator` and an
   "Open Session" button that navigates to section `.claude` with that session. Choosing a row navigates to section
-  `.tasks` with the task id. In `draft` and `done`, rows can be reordered (`onMove`) and have the context menu item
-  "Remove from Bundle", disabled while the bundle has one task; both call `updateBundle` with `BundlePatch(taskIDs:)`.
+  `.tasks` with the task id. In `draft`, rows can be reordered (`onMove`) and have the context menu item "Remove from
+  Bundle", disabled while the bundle has one task; both call `updateBundle` with `BundlePatch(taskIDs:)`. In the other
+  statuses the task list cannot be changed; a `done` bundle can still be renamed and deleted.
 - Delete Bundle…: a confirmation "Delete <ID>?" with the message "Its worktrees are removed, and the branches whose
   work was brought in are deleted. Its tasks and sessions are kept." and the buttons Delete (destructive) and Cancel;
   Delete calls `deleteBundle`; after success `selection.item` is cleared.
