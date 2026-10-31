@@ -1338,8 +1338,7 @@ on another Main, and with `unavailable` and the check's message when a configura
 "Regenerate now".
 
 - Params: `EmptyPayload`. Result: `EmptyPayload`, once the checks passed; the work continues in the background (a
-  check, which trusts the changes of the guardrail pushed to the branch outside the Forge when they hold no personal
-  data, then a retry when the current cycle is `failed`, else a `manual` cycle,
+  check, then a retry when the current cycle is `failed`, else a `manual` cycle,
   [forge/pipeline.md](../forge/pipeline.md#methods)).
 - Errors: `unavailable` (not the Forge, or a configuration check failed); `conflict` (a cycle is active).
 - Events: `forge.changed`, then the events of the regeneration session.

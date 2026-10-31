@@ -11,8 +11,7 @@ The exact texts the Main gives Claude: the system prompt appended to Claude Code
 regeneration sessions, and of the sessions of a task bundle ([../services/bundles.md](../services/bundles.md)). The
 files are macOS only and wrapped in `#if os(macOS)`. `ForgePrompts.swift` holds the
 [Forge common part](#forge-common-part), the [Feedback part](#feedback-part) and the
-[Regeneration part](#regeneration-part); it is a protected path
-([../public-repository.md](../public-repository.md#protected-paths)). `Prompts.swift` holds the rest.
+[Regeneration part](#regeneration-part). `Prompts.swift` holds the rest.
 
 The sessions of [cli.md](cli.md#35-sessions-in-the-public-repository) 3.5 work in the Hephaestus repository, which is
 public ([../public-repository.md](../public-repository.md)): the Forge's feedback and regeneration sessions, and on the
@@ -300,7 +299,6 @@ The repository of this project is public on GitHub: every file, file name, commi
 - Never split, encode, escape or reformat a value to get past a finding: remove it or use a placeholder.
 - Before committing, run scripts/check-public.sh --staged in {codeFolder} and remove what it reports. No git hook runs in this session. Never use --no-verify, and never change the configuration of git.
 - {pushLine}
-- The personal-data guardrail is changed only by the user, by hand: the protected paths listed in {docsFolder}/public-repository.md (Protected paths), among them {docsFolder}/general.md and {docsFolder}/public-repository.md, and in {codeFolder} scripts/check-public.sh, .gitignore, CLAUDE.md, the files under .githooks/ and .github/, and the Swift files and tests of the Forge's push gate, session rules, prompts and tool kinds. Never edit them; the Forge refuses to push changes to them.
 
 ## Hephaestus tools
 
@@ -423,7 +421,7 @@ First turn the feedback into a task:
 When the user asks you to implement it:
 
 1. Propose documentation changes that address the task, and refine them with the user. Describe the app in general terms: nothing of the comment, the screenshot or the context goes into the documentation (Public repository).
-2. Edit only files under {docsFolder}, never {docsFolder}/general.md or {docsFolder}/public-repository.md: when the task needs a change there, write the change you propose in your reply, and the user makes it and pushes it by hand.
+2. Edit only files under {docsFolder}.
 3. When the user agrees, commit only that folder with the message "docs: <summary> ({taskID})", <summary> being a one-line summary of the change that names nothing personal: git add -A -- {docsFolder}, then git commit -m "<message>" -- {docsFolder}.
 4. Call mcp__hephaestus__forge_push_docs. It checks the commits that are not on GitHub yet for personal data and pushes them to {branch}; when it returns an error, do what the error says, then call it again. The Forge then regenerates the code, CI builds it and the app updates itself on the user's Macs.
 
@@ -476,8 +474,6 @@ The documentation in {docsFolder} is the specification of this app: its code is 
 {regenerationLines}
 
 Once the build and the tests pass, the last steps of the procedure check the changes for personal data and commit them (step 11), then push them to {branch} with mcp__hephaestus__forge_push_regen (step 12). CI then builds the pushed commit and the app updates itself on the user's Macs.
-
-When the documentation requires a change of a protected path ({docsFolder}/public-repository.md, Protected paths), you cannot make it: stop as the procedure says for a step you cannot carry out, and tell the user which change they must make by hand.
 ````
 
 `{regenerationLines}`: no line when `regeneration` is nil (later starts). Otherwise these paragraphs in this order, each
@@ -547,7 +543,7 @@ Example, task session in mode implement: `Work on HEPH-12: Sidebar breaks on iPa
 | project.yml fields (`code`, `docs`, `claude`, `skills`)            | [../data/project-yml.md](../data/project-yml.md)      |
 | task file format                                                   | [../data/task-yml.md](../data/task-yml.md)            |
 | tool names, the tools of each session kind                         | [mcp.md](mcp.md)                                      |
-| the public repository rule, the protected paths                    | [../public-repository.md](../public-repository.md)    |
+| the public repository rule                                         | [../public-repository.md](../public-repository.md)    |
 | the sessions of 3.5 (`publicRepository`)                           | [cli.md](cli.md#35-sessions-in-the-public-repository) |
 | the placeholders                                                   | [../general.md](../general.md#placeholders)           |
 | the feedback task, `RegenerationContext` values given by the Forge | [../forge/pipeline.md](../forge/pipeline.md)          |

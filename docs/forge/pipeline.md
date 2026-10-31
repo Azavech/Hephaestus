@@ -25,10 +25,9 @@ procedure and docs hash: [generation.md](generation.md). Workflow: [ci.md](ci.md
 The repository is public and holds no personal data ([../public-repository.md](../public-repository.md)). Claude never
 pushes: the two Forge push tools ([MCP tools](#mcp-tools)) are the only way the commits of a Forge session are meant to
 reach GitHub. They push only commits that pass the personal data check of the published `scripts/check-public.sh` of
-the last head of the branch the Forge trusts, with the user's private terms ([Private terms](#private-terms)), and
-never a change of the guardrail itself. Commits that reach the branch another way are checked the same way at the next
-check, and stop the automatic regenerations while they fail, or while they change the guardrail and the user has not
-reviewed them ([Checks and triggers](#checks-and-triggers)).
+the last head of the branch the Forge trusts, with the user's private terms ([Private terms](#private-terms)). Commits
+that reach the branch another way are checked the same way at the next check, and stop the automatic regenerations
+while they fail ([Checks and triggers](#checks-and-triggers)).
 
 Every file of this doc is macOS only and wrapped in `#if os(macOS)`. Logging uses `Log.host`
 ([../architecture.md](../architecture.md#logging)).
@@ -78,20 +77,19 @@ before handling `forge.feedback` and at the start of the push tools. Before the 
 the source project, the Forge registers it when it can
 ([Registering the source project](#registering-the-source-project)). The first failure stops the list:
 
-| Check                                                                                                                                                                                              | Message                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| the source project is hosted on this Main (`registry.hosted(_:)`)                                                                                                                                  | `The Forge source project <ID> is not on this Main.`, a space, then the text of the step of [Registering the source project](#registering-the-source-project) that failed                                                                                                                                                                                                                                                                                                                                                                    |
-| neither it nor one of its ancestors is migrating (`registry.checkWritable(_:)` throws no `locked`)                                                                                                 | `The Forge source project <ID> is being moved.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `host.info` reports `gitAvailable`                                                                                                                                                                 | `git is not available on this Main.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `git rev-parse --show-toplevel` prints the repository root (symlinks resolved on both sides)                                                                                                       | `<path> is not the top folder of a git repository.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `git remote get-url origin`, without a trailing `.git` and compared case-insensitively, is `https://github.com/<repository>`, `ssh://git@github.com/<repository>` or `git@github.com:<repository>` | `The origin remote of <ID> is <url>, not github.com/<repository>.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `git remote get-url --push --all origin` prints one URL, which passes the test of the previous row                                                                                                 | `The push URL of origin is <urls>, not github.com/<repository>.` (`<urls>` joined with `, `)                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `git config --get-all remote.origin.pushurl` prints nothing                                                                                                                                        | `origin has a push URL; remove it with git config --unset-all remote.origin.pushurl.`                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| the hooks path is `.githooks` (below)                                                                                                                                                              | the error of `git config`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| commits are not signed (below)                                                                                                                                                                     | the error of `git config`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| no Claude Code settings in the repository (below)                                                                                                                                                  | `Claude Code settings in <path> would apply to the Forge's sessions: move <files> out of the repository, then retry.` (`<files>` joined with `, `)                                                                                                                                                                                                                                                                                                                                                                                           |
-| the guardrail files hold no local change (below)                                                                                                                                                   | `The guardrail files of <ID> were changed in <path>: <paths>. Undo each change (git restore --source=origin/<branch> --staged --worktree -- <file> for a file origin has; delete a file origin does not have), or check and push your reviewed change by hand (docs/public-repository.md#protected-paths).` (`<paths>` joined with `, `); without `refs/remotes/origin/<branch>`: `The guardrail files of <ID> cannot be compared with origin: <path> has no refs/remotes/origin/<branch>. Run git fetch origin <branch> there, then retry.` |
-| `host.info` reports `claudeAvailable`                                                                                                                                                              | `The Claude CLI is not available on this Main.`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Check                                                                                                                                                                                              | Message                                                                                                                                                                   |
+|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| the source project is hosted on this Main (`registry.hosted(_:)`)                                                                                                                                  | `The Forge source project <ID> is not on this Main.`, a space, then the text of the step of [Registering the source project](#registering-the-source-project) that failed |
+| neither it nor one of its ancestors is migrating (`registry.checkWritable(_:)` throws no `locked`)                                                                                                 | `The Forge source project <ID> is being moved.`                                                                                                                           |
+| `host.info` reports `gitAvailable`                                                                                                                                                                 | `git is not available on this Main.`                                                                                                                                      |
+| `git rev-parse --show-toplevel` prints the repository root (symlinks resolved on both sides)                                                                                                       | `<path> is not the top folder of a git repository.`                                                                                                                       |
+| `git remote get-url origin`, without a trailing `.git` and compared case-insensitively, is `https://github.com/<repository>`, `ssh://git@github.com/<repository>` or `git@github.com:<repository>` | `The origin remote of <ID> is <url>, not github.com/<repository>.`                                                                                                        |
+| `git remote get-url --push --all origin` prints one URL, which passes the test of the previous row                                                                                                 | `The push URL of origin is <urls>, not github.com/<repository>.` (`<urls>` joined with `, `)                                                                              |
+| `git config --get-all remote.origin.pushurl` prints nothing                                                                                                                                        | `origin has a push URL; remove it with git config --unset-all remote.origin.pushurl.`                                                                                     |
+| the hooks path is `.githooks` (below)                                                                                                                                                              | the error of `git config`                                                                                                                                                 |
+| commits are not signed (below)                                                                                                                                                                     | the error of `git config`                                                                                                                                                 |
+| no Claude Code settings in the repository (below)                                                                                                                                                  | `Claude Code settings in <path> would apply to the Forge's sessions: move <files> out of the repository, then retry.` (`<files>` joined with `, `)                        |
+| `host.info` reports `claudeAvailable`                                                                                                                                                              | `The Claude CLI is not available on this Main.`                                                                                                                           |
 
 A failure sets `lastError` to the message; `forge.feedback`, `forge.regenerate`, `forge.retry` and the push tools
 fail with `unavailable` and the message (`locked` for the migrating case). Checks and polling keep running, so the
@@ -112,19 +110,6 @@ error clears once fixed. `<path>` is the repository root. When `git remote get-u
 - Claude Code settings: none of `.claude/settings.json`, `.claude/settings.local.json` and `.mcp.json` exists in the
   repository root. Their rules, hooks, environment and servers would apply to every session started there, the
   Forge's included; git ignores them, and the sessions of 3.5 can neither create nor edit them.
-- Guardrail files: the paths of `ForgePushGate.protectedPaths` ([MCP tools](#mcp-tools) step 4), and the files named
-  `.gitattributes` or `.mailmap` in any folder, which would change how git reads the files the gate checks, hold no
-  change made in the source project since its last commit in common with `origin`: with `<common>` = `git merge-base
-  HEAD refs/remotes/origin/<branch>` and `<pathspecs>` = the paths of `ForgePushGate.protectedPaths` followed by
-  `':(glob)**/.gitattributes'` and `':(glob)**/.mailmap'`, `git diff --name-only -z <common> -- <pathspecs>` (the
-  working tree), `git diff --name-only -z --cached <common> -- <pathspecs>` (the index) and `git ls-files --others -z --
-  <pathspecs>` (files git does not track, ignored ones included, such as a hook added to `.githooks/`) print nothing.
-  The `<paths>` of its message are the paths they print, each once, sorted in byte order. When
-  `refs/remotes/origin/<branch>` does not exist (`git rev-parse --verify --quiet refs/remotes/origin/<branch>` exits 1;
-  any other failure fails the check with the git error), the check fails with its second message before any other
-  command: without that ref it cannot tell what changed. A clone that is only behind `origin` passes; a change of the
-  guardrail made there, committed or not, by the user or by a session, fails until it is pushed or undone, because the
-  user's own git commands would run its hooks and its check with the user's credentials.
 
 ### Registering the source project
 
@@ -456,7 +441,6 @@ that does not join waits for the next cycle.
 | (regeneration step)                     | session started                                                                                                              | `regenerating`    |
 | (regeneration step)                     | a configuration check or the check failed, working tree not clean, unpushed commits, session start failed                    | `failed`          |
 | `regenerating`                          | `forge_push_regen` of the cycle's session pushed `<sha>`                                                                     | `regenPushed`     |
-| `regenerating`                          | `forge_push_regen` of the cycle's session refused a change of the guardrail (MCP tools steps 1 and 4)                        | `failed`          |
 | `regenerating`                          | the cycle's session ends a turn, stops or fails without having pushed with `forge_push_regen`                                | `failed`          |
 | `regenerating`                          | the cycle's session is deleted                                                                                               | `failed`          |
 | `failed` (`failedState` `regenerating`) | `forge_push_regen` of the cycle's session pushed `<sha>`                                                                     | `regenPushed`     |
@@ -518,17 +502,8 @@ is `regenerating`:
 - status `failed`: the cycle fails with `The regeneration session failed: <SessionInfo.error>`;
 - removed: the cycle fails with `The regeneration session was deleted.`.
 
-A cycle that `forge_push_regen` already failed (a change of the guardrail) keeps that error when the turn ends. A late
-`forge_push_regen` from that session still moves a cycle failed in `regenerating` to `regenPushed`, so a session that
-stopped to ask the user a question can finish after the answer.
-
-When `forge_push_regen` is refused because of the guardrail (the guardrail files of the configuration checks in step 1
-of [MCP tools](#mcp-tools), or step 4), the cycle fails at once, `failedState` `regenerating`, with `Guardrail files
-changed (<paths>): review the unpushed commits, check them with origin's script
-(docs/public-repository.md#protected-paths), push them by hand, then press Retry.` The user reviews the session's
-commits, checks them with the script as it is on GitHub, since they may change the check that judges them, and pushes
-them by hand ([../public-repository.md](../public-repository.md#protected-paths)); Retry then trusts them (Checks and
-triggers step 4, [Methods](#methods)), finds docs and code in sync and records the pushed head (Regeneration step 3).
+A late `forge_push_regen` from that session still moves a cycle failed in `regenerating` to `regenPushed`, so a
+session that stopped to ask the user a question can finish after the answer.
 
 ### Retry
 
@@ -567,25 +542,14 @@ A **check**, one at a time (a check requested while one runs waits for it and us
    `ci skip marker` findings: its standard output, untrimmed, each line ending at a line feed, is an optional first
    line starting with `Note: `, then one or more lines `<sha8> message: ci skip marker` (`<sha8>` being 8 lowercase
    hexadecimal digits), then a last line starting with `Personal data check: `. GitHub ran no CI for such commits, and
-   this check stands in for the personal data check of that run. When they are clean,
-   `ForgePushGate.guardrailPaths(from: trustedHead, to: head.commit)` lists the paths of
-   `git diff-tree --name-only -r -z <trustedHead> <head.commit>` that [MCP tools](#mcp-tools) step 4 leaves to the user
-   by their name (a protected path, a `.gitattributes` or `.mailmap` file, a path holding a character outside ASCII),
-   each once, sorted in byte order: a change of the guardrail that holds no personal data passes that check, yet it
-   can weaken the checks of the next pushes (MCP tools step 6, CI).
-   - Clean, no such path: `trustedHead` = `head.commit`.
+   this check stands in for the personal data check of that run.
+   - Clean: `trustedHead` = `head.commit`.
    - Findings: `lastError` = `Commits pushed to <branch> outside the Forge hold personal data: follow "If personal data
      was pushed" in docs/public-repository.md.`, a blank line and the finding lines; `trustedHead` is kept.
-   - Clean, with such paths: `lastError` = `Commits pushed to <branch> outside the Forge change the personal-data
-     guardrail: <paths>. Review them, then press Regenerate Now or Retry on the Forge screen to trust them.`
-     (`<paths>` joined with `, `); `trustedHead` is kept, except in the check that `forge.regenerate` and
-     `forge.retry` run first ([Methods](#methods)), which sets `trustedHead` = `head.commit`: the user presses one of
-     these buttons after reviewing them, as the message asks.
    - Any other failure: `lastError` = `The commits pushed to <branch> outside the Forge could not be checked:
      <reason>.`; `trustedHead` is kept. `<reason>`, written without its final period, is the git error when `git show`
-     or `git diff-tree` fails (no script at `trustedHead`: `git show failed: <line>`,
-     [Git operations](#git-operations)), else the `<reason>` of [MCP tools](#mcp-tools) step 6 (`timed out` for a
-     timeout).
+     fails (no script at `trustedHead`: `git show failed: <line>`, [Git operations](#git-operations)), else the
+     `<reason>` of [MCP tools](#mcp-tools) step 6 (`timed out` for a timeout).
 
    `forge.json` is written when `trustedHead` changes. `head` is **trusted** while `trustedHead` equals `head.commit`.
 5. `GET releases/latest`: a `tag_name` of the form `build-<N>` with `N` greater than `latestRelease.build` (or no
@@ -635,8 +599,7 @@ call with its text. `<tool>` is the tool's name and `<branch>` the configured br
    - `forge_push_regen`: the session is `cycle.sessionID` and the cycle is `regenerating`, or `failed` with
      `failedState` `regenerating`, else `forge_push_regen is only available in the current Forge regeneration
      session.`.
-   - Then the configuration checks. When the guardrail files fail them in `forge_push_regen`, the cycle also fails at
-     once ([Session observation](#session-observation)).
+   - Then the configuration checks.
    - Then the private terms file is written when it is missing ([Private terms](#private-terms)); a failure to write it
      is logged, and the file, still missing, holds no term for the check that follows. It must hold a term
      (`privateTermsCount()` > 0), else `private-terms.txt holds no terms: add your names in Settings ▸ Forge & Updates
@@ -655,35 +618,11 @@ call with its text. `<tool>` is the tool's name and `<branch>` the configured br
    - `git rev-list --merges <base>..<sha>` prints a commit: `Rebase instead of merging: git pull --rebase origin
      <branch>, then call <tool> again.`.
 4. **Paths.** For each commit, oldest first: the paths it changes, `git diff-tree --no-commit-id --name-only -r -z
-   <commit>` (added, modified, deleted, and both names of a renamed file); the binary files it adds or changes,
-   decided as the check script decides them, with no git attributes
-   ([../public-repository.md](../public-repository.md#check-script)): each record of `git diff-tree --no-commit-id
-   --root --raw --no-abbrev --no-renames -r -z <commit>` whose new mode is `100644` or `100755` and whose new object
-   (`git cat-file blob <sha>`) holds a NUL byte in its first 8000 bytes (a binary file it deletes does not count); and
-   the paths of its tree,
+   <commit>` (added, modified, deleted, and both names of a renamed file), and the paths of its tree,
    `git ls-tree -r -z --name-only <commit>`. Paths are compared after ASCII lowercasing, so that a path written in
-   another letter case, which a Mac's disk stores as the same file, counts as that path. That disk also folds some
-   characters outside ASCII onto ASCII letters (U+212A KELVIN SIGN onto `k`, U+017F LONG S onto `s`: verified on APFS),
-   so a path holding a character outside ASCII is left to the user (the guardrail below). The refusals below are looked
-   for in their order: the guardrail, over all the commits at once; then the case clashes, and then the `docs/` rule of
-   the tool, each over the commits oldest first and, within a commit, over its paths in the order of `git diff-tree`.
-   - The guardrail: a protected path, which only the user changes, by hand
-     ([../public-repository.md](../public-repository.md#protected-paths)), as listed by `ForgePushGate.protectedPaths`:
-     `docs/general.md`, `docs/public-repository.md`, `scripts/check-public.sh`, `.gitignore`, `CLAUDE.md`,
-     `HephaestusKit/Sources/HephHost/Forge/ForgePushGate.swift`, `HephaestusKit/Sources/HephHost/Forge/ForgeGit.swift`,
-     `HephaestusKit/Sources/HephHost/Forge/ForgeChecks.swift`,
-     `HephaestusKit/Sources/HephHost/Forge/PrivateTerms.swift`,
-     `HephaestusKit/Sources/HephHost/Claude/ForgeSessionRules.swift`,
-     `HephaestusKit/Sources/HephHost/Claude/ForgePrompts.swift`,
-     `HephaestusKit/Sources/HephHost/MCP/MCPToolKinds.swift`,
-     `HephaestusKit/Tests/HephHostTests/PublicCheckTests.swift`,
-     `HephaestusKit/Tests/HephHostTests/ForgePushTests.swift` and every path under `.githooks/` or `.github/`; a file
-     named `.gitattributes` or `.mailmap` in any folder, which changes how git reads the others; a path holding a
-     character outside ASCII (a byte above `0x7F`), which a Mac's disk can store as one of the others
-     (`.githoo<U+212A>s/pre-push` is `.githooks/pre-push` there); a binary file. Any of
-     them: `Changes to the personal-data guardrail are pushed by hand after review: <paths>.` (`<paths>`: each such path
-     of the commits once, as the commit writes it, sorted in byte order, joined with `, `). For `forge_push_regen` the
-     cycle also fails at once ([Session observation](#session-observation)).
+   another letter case, which a Mac's disk stores as the same file, counts as that path. The refusals below are looked
+   for in their order: the case clashes, then the `docs/` rule of the tool, each over the commits oldest first and,
+   within a commit, over its paths in the order of `git diff-tree`.
    - A path the commit adds or changes that equals, ignoring ASCII case, another path of its tree, or one of whose
      folders equals, ignoring ASCII case, another folder of its tree: `<sha8> adds <path>, which differs only in case
      from <other path>.`, `<other path>` being that other path, or that other folder followed by `/` (`…, which
@@ -747,9 +686,8 @@ call with its text. `<tool>` is the tool's name and `<branch>` the configured br
      Result: `Pushed regeneration commit <sha8>. The Forge now waits for the CI run and the release.`.
 
 `<sha8>` is the first 8 characters of a full SHA. Steps 2 to 7 are `ForgePushGate.push(_:trustedHead:)`, called with
-`trustedHead`, and Checks and triggers step 4 is `ForgePushGate.checkPushedElsewhere(from:to:)` and
-`ForgePushGate.guardrailPaths(from:to:)` ([Swift API](#swift-api)), which [../testing.md](../testing.md) runs on
-temporary repositories.
+`trustedHead`, and Checks and triggers step 4 is `ForgePushGate.checkPushedElsewhere(from:to:)`
+([Swift API](#swift-api)), which [../testing.md](../testing.md) runs on temporary repositories.
 
 ## Git operations
 
@@ -772,35 +710,28 @@ and triggers step 4, run their own git commands with the same two settings, give
 same variable. Code that a session starts can change the files of the working tree, the hooks included;
 the push needs no hook, since the push tools run the published check themselves (MCP tools step 6).
 
-| Use                               | Command                                                                             | Timeout | Result                                                                               |
-|-----------------------------------|-------------------------------------------------------------------------------------|---------|--------------------------------------------------------------------------------------|
-| fetch                             | `git fetch --quiet origin <branch>`                                                 | 120 s   | —                                                                                    |
-| head                              | `git rev-parse --verify refs/remotes/origin/<branch>`                               | 30 s    | stdout trimmed                                                                       |
-| origin branch exists              | `git rev-parse --verify --quiet refs/remotes/origin/<branch>`                       | 30 s    | exit 0 = exists, 1 = does not exist                                                  |
-| current branch                    | `git rev-parse --abbrev-ref HEAD`                                                   | 30 s    | stdout trimmed                                                                       |
-| HEAD                              | `git rev-parse --verify HEAD`                                                       | 30 s    | stdout trimmed                                                                       |
-| ancestor                          | `git merge-base --is-ancestor <a> <b>`                                              | 30 s    | exit 0 = ancestor, 1 = not                                                           |
-| last common commit                | `git merge-base <a> <b>`                                                            | 30 s    | stdout trimmed                                                                       |
-| commits                           | `git rev-list --reverse <a>..<b>`                                                   | 30 s    | one full SHA per line                                                                |
-| merge commits                     | `git rev-list --merges <a>..<b>`                                                    | 30 s    | empty stdout = none                                                                  |
-| changed paths                     | `git diff-tree --no-commit-id --name-only -r -z <commit>`                           | 30 s    | NUL-terminated paths                                                                 |
-| paths changed between two commits | `git diff-tree --name-only -r -z <a> <b>`                                           | 30 s    | NUL-terminated paths                                                                 |
-| changed files                     | `git diff-tree --no-commit-id --root --raw --no-abbrev --no-renames -r -z <commit>` | 30 s    | NUL-terminated: `:<old mode> <new mode> <old sha> <new sha> <status>`, then the path |
-| blob                              | `git cat-file blob <sha>`                                                           | 30 s    | stdout bytes                                                                         |
-| paths of a tree                   | `git ls-tree -r -z --name-only <rev>`                                               | 30 s    | NUL-terminated paths                                                                 |
-| local changes                     | `git diff --name-only -z <rev> -- <pathspecs>`, the same with `--cached`            | 30 s    | NUL-terminated paths; empty = none                                                   |
-| files git does not track          | `git ls-files --others -z -- <pathspecs>`                                           | 30 s    | NUL-terminated paths; empty = none                                                   |
-| docs files                        | `git ls-tree -r -z <rev> -- docs`                                                   | 30 s    | entries, below                                                                       |
-| file at a revision                | `git show <rev>:<path>`                                                             | 30 s    | stdout bytes                                                                         |
-| working tree clean                | `git status --porcelain`                                                            | 30 s    | empty stdout = clean                                                                 |
-| top folder                        | `git rev-parse --show-toplevel`                                                     | 30 s    | stdout trimmed                                                                       |
-| origin URL                        | `git remote get-url origin`                                                         | 30 s    | stdout trimmed                                                                       |
-| push URLs                         | `git remote get-url --push --all origin`                                            | 30 s    | one URL per line                                                                     |
-| push URL setting                  | `git config --get-all remote.origin.pushurl`                                        | 30 s    | stdout; exit 1 = none                                                                |
-| local setting                     | `git config --local --get <key>` (`core.hooksPath`, `commit.gpgsign`)               | 30 s    | stdout trimmed; exit 1 = not set                                                     |
-| set a local setting               | `git config --local <key> <value>`                                                  | 30 s    | —                                                                                    |
-| push                              | `git push --no-follow-tags origin <sha>:refs/heads/<branch>`                        | 120 s   | —                                                                                    |
-| GitHub token                      | `gh auth token`                                                                     | 10 s    | stdout trimmed; non-zero exit, empty output or no `gh` = no token                    |
+| Use                 | Command                                                               | Timeout | Result                                                            |
+|---------------------|-----------------------------------------------------------------------|---------|-------------------------------------------------------------------|
+| fetch               | `git fetch --quiet origin <branch>`                                   | 120 s   | —                                                                 |
+| head                | `git rev-parse --verify refs/remotes/origin/<branch>`                 | 30 s    | stdout trimmed                                                    |
+| current branch      | `git rev-parse --abbrev-ref HEAD`                                     | 30 s    | stdout trimmed                                                    |
+| HEAD                | `git rev-parse --verify HEAD`                                         | 30 s    | stdout trimmed                                                    |
+| ancestor            | `git merge-base --is-ancestor <a> <b>`                                | 30 s    | exit 0 = ancestor, 1 = not                                        |
+| commits             | `git rev-list --reverse <a>..<b>`                                     | 30 s    | one full SHA per line                                             |
+| merge commits       | `git rev-list --merges <a>..<b>`                                      | 30 s    | empty stdout = none                                               |
+| changed paths       | `git diff-tree --no-commit-id --name-only -r -z <commit>`             | 30 s    | NUL-terminated paths                                              |
+| paths of a tree     | `git ls-tree -r -z --name-only <rev>`                                 | 30 s    | NUL-terminated paths                                              |
+| docs files          | `git ls-tree -r -z <rev> -- docs`                                     | 30 s    | entries, below                                                    |
+| file at a revision  | `git show <rev>:<path>`                                               | 30 s    | stdout bytes                                                      |
+| working tree clean  | `git status --porcelain`                                              | 30 s    | empty stdout = clean                                              |
+| top folder          | `git rev-parse --show-toplevel`                                       | 30 s    | stdout trimmed                                                    |
+| origin URL          | `git remote get-url origin`                                           | 30 s    | stdout trimmed                                                    |
+| push URLs           | `git remote get-url --push --all origin`                              | 30 s    | one URL per line                                                  |
+| push URL setting    | `git config --get-all remote.origin.pushurl`                          | 30 s    | stdout; exit 1 = none                                             |
+| local setting       | `git config --local --get <key>` (`core.hooksPath`, `commit.gpgsign`) | 30 s    | stdout trimmed; exit 1 = not set                                  |
+| set a local setting | `git config --local <key> <value>`                                    | 30 s    | —                                                                 |
+| push                | `git push --no-follow-tags origin <sha>:refs/heads/<branch>`          | 120 s   | —                                                                 |
+| GitHub token        | `gh auth token`                                                       | 10 s    | stdout trimmed; non-zero exit, empty output or no `gh` = no token |
 
 **Docs hash of a revision.** `git ls-tree -r -z <rev> -- docs` prints NUL-terminated entries
 `<mode> <type> <object>\t<path>`. The entries with mode `100644` or `100755` and type `blob` whose last path component
@@ -904,12 +835,12 @@ requesting device), `regenerate()` and `retry(itemTaskID:)` ([../services/host.m
 results: [../protocol/methods.md](../protocol/methods.md). Every method except `forge.status` fails with `unavailable`
 `This Main is not the Forge.` while the Forge is not enabled.
 
-| Method             | Behavior                                                                                                                                                                                                                                                                | Errors                                                                                               |
-|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| `forge.status`     | the current `ForgeState`; may start a background check (Checks and triggers). While the Forge is not enabled: a state with `enabled` false, `hostDeviceID` = this Main, `appDocsHash` = `DocsHash.embedded`, `items` empty and the other fields nil                     | —                                                                                                    |
-| `forge.feedback`   | Feedback intake                                                                                                                                                                                                                                                         | `unavailable`, `locked`, `badRequest`, `notFound` and `conflict` (the screenshot upload), `internal` |
-| `forge.regenerate` | answers `{}` after the configuration checks and the conflict check, then works in the background: a check of its own, whose step 4 trusts the changes of the guardrail it finds (Checks and triggers), then Retry when the cycle is `failed`, else the `manual` trigger | `unavailable`, `conflict` `A regeneration is already in progress (<state>).`                         |
-| `forge.retry`      | answers `{}` after the checks (the item must be `failed` and in the current cycle), then works in the background: a check of its own, as for `forge.regenerate`, then Retry                                                                                             | `unavailable`, `notFound` `No Forge item for <task id>.`, `conflict` `<task id> has not failed.`     |
+| Method             | Behavior                                                                                                                                                                                                                                            | Errors                                                                                               |
+|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
+| `forge.status`     | the current `ForgeState`; may start a background check (Checks and triggers). While the Forge is not enabled: a state with `enabled` false, `hostDeviceID` = this Main, `appDocsHash` = `DocsHash.embedded`, `items` empty and the other fields nil | —                                                                                                    |
+| `forge.feedback`   | Feedback intake                                                                                                                                                                                                                                     | `unavailable`, `locked`, `badRequest`, `notFound` and `conflict` (the screenshot upload), `internal` |
+| `forge.regenerate` | answers `{}` after the configuration checks and the conflict check, then works in the background: a check of its own (Checks and triggers), then Retry when the cycle is `failed`, else the `manual` trigger                                        | `unavailable`, `conflict` `A regeneration is already in progress (<state>).`                         |
+| `forge.retry`      | answers `{}` after the checks (the item must be `failed` and in the current cycle), then works in the background: a check of its own, as for `forge.regenerate`, then Retry                                                                         | `unavailable`, `notFound` `No Forge item for <task id>.`, `conflict` `<task id> has not failed.`     |
 
 Errors of the background work go to the cycle (`failed`) or to `lastError`.
 
@@ -1058,13 +989,10 @@ struct ForgeGit: Sendable {
 /// Checks and triggers.
 struct ForgePushGate: Sendable {
     enum Tool: String, Sendable { case pushDocs = "forge_push_docs", pushRegen = "forge_push_regen" }
-    /// A refused push: `message` is the tool's error text; `guardrailPaths` lists the paths of step 4 that only the
-    /// user pushes (empty for the other refusals).
-    struct Refusal: Error, Sendable, Equatable { var message: String; var guardrailPaths: [String] }
+    /// A refused push: `message` is the tool's error text.
+    struct Refusal: Error, Sendable, Equatable { var message: String }
     /// A push: the full SHA pushed and the base of step 2.
     struct Pushed: Sendable, Equatable { var commit: String; var base: String }
-    /// The protected paths of public-repository.md, in the order of MCP tools step 4; a folder ends with "/".
-    static let protectedPaths: [String]
     /// `termsFile`: passed as HEPHAESTUS_PRIVATE_TERMS (the caller writes it first when it is missing).
     init(git: ForgeGit, branch: String, termsFile: URL)
     /// Throws Refusal, whose message is also the text of git and bash failures. `trustedHead`: the commit whose
@@ -1074,9 +1002,6 @@ struct ForgePushGate: Sendable {
     /// marker` findings alone count as clean), else the finding lines; throws Refusal (its message is the reason) when
     /// the check cannot run.
     func checkPushedElsewhere(from trusted: String, to head: String) async throws -> String?
-    /// Checks and triggers step 4: the paths that differ between `trusted` and `head` that step 4 of the push tools
-    /// leaves to the user by their name, each once, sorted in byte order; throws Refusal (the git error) on failure.
-    func guardrailPaths(from trusted: String, to head: String) async throws -> [String]
 }
 
 /// Private terms: the pre-filled file, the suggestions and the count.
@@ -1119,14 +1044,11 @@ The files of this doc:
 | `ForgePolling.swift`  | `extension ForgeService`: Checks and triggers, Polling                                                                                                                                                                                      |
 | `ForgeStore.swift`    | `extension ForgeService`: loading and writing `forge.json`                                                                                                                                                                                  |
 | `ForgeGit.swift`      | `ForgeGit`: Git operations and the docs hash of a revision                                                                                                                                                                                  |
-| `ForgePushGate.swift` | `ForgePushGate`: steps 2 to 7 of MCP tools, the protected paths, step 4 of Checks and triggers                                                                                                                                              |
+| `ForgePushGate.swift` | `ForgePushGate`: steps 2 to 7 of MCP tools, step 4 of Checks and triggers                                                                                                                                                                   |
 | `PrivateTerms.swift`  | `PrivateTerms` and the `privateTermsURL`, `privateTermsCount()`, `preparePrivateTerms()`, `privateTermSuggestions()`, `addPrivateTerm(_:)` and `dismissPrivateTerm(_:)` members of `ForgeService` (`extension ForgeService`): Private terms |
 | `GitHubClient.swift`  | `GitHubClient` and the `GitHub*` types of the Swift API (GitHub API, except Polling)                                                                                                                                                        |
 
-The actor's stored state is `internal`, so that the extensions in the other files can use it. `ForgeGit.swift`,
-`ForgeChecks.swift`, `ForgePushGate.swift` and `PrivateTerms.swift` are protected paths
-([../public-repository.md](../public-repository.md#protected-paths)): a regeneration that would change them stops, and
-the user changes them by hand.
+The actor's stored state is `internal`, so that the extensions in the other files can use it.
 
 ## Depends on
 
@@ -1140,7 +1062,7 @@ the user changes them by hand.
 | `SessionService`, `SessionStart`, `ChildProcess`, `CapturedOutput`, `LoginEnvironment`, the permission rules and environment of the sessions of 3.5                                                | [../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)                      |
 | `RegenerationContext`, `RegenerationItem`, `FailedCIRun`, `FailedCIJob`, the feedback and regeneration prompts                                                                                     | [../claude/prompts.md](../claude/prompts.md)                                                   |
 | `forge_push_docs`, `forge_push_regen`, `MCPHost`                                                                                                                                                   | [../claude/mcp.md](../claude/mcp.md)                                                           |
-| `scripts/check-public.sh` (options, output, exit status), the hooks, the private terms format, the protected paths, "If personal data was pushed"                                                  | [../public-repository.md](../public-repository.md)                                             |
+| `scripts/check-public.sh` (options, output, exit status), the hooks, the private terms format, "If personal data was pushed"                                                                       | [../public-repository.md](../public-repository.md)                                             |
 | the placeholders                                                                                                                                                                                   | [../general.md](../general.md#placeholders)                                                    |
 | the `public-check` and `public-check-terms` jobs                                                                                                                                                   | [ci.md](ci.md)                                                                                 |
 | `DeviceRecord` (names and addresses of Private terms)                                                                                                                                              | [../protocol/types.md](../protocol/types.md)                                                   |

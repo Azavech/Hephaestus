@@ -73,9 +73,9 @@ Layers that do not depend on each other keep personal data out ([public-reposito
 - the Forge push gate: Forge sessions never push; the Forge checks their commits, then pushes them itself, and checks
   the commits that reach its branch another way ([public-repository.md](public-repository.md#forge-push-gate),
   [forge/pipeline.md](forge/pipeline.md));
-- Claude's permissions in the sessions that work in the repository: `git push`, git settings and edits of the
-  guardrail are denied, no hook runs and no permission is remembered; code a session runs, and a `project` or `task`
-  session in `bypassPermissions`, can still get past them
+- Claude's permissions in the sessions that work in the repository: `git push` and git settings are denied, no hook
+  runs and no permission is remembered; code a session runs, and a `project` or `task` session in
+  `bypassPermissions`, can still get past them
   ([public-repository.md](public-repository.md#claude-permissions), [claude/cli.md](claude/cli.md));
 - the commit identity: commits carry the user's own git identity, checked for private terms, and no signature
   ([public-repository.md](public-repository.md#commit-identity));
@@ -85,11 +85,7 @@ Layers that do not depend on each other keep personal data out ([public-reposito
   built or released without them ([forge/ci.md](forge/ci.md)); the check refuses the commit messages that would make
   GitHub start none;
 - signing out of the repository: no team ID in the project file
-  ([architecture.md](architecture.md#configsigningxcconfig));
-- protected paths: this doc, [public-repository.md](public-repository.md), the check script, the hooks, `.github/`,
-  `.gitignore`, the root `CLAUDE.md`, and the Swift files and tests of the Forge push gate, its checks and the rules
-  and prompts of its sessions are changed only by hand, after review
-  ([public-repository.md](public-repository.md#protected-paths)).
+  ([architecture.md](architecture.md#configsigningxcconfig)).
 
 ## Documentation rules
 

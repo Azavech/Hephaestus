@@ -322,8 +322,7 @@ so the log and the summary can be public.
 
 ## Public repository rules
 
-The workflow, its logs and its releases are public. Every change to `.github/` keeps these rules, and is pushed by hand
-after review ([../public-repository.md](../public-repository.md#protected-paths)):
+The workflow, its logs and its releases are public. Every change to `.github/` keeps these rules:
 
 - `PRIVATE_TERMS` is a secret of the environment `private-terms`, never a repository secret, and is read only in the
   `env:` of "Write the private terms" of `public-check-terms`. No step prints a secret or the environment.

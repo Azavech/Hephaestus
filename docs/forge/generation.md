@@ -189,9 +189,6 @@ stages or deletes anything in it.
      there), and then still matches its own doc.
    - The Xcode project file changes only as `docs/architecture.md` says; files added under `App/` need no project
      change.
-   - In a Forge session, when a changed doc requires a change to a protected path
-     ([../public-repository.md](../public-repository.md#protected-paths)), stop (2.3): that regeneration is done by
-     hand, outside the Forge.
 7. **Update the tests.** Tests are governed by `docs/testing.md` only. Update the tests that cover changed behavior and
    add the tests `docs/testing.md` lists for new behavior.
 8. **Build and test.** `scripts/build.sh all` and `scripts/test.sh` ([ci.md](ci.md)) both succeed. Fix the code, never
@@ -227,9 +224,6 @@ stages or deletes anything in it.
       - `origin/<branch>` moved: 12.1 to 12.3;
       - personal data findings: remove the data the findings name, `git reset --soft origin/<branch>`, then steps 10
         and 11 again (one commit); when the docs require that data, stop (2.3);
-      - changes to the personal-data guardrail (protected paths, or the guardrail files of the Forge's configuration
-        checks): stop (2.3); the commits stay local for the user to review, check with origin's script and push by
-        hand ([../public-repository.md](../public-repository.md#protected-paths));
       - no private term, or suggested private terms pending: stop (2.3); the user acts in Settings ▸ Forge & Updates.
     - By hand: `git push origin <branch>`, with the hooks active (`core.hooksPath` is `.githooks`). When it is rejected
       because `origin/<branch>` moved: 12.1 to 12.3. When the pre-push hook refuses it: as for personal data findings
@@ -272,8 +266,6 @@ Stop without committing or pushing, and explain why in the reply, when:
 - there is nothing to do (step 4);
 - a doc is ambiguous, contradicts another doc, or cannot be implemented without inventing something;
 - the build or the tests cannot pass without changing a doc;
-- in a Forge session, a changed doc requires a change to a protected path (step 6), or the Forge refuses the push
-  because of one (step 12);
 - the personal data check reports data that a doc requires (steps 11 and 12);
 - the Forge refuses the push until the user adds private terms or reviews suggested ones (step 12);
 - the failed CI job to fix is `public-check` or `public-check-terms` (2.2).
@@ -303,9 +295,7 @@ screenshot, a comment, a transcript or a log of the user's machines. Use the pla
 
 - Before committing, run `scripts/check-public.sh --staged` and fix every finding. Never use `--no-verify`.
 - Never split, encode, escape or reformat a value to get past a finding: remove it or use a placeholder.
-- In a Forge session, never run `git push`: push with the session's Forge tool, `forge_push_docs` or
-  `forge_push_regen`. Never edit the protected paths of `docs/public-repository.md` there: the user changes them by
-  hand.
+- In a Forge session, never run `git push`: push with the session's Forge tool, `forge_push_docs` or `forge_push_regen`.
 - Notes about the user or their machines never go into this file or any other file of the repository.
 
 ## Rules

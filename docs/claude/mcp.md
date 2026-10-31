@@ -262,8 +262,6 @@ A `bundle` session, the coordinator of a bundle ([../services/bundles.md](../ser
 that read and change projects and tasks, the bundle tools and `forge_push_docs`, which pushes only for the bundles of
 the Forge source project. It starts its task sessions with `start_bundle_task` alone, and gets no tool that runs a
 command: in the Forge source project it holds a push tool, like a feedback session.
-It is a protected path ([../public-repository.md](../public-repository.md#protected-paths)), so a regeneration never
-widens the tools of these sessions.
 
 ```swift
 struct MCPToolDefinition: Sendable {
@@ -956,7 +954,7 @@ and the skills library are synced between Mains), and the Forge and bundle tools
 | `mesh.snapshot`, `projects.*`, `tasks.*` (`tasks.addComment` with `author`), `sessions.start`, `runs.*`, `tabs.open`, `search.query`, `skills.*`, `uploads.*`, `maxChunkSize`                                                                 | [../protocol/methods.md](../protocol/methods.md)   |
 | `HostService` (conformance to `MCPHost`, `perform`), `RequestContext.local(device:author:)`, `MeshService.requestPeer`, starting and stopping the server, the refusal of `runs` changes for Claude                                            | [../services/host.md](../services/host.md)         |
 | `ForgeService.pushDocs`, `ForgeService.pushRegen`, the Forge push gate                                                                                                                                                                        | [../forge/pipeline.md](../forge/pipeline.md)       |
-| the public repository rule that limits the tools of Forge sessions, the protected paths                                                                                                                                                       | [../public-repository.md](../public-repository.md) |
+| the public repository rule that limits the tools of Forge sessions                                                                                                                                                                            | [../public-repository.md](../public-repository.md) |
 | `Log.host`, logging rules                                                                                                                                                                                                                     | [../architecture.md](../architecture.md)           |
 | SKILL.md validation                                                                                                                                                                                                                           | [skills.md](skills.md)                             |
 | token registration by session processes                                                                                                                                                                                                       | [cli.md](cli.md)                                   |

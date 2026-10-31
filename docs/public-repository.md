@@ -12,22 +12,21 @@ The GitHub repository `Azavech/Hephaestus` is public. [general.md](general.md#pu
 states the rule, defines personal data and gives the placeholders. This doc defines how the rule is enforced: the
 personal data check `scripts/check-public.sh`, the git hooks that run it, the private terms, what the Forge, Claude's
 sessions and CI do with them, the setup of a clone, the first publication, and what to do when personal data reached
-GitHub. This doc and general.md are changed only by hand ([Protected paths](#protected-paths)).
+GitHub.
 
 ## Layers
 
-| Layer              | What                                                                                                                                                                                                                                    | Defined in                                                                                                     |
-|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|
-| Rule               | what personal data is, the placeholders, where personal data lives instead                                                                                                                                                              | [general.md](general.md#public-repository-no-personal-data)                                                    |
-| Check script       | `scripts/check-public.sh`, the only implementation of the check, run by the layers below                                                                                                                                                | [Check script](#check-script)                                                                                  |
-| Git hooks          | every `git commit`, its message and every push of a clone whose `core.hooksPath` is `.githooks`, in a checkout that holds that folder                                                                                                   | [Git hooks](#git-hooks)                                                                                        |
-| Forge push gate    | Forge sessions never push: the Forge checks their commits, then pushes them                                                                                                                                                             | [Forge push gate](#forge-push-gate), [forge/pipeline.md](forge/pipeline.md)                                    |
-| Claude permissions | the sessions working in the repository are denied `git push`, git settings and edits of the guardrail files; code a session runs, and a `project` or `task` session in `bypassPermissions`, can still get past this ([Limits](#limits)) | [Claude permissions](#claude-permissions), [claude/cli.md](claude/cli.md#35-sessions-in-the-public-repository) |
-| Commit identity    | commits carry the user's own git identity, checked for private terms, and no signature                                                                                                                                                  | [Commit identity](#commit-identity)                                                                            |
-| Private terms      | the user's own words (names, accounts, machines), refused in everything the check reads                                                                                                                                                 | [Private terms](#private-terms)                                                                                |
-| CI                 | the `public-check` jobs run first, for every push and pull request that GitHub starts a run for; nothing is built or released without them                                                                                              | [CI](#ci), [forge/ci.md](forge/ci.md)                                                                          |
-| Signing            | no team ID in the project file                                                                                                                                                                                                          | [Signing](#signing), [architecture.md](architecture.md#configsigningxcconfig)                                  |
-| Protected paths    | the Forge push gate refuses changes to the guardrail; the user pushes them by hand after review                                                                                                                                         | [Protected paths](#protected-paths)                                                                            |
+| Layer              | What                                                                                                                                                                                                      | Defined in                                                                                                     |
+|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|
+| Rule               | what personal data is, the placeholders, where personal data lives instead                                                                                                                                | [general.md](general.md#public-repository-no-personal-data)                                                    |
+| Check script       | `scripts/check-public.sh`, the only implementation of the check, run by the layers below                                                                                                                  | [Check script](#check-script)                                                                                  |
+| Git hooks          | every `git commit`, its message and every push of a clone whose `core.hooksPath` is `.githooks`, in a checkout that holds that folder                                                                     | [Git hooks](#git-hooks)                                                                                        |
+| Forge push gate    | Forge sessions never push: the Forge checks their commits, then pushes them                                                                                                                               | [Forge push gate](#forge-push-gate), [forge/pipeline.md](forge/pipeline.md)                                    |
+| Claude permissions | the sessions working in the repository are denied `git push` and git settings; code a session runs, and a `project` or `task` session in `bypassPermissions`, can still get past this ([Limits](#limits)) | [Claude permissions](#claude-permissions), [claude/cli.md](claude/cli.md#35-sessions-in-the-public-repository) |
+| Commit identity    | commits carry the user's own git identity, checked for private terms, and no signature                                                                                                                    | [Commit identity](#commit-identity)                                                                            |
+| Private terms      | the user's own words (names, accounts, machines), refused in everything the check reads                                                                                                                   | [Private terms](#private-terms)                                                                                |
+| CI                 | the `public-check` jobs run first, for every push and pull request that GitHub starts a run for; nothing is built or released without them                                                                | [CI](#ci), [forge/ci.md](forge/ci.md)                                                                          |
+| Signing            | no team ID in the project file                                                                                                                                                                            | [Signing](#signing), [architecture.md](architecture.md#configsigningxcconfig)                                  |
 
 The layers do not depend on each other. `--no-verify` skips the hooks, not the Forge push gate or CI. A hand push that
 skipped the hooks is caught by CI once it is on GitHub, and by the Forge when it reaches the branch the Forge follows
@@ -59,6 +58,8 @@ pushed outside it and CI run it; nothing else decides what personal data is.
   for text or hide a text file as binary.
 - It is committed with mode `100755`. The hooks, the Forge and CI run it with `bash`, so it also works without its exec
   bit.
+- A change that relaxes a rule is pushed alone, before the files that need it: the pre-push hook and CI also judge a
+  push with the check it replaces, and the Forge push gate with that check alone.
 
 ### Modes
 
@@ -741,8 +742,7 @@ branch or a sparse checkout that leaves it out, runs no hook, and git says nothi
   `Cannot list the branches of the remote.`
 - When the remote sha is a commit this clone has and its `scripts/check-public.sh` differs from the working tree's, the
   hook also runs the remote's script, from a temporary copy, on the same range: the pushed commits cannot weaken the
-  check that judges them. A hook changed in the working tree is not judged this way: it is the hook that runs
-  ([Protected paths](#protected-paths)).
+  check that judges them. A hook changed in the working tree is not judged this way: it is the hook that runs.
 - The script runs with its input from `/dev/null`, so it cannot consume the hook's input. Each run prints its own
   summary line; the push is refused when any run fails.
 - The hook runs git with `GIT_NO_REPLACE_OBJECTS=1`, as the script does: a replace ref cannot choose the remote's
@@ -850,16 +850,14 @@ failure ends the call with a text that tells Claude what to do next
 3. The commits between the base and the commit: there is at least one, the base is an ancestor of the commit, and none
    is a merge.
 4. Paths, compared ignoring ASCII case: `forge_push_docs` pushes only changes under `docs/`, `forge_push_regen` none
-   under `docs/`; neither pushes a change to a [protected path](#protected-paths), a binary file, a `.gitattributes` or
-   `.mailmap` file, a path holding a character outside ASCII, which a Mac's disk can store as another path (it folds
-   U+212A KELVIN SIGN onto `k` and U+017F LONG S onto `s`), or a path that differs only in case from another path of
-   its commit.
+   under `docs/`; neither pushes a path that differs only in case from another path of its commit.
 5. `forge_push_regen` only: `App/DocsHash.txt` at the commit equals the docs hash of the commit.
 6. The personal data check as it is on GitHub: the Forge takes `scripts/check-public.sh` from the last head of the
    branch it trusts (`git show`; from the base before its first check), so that neither the commits being pushed nor
-   commits that reached the branch outside the gate unreviewed can change the script that judges them, and runs it
-   with `bash`, `--ref refs/heads/<branch> --commits <base>..<commit>` and `HEPHAESTUS_PRIVATE_TERMS` set to the
-   private terms file. A missing script refuses the push; findings refuse it with the finding lines.
+   commits that reached the branch outside the gate without passing the Forge's check can change the script that
+   judges them, and runs it with `bash`, `--ref refs/heads/<branch> --commits <base>..<commit>` and
+   `HEPHAESTUS_PRIVATE_TERMS` set to the private terms file. A missing script refuses the push; findings refuse it with
+   the finding lines.
 7. `git push --no-follow-tags origin <commit>:refs/heads/<branch>`, never forced.
 
 The Forge's own git commands, and the check it runs in step 6, run with `core.hooksPath=/dev/null` and
@@ -868,13 +866,11 @@ process; step 6 runs the published check instead. They also run with `GIT_NO_REP
 that a replace ref in the repository cannot make steps 3 to 6 read another commit, tree or file than the one step 7
 pushes. Then, when the base is the last head it trusts, the Forge records the pushed commit as the last one it trusts
 ([forge/pipeline.md](forge/pipeline.md#mcp-tools) step 8). At each of its checks, the Forge runs the published check of
-the last head it trusts, with the private terms, on the commits that reached its branch without going through the gate,
-and looks among the paths they change for those step 4 leaves to the user by name: a protected path, a `.gitattributes`
-or `.mailmap` file, a path outside ASCII ([forge/pipeline.md](forge/pipeline.md#checks-and-triggers)). It reports what
-it finds and starts no automatic regeneration until a later head passes. A `ci skip marker` alone passes there: the
-Forge has just checked those commits, as the CI run that GitHub skipped would have. It trusts a change of the guardrail
-only when the user, having reviewed it, presses Regenerate Now or Retry on the Forge screen; until then step 6 keeps
-the script it trusted before.
+the last head it trusts, with the private terms, on the commits that reached its branch without going through the gate
+([forge/pipeline.md](forge/pipeline.md#checks-and-triggers)). It reports what it finds and starts no automatic
+regeneration until a later head passes. A `ci skip marker` alone passes there: the Forge has just checked those
+commits, as the CI run that GitHub skipped would have. When they pass, their head becomes the last head it trusts, whose
+script step 6 runs from then on.
 
 ## Claude permissions
 
@@ -891,21 +887,18 @@ allow rules. As tried with Claude CLI 2.1.309:
   sessions also `xcodebuild`, `swift` and the scripts of `scripts/`.
 - Denied: `git push`, `git config`, `git -c`, `git remote`, `git update-ref`, `git filter-branch`, `git replace`,
   `git notes`, the git options that run a command or write a file (`--upload-pack`, and `--output` of `git diff`,
-  `git log`, `git show` and `git stash`); edits of the protected paths, of Claude Code's own settings (`.claude/`,
-  `.mcp.json`) and of `.hephaestus/` folders, also when the path is written in another letter case. The protected
-  paths are named by their absolute path, so the sessions of sub projects, which work in a folder of the repository,
-  are denied them too. A deny rule wins over every allow rule. Every session of any project is denied edits of
+  `git log`, `git show` and `git stash`); edits of Claude Code's own settings (`.claude/`, `.mcp.json`) and of
+  `.hephaestus/` folders. A deny rule wins over every allow rule. Every session of any project is denied edits of
   `.hephaestus/` folders: the app's project data, run configurations included, changes only through the app.
 - Their environment runs no git hook, rewrites every push URL to a scheme that has no remote helper, so that a plain
   `git push` from a hook, script, test or build fails, and keeps commits on the identity of git's configuration, with
   UTC dates.
 - Anything else shows the user a permission card: a fetch or pull from another repository or of another ref,
-  `git restore` and `git reset` in another form, which can copy any file of a commit, one the session wrote in another
-  folder for example, over a protected path, `scripts/check-public.sh` with other arguments in a feedback session (its
-  `--commits` passes them to `git rev-list`, whose `--output` empties a file), `git mv`, a command with an environment
-  assignment before it, `git -C <folder> …`, `bash -c "…"`. These cards offer no "Always Allow", and the permission
-  mode of feedback and regeneration sessions cannot be changed. A `project` or `task` session keeps its own mode; in
-  `bypassPermissions` it shows no card.
+  `git restore` and `git reset` in another form, `scripts/check-public.sh` with other arguments in a feedback session
+  (its `--commits` passes them to `git rev-list`, whose `--output` empties a file), `git mv`, a command with an
+  environment assignment before it, `git -C <folder> …`, `bash -c "…"`. These cards offer no "Always Allow", and the
+  permission mode of feedback and regeneration sessions cannot be changed. A `project` or `task` session keeps its own
+  mode; in `bypassPermissions` it shows no card.
 - No Hephaestus tool lets a session define a command: run configurations are changed only by the user, in the app
   ([claude/mcp.md](claude/mcp.md#65-update_project)). Feedback and regeneration sessions get no tool that reads the
   mesh's devices, projects or runs.
@@ -1029,63 +1022,6 @@ The project file holds no team ID. The target's Debug and Release configurations
 Capabilities writes a team into `project.pbxproj`, `team id` refuses the commit;
 `git restore Hephaestus.xcodeproj/project.pbxproj` undoes it.
 
-## Protected paths
-
-The guardrail is changed only by hand. These paths are protected:
-
-| Path                                                            | Governed by                                                                                 |
-|-----------------------------------------------------------------|---------------------------------------------------------------------------------------------|
-| `docs/general.md`                                               | itself                                                                                      |
-| `docs/public-repository.md`                                     | itself                                                                                      |
-| `scripts/check-public.sh`                                       | this doc                                                                                    |
-| `.githooks/`                                                    | this doc                                                                                    |
-| `.github/`                                                      | [forge/ci.md](forge/ci.md), whose `.github/workflows/ci.yml` is the only file of the folder |
-| `.gitignore`                                                    | [architecture.md](architecture.md#gitignore)                                                |
-| `CLAUDE.md`                                                     | [forge/generation.md](forge/generation.md#3-claudemd)                                       |
-| `HephaestusKit/Sources/HephHost/Forge/ForgePushGate.swift`      | [forge/pipeline.md](forge/pipeline.md)                                                      |
-| `HephaestusKit/Sources/HephHost/Forge/ForgeGit.swift`           | [forge/pipeline.md](forge/pipeline.md)                                                      |
-| `HephaestusKit/Sources/HephHost/Forge/ForgeChecks.swift`        | [forge/pipeline.md](forge/pipeline.md)                                                      |
-| `HephaestusKit/Sources/HephHost/Forge/PrivateTerms.swift`       | [forge/pipeline.md](forge/pipeline.md)                                                      |
-| `HephaestusKit/Sources/HephHost/Claude/ForgeSessionRules.swift` | [claude/cli.md](claude/cli.md)                                                              |
-| `HephaestusKit/Sources/HephHost/Claude/ForgePrompts.swift`      | [claude/prompts.md](claude/prompts.md)                                                      |
-| `HephaestusKit/Sources/HephHost/MCP/MCPToolKinds.swift`         | [claude/mcp.md](claude/mcp.md)                                                              |
-| `HephaestusKit/Tests/HephHostTests/PublicCheckTests.swift`      | [testing.md](testing.md)                                                                    |
-| `HephaestusKit/Tests/HephHostTests/ForgePushTests.swift`        | [testing.md](testing.md)                                                                    |
-
-They hold the check, the hooks, CI, the rule Claude reads in every session of the repository, the Forge push gate with
-its git commands, configuration checks and private terms, the rules and prompts of the sessions that work in the
-repository, the tools each session kind gets, and the tests of the check and of the gate. A feedback session can still
-change the docs that describe them, and the Forge pushes that doc change; the code change it requires is then made,
-reviewed and pushed by hand, so no automatic loop weakens the guardrail.
-
-- The Forge push gate refuses a commit range that changes any of them, compared ignoring ASCII case, with
-  `Changes to the personal-data guardrail are pushed by hand after review: <paths>.`
-  ([forge/pipeline.md](forge/pipeline.md#mcp-tools)).
-- The sessions that work in the repository, those of its sub projects included, are denied edits of them with the Write
-  and Edit tools and shell redirection, also when the path is written in another letter case; without the user's
-  approval, their allowed git commands were found to do no more than delete one, take away its exec bit or give it the
-  content it has in a commit of the repository ([claude/cli.md](claude/cli.md#35-sessions-in-the-public-repository)). A
-  configuration check of the Forge reports every difference between these paths in its source repository and on `origin`
-  ([forge/pipeline.md](forge/pipeline.md#configuration-checks)). When a doc change requires a change to a protected
-  path, a regeneration stops ([forge/generation.md](forge/generation.md#23-stopping)) and the user makes that change by
-  hand, outside the Forge.
-- The user reviews such a change, runs the `PublicCheckTests` and `ForgePushTests` ([testing.md](testing.md)) and
-  `scripts/check-public.sh --tree HEAD`, then checks the commits with the script as it is on GitHub, since they may
-  change the check that judges them, and pushes them with the hooks active:
-
-  ```sh
-  git fetch origin
-  git --no-replace-objects show origin/main:scripts/check-public.sh > "$TMPDIR/check-public.sh"
-  bash "$TMPDIR/check-public.sh" --commits origin/main..HEAD
-  git push origin main
-  ```
-
-- A change that relaxes a rule is pushed alone, before the files that need it: the pre-push hook and CI also judge a
-  push with the check it replaces.
-- The Forge's next check reports a change of these paths pushed by hand, and its push gate keeps judging with the
-  script it trusted before until the user presses Regenerate Now or Retry on the Forge screen
-  ([Forge push gate](#forge-push-gate)).
-
 ## Setting up a clone
 
 Every clone is set up once, before its first commit:
@@ -1181,6 +1117,9 @@ The check finds known forms and the private terms. It does not find:
 
 - personal data of no known form that is not a private term: names, places, project names. On a Mac or in CI without
   private terms, only the generic rules run;
+- personal data that a weakened check lets through: feedback and regeneration sessions may change every file, the
+  check script, the hooks, CI and the Forge push gate's own code included. The change itself is judged by the check
+  it replaces, but once it is published, the later pushes are judged by the weaker one;
 - personal data in author and committer names and e-mails, except private terms: the check does not know which
   identity is the user's, so a commit made with another one passes;
 - personal data of a known form in a ref name, such as an e-mail address or a home path: ref names are checked for
@@ -1199,8 +1138,7 @@ The check finds known forms and the private terms. It does not find:
   ([forge/pipeline.md](forge/pipeline.md#private-terms));
 - a word split by a variation selector, U+FE00 to U+FE0F: `hidden character` allows them, since emoji carry them;
 - a path holding a character outside ASCII that a Mac's disk folds onto another path (U+212A KELVIN SIGN onto `k`,
-  U+017F LONG S onto `s`): `case collision` compares ASCII case only; the Forge push gate leaves such paths to the
-  user, and the Forge reports those pushed outside it;
+  U+017F LONG S onto `s`): `case collision` and the Forge push gate compare ASCII case only;
 - data encoded in text, such as base64 or `data:` URIs;
 - a value derived from personal data, such as a hash of a home-folder path: the workspace `Package.resolved` holds the
   `originHash` of the CI checkout, never one written on a Mac
@@ -1229,8 +1167,8 @@ The check finds known forms and the private terms. It does not find:
 - a push made by code that a session runs, by a `project` or `task` session of the source project in the mode
   `bypassPermissions` or through a run configuration it starts, or by a command the user approves that overrides the
   sessions' git settings ([Claude permissions](#claude-permissions)): it passes through no gate. Once it is on GitHub,
-  the Forge reports its personal data and its changes of the guardrail, which it trusts only once the user has reviewed
-  them, and CI reports its personal data; a weaker check it brings judges the later pushes in CI;
+  the Forge and CI report its personal data; a weaker check it brings judges the later pushes in CI, and in the Forge
+  push gate once the Forge's check finds no personal data in it;
 - the work of a session of another project, to which [Claude permissions](#claude-permissions) does not apply even when
   it works in the repository through its path, such as a task session that a session of the repository starts for a
   task of another project (`start_task_session`).

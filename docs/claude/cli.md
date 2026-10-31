@@ -491,8 +491,8 @@ allowed rule and their permission mode.
 Their commits are meant to reach GitHub only through the Forge push tools, which check them for personal data first
 ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)); a `project` or `task` session has no push tool, and the user
 pushes its commits by hand, outside the session. The rules and the environment below stop the direct ways of pushing
-and of editing the guardrail that were tried. In a session, the environment makes a push fail even when the user
-approves its permission card (`git -C <folder> push …`), but not a push that overrides its git settings:
+that were tried. In a session, the environment makes a push fail even when the user approves its permission card
+(`git -C <folder> push …`), but not a push that overrides its git settings:
 `git -C <folder> -c url.<url>.pushInsteadOf=<url> push …` pushed despite it, since git uses the longest matching
 `pushInsteadOf` (verified with git 2.54). Code a session runs (its scripts, tests and builds) can still push, and so
 can a `project` or `task` session ([../public-repository.md](../public-repository.md#limits)): in the mode
@@ -500,8 +500,7 @@ can a `project` or `task` session ([../public-repository.md](../public-repositor
 (`start_run`, [mcp.md](mcp.md#614-start_run)), whose command runs in the login environment, without the changes below
 ([../services/runs.md](../services/runs.md#4-process)), and can run a file the session changed.
 
-`ForgeSessionRules.swift`, a protected path ([../public-repository.md](../public-repository.md#protected-paths)), holds
-the lists and the environment of this section, and nothing else:
+`ForgeSessionRules.swift` holds the lists and the environment of this section, and nothing else:
 
 ```swift
 /// The rules and the environment of the sessions of cli.md 3.5.
@@ -510,8 +509,8 @@ enum ForgeSessionRules {
     /// --allowedTools: .feedback for feedback sessions and the task sessions of a bundle, .bundle for bundle
     /// sessions, .regeneration for regeneration sessions; branch: the setting forge.branch.
     static func allowedTools(_ set: AllowedSet, branch: String) -> [String]
-    /// --disallowedTools; repositoryRoot: the absolute path of the repository root (below), which starts with "/".
-    static func disallowedTools(repositoryRoot: String) -> [String]
+    /// --disallowedTools.
+    static let disallowedTools: [String]
     /// The login environment with the changes below.
     static func environment(_ login: [String: String]) -> [String: String]
 }
@@ -575,34 +574,13 @@ Bash(git diff *--output*)
 Bash(git log *--output*)
 Bash(git show *--output*)
 Bash(git stash *--output*)
-Edit(/<repository root>/docs/general.md)
-Edit(/<repository root>/docs/public-repository.md)
-Edit(/<repository root>/scripts/check-public.sh)
-Edit(/<repository root>/.githooks/**)
-Edit(/<repository root>/.github/**)
-Edit(/<repository root>/.gitignore)
-Edit(/<repository root>/CLAUDE.md)
-Edit(/<repository root>/HephaestusKit/Sources/HephHost/Forge/ForgePushGate.swift)
-Edit(/<repository root>/HephaestusKit/Sources/HephHost/Forge/ForgeGit.swift)
-Edit(/<repository root>/HephaestusKit/Sources/HephHost/Forge/ForgeChecks.swift)
-Edit(/<repository root>/HephaestusKit/Sources/HephHost/Forge/PrivateTerms.swift)
-Edit(/<repository root>/HephaestusKit/Sources/HephHost/Claude/ForgeSessionRules.swift)
-Edit(/<repository root>/HephaestusKit/Sources/HephHost/Claude/ForgePrompts.swift)
-Edit(/<repository root>/HephaestusKit/Sources/HephHost/MCP/MCPToolKinds.swift)
-Edit(/<repository root>/HephaestusKit/Tests/HephHostTests/PublicCheckTests.swift)
-Edit(/<repository root>/HephaestusKit/Tests/HephHostTests/ForgePushTests.swift)
 Edit(.claude/**)
 Edit(.mcp.json)
 Edit(**/.hephaestus/**)
 ```
 
-`<repository root>` is the absolute path of the repository root, which starts with `/`, so that each of these rules
-starts with `Edit(//`: the code folder (`<root>/<code>`, [../data/project-yml.md](../data/project-yml.md)) of the
-project `forge.sourceProjectID`, as `claudeProject(_:)` reads it at each process start (5.3); for a `feedback` or
-`regeneration` session, and when that project cannot be read, the code folder of the session's own project; for a `task`
-session of a bundle, its work folder, the code folder's place in its worktree, so that the rules cover the copies of the
-protected paths it works on. Every other session gets the last rule alone (3.1): the app's project data under
-`.hephaestus/`, run configurations included ([mcp.md](mcp.md#65-update_project)), changes only through the app.
+Every other session gets the last rule alone (3.1): the app's project data under `.hephaestus/`, run configurations
+included ([mcp.md](mcp.md#65-update_project)), changes only through the app.
 
 How the CLI applies them, as verified with CLI 2.1.309 in sessions driven like the app's:
 
@@ -631,26 +609,10 @@ How the CLI applies them, as verified with CLI 2.1.309 in sessions driven like t
   arguments after it to `git rev-list`, whose `--output=<file>` empties that file, a hook for example (verified with
   git 2.54). Regeneration sessions run every script of `scripts/` anyway.
 - An `Edit(<path>)` rule takes a path relative to the session's working directory, the project root, and matches no
-  path outside it: in a sub folder of a repository, as a sub project's session works, `Edit(../docs/general.md)` and
-  `Edit(../.githooks/**)` let the Write tool write `../docs/general.md` and `../.githooks/pre-push`. `Edit(//<path>)`
-  takes an absolute path, so the app names the protected paths that way, from the repository root. From that sub
-  folder, the absolute rules refused the Write tool for `../docs/general.md`, for `../Docs/General.md` and
-  `../.githooKs/pre-push` (other letter cases) and for `../.githoo<U+212A>s/pre-push` (U+212A KELVIN SIGN, which the
-  Mac's disk folds onto `k`), a shell redirection to `../docs/general.md`, and, for a rule written through a symbolic
-  link (`//tmp/…`), the Write tool on the file's resolved path (`/private/tmp/…`), in `-p` runs given the repository
-  root with `--add-dir`, so that only the rules could refuse. A root path holding a character that the rules read as
-  a pattern (`*`, `?`, `[`, `\`) was not tried. `.claude/**`, `.mcp.json` and `**/.hephaestus/**` stay relative to the
-  project root, where Claude Code reads its project settings; in the project root, they refused the Write tool and
-  shell redirections for `.claude/settings.json`, `.mcp.json`, `.hephaestus/project.yml` and
-  `sub/.hephaestus/project.yml`. The Edit tool itself and the other paths were not tried.
-- Without the user's approval, the allowed git commands can delete a protected path or take away its exec bit
-  (`git rm`; `git add --chmod=-x`, a commit, then `git stash`), or give it the content it has in a commit of the
-  repository (`git stash`, `git pull`); no other way for them to write it was found. `git restore` and `git reset` in
-  another form than `git reset --soft origin/<branch>` ask: `git restore --source=<commit>:<folder> -- <path>`, and
-  `git reset <commit>:<folder> -- <path>` followed by `git restore <path>`, copy any file of a commit over a protected
-  path, mode included, such as a file the session wrote in another folder and committed (verified with git 2.54). The
-  Forge's configuration checks report a protected path of the working tree that differs from `origin`
-  ([../forge/pipeline.md](../forge/pipeline.md#configuration-checks)).
+  path outside it. `.claude/**`, `.mcp.json` and `**/.hephaestus/**` are relative to the project root, where Claude
+  Code reads its project settings; in the project root, they refused the Write tool and shell redirections for
+  `.claude/settings.json`, `.mcp.json`, `.hephaestus/project.yml` and `sub/.hephaestus/project.yml`. The Edit tool
+  itself and the other paths were not tried.
 
 Environment: the login environment (1.1) with these changes.
 
@@ -1177,8 +1139,8 @@ Only broadcast, never logged:
 | `ClaudePathEncoding` (transcript folder)                                                                                                                                                                                                                                                                                                                                                    | [../devices/migration.md](../devices/migration.md)                                               |
 | `HostService` (conformance to `SessionHost`), `HostMethodHandler`, `HostInfoService.refresh()`, `checkWritable`                                                                                                                                                                                                                                                                             | [../services/host.md](../services/host.md)                                                       |
 | `UploadService` (`claim`, `finish`, `release`), `ClaimedUpload`                                                                                                                                                                                                                                                                                                                             | [../services/files.md](../services/files.md#7-uploads)                                           |
-| `ForgeService` notifications, the Forge push tools, the configuration checks (push URL, guardrail files, Claude Code settings)                                                                                                                                                                                                                                                              | [../forge/pipeline.md](../forge/pipeline.md)                                                     |
-| the public repository rule, the commit identity, the protected paths, the limits of these rules                                                                                                                                                                                                                                                                                             | [../public-repository.md](../public-repository.md)                                               |
+| `ForgeService` notifications, the Forge push tools, the configuration checks (push URL, Claude Code settings)                                                                                                                                                                                                                                                                               | [../forge/pipeline.md](../forge/pipeline.md)                                                     |
+| the public repository rule, the commit identity, the limits of these rules                                                                                                                                                                                                                                                                                                                  | [../public-repository.md](../public-repository.md)                                               |
 | `Log.host`, logging rules                                                                                                                                                                                                                                                                                                                                                                   | [../architecture.md](../architecture.md)                                                         |
 | `MCPServer`                                                                                                                                                                                                                                                                                                                                                                                 | [mcp.md](mcp.md)                                                                                 |
 | `Prompts`, `ClaudeProjectContext`, `ClaudeTaskContext`, `RegenerationContext`                                                                                                                                                                                                                                                                                                               | [prompts.md](prompts.md)                                                                         |
