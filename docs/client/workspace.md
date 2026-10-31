@@ -410,7 +410,8 @@ projects tree and the stores ([Projects list](#projects-list)).
   store does not contain that id yet is inserted into the store (an existing element is never replaced: events bring
   updates); `listProjects()` and `listSkills()` replace `projects` and `skills` ([Projects list](#projects-list));
   `meshSnapshot()`, `renameDevice` and `setAddresses` results are merged into the registry; `hostInfo()` sets
-  `hostInfo`.
+  `hostInfo`. A `BundleItem` result is never inserted: the bundle reaches the store through `bundle.changed`, which
+  the Main sends before its response ([services/bundles.md](../services/bundles.md#bundleservice)).
 - In a preview workspace, `PreviewData.respond` answers instead of a peer ([Previews](#previews)).
 
 ### Functions
@@ -662,7 +663,7 @@ public final class ProjectStore {
   `isRemoved = true` and drops the store; otherwise a store that never loaded gets phase `failed(message)`, and a store
   that had data returns to `loaded` and the failure is reported ([Error reports](#error-reports)).
 - Sorting: tasks by the number after the last `-` of the id (ids without a number last, by id); bundles by the number
-  after the last `-B` of the id; sessions by `created`,
+  after the last `-B` of the id (ids without a number last, by id); sessions by `created`,
   then id; runs by `startedAt`, then id. Runs trim: while more than 20 runs are kept, the oldest run whose state is
   not `running` is dropped, as the Main does ([services/runs.md](../services/runs.md#7-history)); a `running` run is
   never dropped, so more than 20 can stay.
@@ -792,7 +793,7 @@ public final class Selection {
 | Section    | `item`                                                                                                                  |
 |------------|-------------------------------------------------------------------------------------------------------------------------|
 | `overview` | none                                                                                                                    |
-| `tasks`    | Task id (`HEPH-12`)                                                                                                     |
+| `tasks`    | Task id (`HEPH-12`) or bundle id (`HEPH-B3`, [services/bundles.md](../services/bundles.md#bundle-id))                   |
 | `code`     | Path of the active file, relative to the project root, optionally followed by `#L<line>` ([File items](#file-items))    |
 | `docs`     | Path of the shown document, relative to the project root, optionally followed by `#L<line>` ([File items](#file-items)) |
 | `web`      | Web tab id                                                                                                              |

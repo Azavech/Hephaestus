@@ -17,7 +17,8 @@ project, [../forge/pipeline.md](../forge/pipeline.md#mcp-tools)) or leaves them 
 and finishes the bundle.
 
 `BundleFile.swift` is in `HephCore`; the files of `HephHost/Bundles` are macOS only and wrapped in `#if os(macOS)`.
-Logging uses `Log.host` ([../architecture.md](../architecture.md#logging)); bundle names are never logged.
+Logging uses `Log.host` ([../architecture.md](../architecture.md#logging)), in `BundleFile` too; bundle names are never
+logged.
 
 ## Bundle id
 
@@ -68,8 +69,17 @@ YAML is skipped and logged when the bundles are loaded; the app never writes it.
 deleted later stays listed, and the UI shows it as deleted.
 
 `BundleFile.loadAll(projectRoot:projectID:)` lists `.hephaestus/bundles/` like the task files
-([../data/task-yml.md](../data/task-yml.md#loading-the-tasks-of-a-project)) and sorts the bundles by number. The file
-watcher does not follow the folder: every change goes through `BundleService`.
+([../data/task-yml.md](../data/task-yml.md#loading-the-tasks-of-a-project)) and sorts the bundles by number; each file
+it skips is logged with `Log.host` (`error`: the file name and the `DataError` message). The file watcher does not
+follow the folder: every change goes through `BundleService`.
+
+Errors, as those of `TaskFile` ([../data/task-yml.md](../data/task-yml.md#changes-made-by-the-app)):
+
+- `BundleFile.create` fails with `.invalid("<id> is not a bundle id")` when the file's `id` is not a bundle id, and
+  with `.invalid("<id>.yml already exists")` when the bundle file exists.
+- `BundleFile.update` and `BundleFile.delete` of a missing file fail with `.notFound("bundle <id> not found")`.
+- `BundleFile.update` of a file that does not decode or breaks a rule fails with
+  `.refused("The file is invalid: HEPH-B1.yml: <problem>")`.
 
 Example:
 
@@ -94,26 +104,38 @@ tasks:
 
 ## Worktrees
 
-`BundleGit` runs git as the Forge does ([../forge/pipeline.md](../forge/pipeline.md#git-operations)): the first `git`
-of the login environment's `PATH`, only while `host.info` reports `gitAvailable`, with `ChildProcess.capture`, no
-shell, a timeout of 60 s, errors `git <subcommand> failed: <last non-empty stderr line>`.
+`BundleGit` runs `git -c core.hooksPath=/dev/null -c core.fsmonitor=false <arguments>` with the arguments listed
+here, as the Forge's git does ([../forge/pipeline.md](../forge/pipeline.md#git-operations)): no hook or file-system
+monitor of the repository runs in the app's process, since the sessions can change them. git is the first executable
+regular file named `git` in the `PATH` of the login environment, run with `ChildProcess.capture`, that environment, no
+shell and a timeout of 60 s. A failure is `internal` `git <subcommand> failed: <reason>`,
+`<reason>` being the last non-empty line of stderr, else `timed out` for a timeout and `exit status <N>` otherwise; a
+git that is not found gives `strerror(ENOENT)`, one that cannot be started the `strerror` of the spawn error.
+`BundleService` uses `BundleGit` only while `host.info` reports `gitAvailable`; otherwise the method or tool fails with
+`unavailable` `git is not available on this Main.`
 
 - **Repository.** `<top>` = `git rev-parse --show-toplevel` in the project's code folder
   ([../data/project-yml.md](../data/project-yml.md)); `<rel>` = the code folder's path relative to `<top>` (empty when
   they are equal). The code folder must be in a repository whose `HEAD` is a branch with a commit
   (`git symbolic-ref --short HEAD` and `git rev-parse --verify HEAD` succeed), else `badRequest` `Bundles need a git
   repository on a branch with a commit: <code folder path> is not in one.`
-- **Branch.** The branch of a task is `task/<task id>`, for example `task/HEPH-12`.
+- **Branch.** The branch of a task is `task/<task id>`, for example `task/HEPH-12`. It exists when
+  `git rev-parse --verify --quiet refs/heads/task/<id>`, run in `<top>`, exits with status 0, and does not when it
+  exits with status 1; another status is a failure (`BundleGit.branchExists`).
 - **Worktree folder.** `<Application Support>/Hephaestus/Worktrees/<projectID>/<task id>/`
   ([../data/app-storage.md](../data/app-storage.md#folder)). The **work folder** of the task is
   `<worktree folder>/<rel>`: the code folder's place in the worktree.
-- **Creating.** When the worktree folder does not exist: `git worktree prune`, then, when the branch exists
-  (`git rev-parse --verify --quiet refs/heads/task/<id>`), `git worktree add <folder> task/<id>`, else
-  `git worktree add -b task/<id> <folder> <base>`. The parent folders are created first. Every command runs in `<top>`.
-- **Removing.** `git worktree remove --force <folder>`; when the folder is still there, it is deleted; then
-  `git worktree prune`.
+- **Creating.** When the worktree folder does not exist: `git worktree prune`, then, when the branch exists,
+  `git worktree add <folder> task/<id>`, else `git worktree add -b task/<id> <folder> <base>`. The parent folders are
+  created first. Every command runs in `<top>`.
+- **Removing.** `git worktree remove --force <folder>`; when it fails, its error is logged; when the folder is still
+  there, it is deleted; then `git worktree prune`.
 - **Brought in.** A branch's work is on `<base>` when `git cherry <base> task/<id>` prints no line starting with `+`:
   every commit of the branch has an equal change on `<base>`.
+- **Removing the work** (`bundles.delete`, `finish`). For each task of the bundle, in order: its worktree is removed
+  when its folder exists; then, when the bundle has a `base` and the task's branch exists, the branch is deleted
+  (`git branch -D task/<id>`) when its work is on `base`, else kept. Without a `base` no branch is looked at; a branch
+  that does not exist is neither deleted nor kept.
 
 ## BundleService
 
@@ -121,38 +143,47 @@ shell, a timeout of 60 s, errors `git <subcommand> failed: <last non-empty stder
 `init(host: HostService)`, conforming to `HostMethodHandler`. It keeps the `BundleItem`s of every registered project in
 a cache, loaded with the project and dropped with it, and runs every change inside `registry.write(projectID)`. Each
 change emits `bundleChanged {projectID, bundle}` (`bundleRemoved {projectID, bundleID}` for a deletion) when the
-bundle differs from the cached one.
+bundle differs from the cached one. The event is emitted before the method or tool returns: the device that called a
+method receives it before the response.
 
 A `bundleID` that `BundleID(_:)` does not parse with the project's identifier, or without a cached bundle: `notFound`
-`Bundle <id> does not exist.` A task id given to a method must name a task of the project that is not broken
-(`notFound` `Task <id> does not exist.`, `conflict` `The file is invalid: <parseError>`).
+`Bundle <id> does not exist.`; so is a bundle file that a change finds missing (`.notFound("bundle <id> not found")`).
+The other `DataError`s map as in [host.md](host.md#69-data-errors). A task id given to a method must name a task of the
+project that is not broken (`notFound` `Task <id> does not exist.`, `conflict` `The file is invalid: <parseError>`).
 
 ### Methods
 
-| Method           | Statuses allowed                        | Effect                                                                                                                     |
-|------------------|-----------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
-| `bundles.create` | —                                       | new file: `name`, `status` `draft`, the tasks in the given order, repeats removed (first kept); at least one task          |
-| `bundles.update` | `name`: any; `taskIDs`: `draft`, `done` | `name` replaced; `taskIDs` replaces the tasks, keeping the `session` of a task that stays; a `done` bundle becomes `draft` |
-| `bundles.delete` | `draft`, `done`                         | worktrees of its tasks removed; branches whose work is on `base` deleted (`git branch -D`), the others kept; file deleted  |
-| `bundles.start`  | `draft`                                 | Start (below)                                                                                                              |
-| `bundles.stop`   | `running`, `review`                     | `sessions.stop` of the coordinator and of every task session of the bundle; status `draft`; worktrees and branches kept    |
+| Method           | Statuses allowed                        | Effect                                                                                                                            |
+|------------------|-----------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `bundles.create` | —                                       | new file: `name`, `status` `draft`, the tasks in the given order, repeats removed (first kept); at least one task                 |
+| `bundles.update` | `name`: any; `taskIDs`: `draft`, `done` | `name` replaced; `taskIDs` replaces the tasks, keeping the `session` of a task that stays, and turns a `done` bundle into `draft` |
+| `bundles.delete` | `draft`, `done`                         | Removing the work ([Worktrees](#worktrees)); file deleted                                                                         |
+| `bundles.start`  | `draft`                                 | Start (below)                                                                                                                     |
+| `bundles.stop`   | `running`, `review`                     | `sessions.stop` of the coordinator and of every task session of the bundle; status `draft`; worktrees and branches kept           |
 
 A method in another status fails with `conflict`: `Stop <bundle id> first.` for `running` and `review`, `<bundle id>
-is done.` for `bundles.start` of a `done` bundle. `bundles.create` and `bundles.update` without a task: `badRequest`
-`A bundle needs at least one task.` A name that is empty or holds a line break: `badRequest` `The name must not be
-empty and must be on one line.`
+is done.` for `bundles.start` of a `done` bundle, `<bundle id> is not running.` for `bundles.stop` of a `draft` or
+`done` bundle. `bundles.create` and `bundles.update` without a task: `badRequest` `A bundle needs at least one task.`
+A name that is empty or holds a line break: `badRequest` `The name must not be empty and must be on one line.` The
+`taskIDs` of `bundles.update` are not deduplicated: a task given twice breaks the file's rule (`badRequest`
+`tasks[<i>].task must be a task of <projectID> listed once`). A task is in at most one bundle that is not `done`, since
+it has one worktree, which another bundle would remove: a task of `bundles.create`, or of the `taskIDs` of
+`bundles.update`, that is in another bundle of the project whose status is not `done` fails with `conflict` `<task id>
+is in <bundle id>.`, the first such task and bundle in order.
 
 ### Start
 
 1. The repository check of [Worktrees](#worktrees).
-2. `base`: kept when set; otherwise `git symbolic-ref --short HEAD` in the code folder.
+2. `base`: kept when set; otherwise `git symbolic-ref --short HEAD` in the code folder, which the cached `BundleItem`
+   takes at once, without an event and without writing the file: the coordinator's prompt reads it there in step 3
+   ([../claude/prompts.md](../claude/prompts.md#bundle-part)).
 3. When `coordinator` names a session of the project: `sessions.send` to it with the text `Resume work on <bundle id>:
    check the state of its tasks with get_bundle.` and this Main's id as `deviceID`. Otherwise
    `sessions.start(SessionStart(projectID:, kind: .bundle, bundleID: <id>, deviceID: <this Main>))`
    ([../claude/cli.md](../claude/cli.md#52-starting-a-session-sessionsstart)), and `coordinator` = its id.
-4. `status` `running`; the file is written. Result: the `BundleItem`.
+4. The file is written: `base`, `coordinator`, `status` `running`. Result: the `BundleItem`.
 
-When step 3 fails, nothing is written and the error is returned.
+When step 3 fails, nothing is written, the cached `base` set by step 2 is removed, and the error is returned.
 
 ### Observing the task sessions
 
@@ -161,11 +192,11 @@ The host calls `sessionChanged(projectID:session:)` for every `session.changed` 
 of status sends one message to the bundle's coordinator with `sessions.send` (this Main's id as `deviceID`; errors
 logged):
 
-| New status          | Condition                                        | Message                                                          |
-|---------------------|--------------------------------------------------|------------------------------------------------------------------|
-| `waitingPermission` | —                                                | `<task id> is waiting for a permission answer in its session.`   |
-| `idle`, `stopped`   | the session had `running` or `waitingPermission` | `<task id> ended its turn. Task status: <TaskStatus raw value>.` |
-| `failed`            | —                                                | `The session of <task id> failed: <SessionInfo.error>`           |
+| New status          | Condition                                                             | Message                                                          |
+|---------------------|-----------------------------------------------------------------------|------------------------------------------------------------------|
+| `waitingPermission` | —                                                                     | `<task id> is waiting for a permission answer in its session.`   |
+| `idle`, `stopped`   | the session had `running` or `waitingPermission`, and its task exists | `<task id> ended its turn. Task status: <TaskStatus raw value>.` |
+| `failed`            | —                                                                     | `The session of <task id> failed: <SessionInfo.error>`           |
 
 The previous statuses are kept in memory per session. A message sent while the coordinator runs a turn is queued by the
 CLI ([../claude/cli.md](../claude/cli.md#55-statuses)).
@@ -173,7 +204,8 @@ CLI ([../claude/cli.md](../claude/cli.md#55-statuses)).
 ### Tools of the coordinator
 
 The MCP tools of [../claude/mcp.md](../claude/mcp.md#625-get_bundle) call these functions with the calling session's
-`bundleID`; a session without one gets the tool error `Only the coordinator of a bundle can use this tool.`
+`bundleID`; a session without one gets the tool error `Only the coordinator of a bundle can use this tool.`, once the
+tool's arguments are checked.
 
 - `details(projectID:bundleID:)`: for `get_bundle`.
 - `startTask(projectID:bundleID:taskID:instructions:)`, for `start_bundle_task`:
@@ -185,30 +217,39 @@ The MCP tools of [../claude/mcp.md](../claude/mcp.md#625-get_bundle) call these 
   3. Otherwise the number of task sessions of the bundle whose status is `starting`, `running` or `waitingPermission`
      must be below `bundles.maxParallel` (`conflict` `<n> task sessions of <bundle id> are running, the limit of this
      Main (Settings ▸ Claude ▸ Bundles). Start <task id> when one of them ends its turn.`).
-  4. The worktree is created when missing ([Worktrees](#worktrees)).
+  4. The worktree is created when missing ([Worktrees](#worktrees)), `<base>` being the bundle's `base`, or the
+     current branch (`git symbolic-ref --short HEAD` in the code folder) when the bundle has none.
   5. `sessions.start(SessionStart(projectID:, kind: .task, taskID:, mode: .implement, message: instructions,
      deviceID: <this Main>, bundleID:))`; the item's `session` = its id; the task's status becomes `in_progress`
-     (`tasks.update`) when it is `todo`. Result: the `SessionInfo`.
-- `setStatus(projectID:bundleID:status:)`, for `update_bundle`: `running` or `review` only.
-- `finish(projectID:bundleID:)`, for `finish_bundle`: for each task in order, its worktree is removed and its branch
-  deleted when its work is on `base`; the bundle becomes `done`; outside the Forge source project, every task of the
-  bundle whose branch was deleted gets the status `done` (in the Forge source project, Completion sets it,
-  [../forge/pipeline.md](../forge/pipeline.md#completion)). Result: `{"bundle":<BundleItem>,"keptBranches":[…]}`,
-  the branches kept because their work is not on `base`.
+     (`tasks.update`) when it is `todo`, a failure of that update being logged, not returned. Result: the
+     `SessionInfo`.
+- `setStatus(projectID:bundleID:status:)`, for `update_bundle`: `status` must be `running` or `review` (`badRequest`
+  `Invalid arguments: status must be one of running, review.`), and so must the bundle (`conflict` `<bundle id> is not
+  running.`).
+- `finish(projectID:bundleID:)`, for `finish_bundle`, while the bundle is `running` or `review` (`conflict` `<bundle id>
+  is not running.`): Removing the work
+  ([Worktrees](#worktrees)); the bundle becomes `done`; outside the Forge source project, every task of the bundle
+  whose branch was deleted gets the status `done` with `tasks.update`, a failure being logged, not returned (in the
+  Forge source project, Completion sets it, [../forge/pipeline.md](../forge/pipeline.md#completion)). Result:
+  `{"bundle":<BundleItem>,"keptBranches":[…]}`, the branches kept because their work is not on `base`.
 
 ### Working folder of a task session
 
 A `task` session with a `bundleID` runs in its task's work folder instead of the project root
 ([../claude/cli.md](../claude/cli.md#3-the-session-process-claudeprocess)): `workFolder(projectID:taskID:)` returns
-it. When the folder does not exist (the bundle finished or was deleted), the process does not start: `Could not start
-Claude: the worktree of <task id> was removed with its bundle.`
+it. When the worktree folder or the work folder does not exist (the bundle finished or was deleted), it throws
+`notFound` `the worktree of <task id> was removed with its bundle.`, and the process does not start: SessionService
+adds `Could not start Claude: ` ([../claude/cli.md](../claude/cli.md#53-starting-the-process)), so the session fails
+with `Could not start Claude: the worktree of <task id> was removed with its bundle.`
 
 ### Projects removed or moved
 
 - When a project is unregistered for good (removed, or moved to another Main, [host.md](host.md#65-unregister_forget)),
   `removeWorktrees(projectID:)` runs `git worktree remove --force` for each folder of `Worktrees/<projectID>/` while the
-  repository is still there, then deletes `Worktrees/<projectID>/`. The branches stay in the repository; a later
-  `start_bundle_task` creates the worktree again.
+  repository is still there and `host.info` reports `gitAvailable`, then deletes `Worktrees/<projectID>/`. The
+  branches stay in the repository; a later `start_bundle_task` creates the worktree again.
+- A sub project removed with `projects.remove` is unregistered by the reload of its parent, with `forget: false`
+  ([host.md](host.md#76-projectsremove)): `removeWorktrees` does not run, and its worktrees stay.
 - `projects.migrate` is refused while a bundle of the tree is `running` or `review`: `conflict` `Stop the bundles of
   <name> first.`
 
@@ -231,6 +272,7 @@ public struct BundleFile: Codable, Sendable, Equatable {
     public struct Item: Codable, Sendable, Equatable {
         public var task: String
         public var session: UUID?
+        public init(task: String, session: UUID?)
     }
     public var id: String
     public var name: String
@@ -240,6 +282,10 @@ public struct BundleFile: Codable, Sendable, Equatable {
     public var base: String?
     public var coordinator: UUID?
     public var tasks: [Item]
+
+    /// The values as given.
+    public init(id: String, name: String, status: BundleStatus, created: Date, updated: Date, base: String?,
+                coordinator: UUID?, tasks: [Item])
 
     public static let shape: YAMLShape    // as TaskFile.shape, "tasks" a list with identity "task"
     public static func folder(projectRoot: URL) -> URL
@@ -289,13 +335,15 @@ struct BundleGit: Sendable {
     func removeWorktree(at folder: URL) async throws
     func isBroughtIn(branch: String, base: String) async throws -> Bool
     func deleteBranch(_ branch: String) async throws
+    func branchExists(_ branch: String) async throws -> Bool
 }
 ```
 
-`BundleDetails` is the result of `get_bundle`: `bundle` (`BundleItem`), `maxParallel` (`Int`), and `tasks`, one per
-task in order: `task` (`TaskItem`, absent for a deleted task), `session` (`SessionInfo`, absent without one), `branch`
-(`task/<id>`), `workFolder` (absent while the worktree does not exist). `BundleFinishResult`: `bundle`,
-`keptBranches` (`[String]`). Both are `Codable` and encoded as the tool results.
+`BundleDetails` is the result of `get_bundle`: `bundle` (`BundleItem`), `maxParallel` (`Int`), and `tasks`, one
+`BundleDetails.Entry` per task in order: `task` (`TaskItem`, absent for a deleted task), `session` (`SessionInfo`,
+absent without one), `branch` (`String`, `task/<id>`), `workFolder` (`String`, the path of the work folder; absent
+while the worktree does not exist). `BundleFinishResult`: `bundle`, `keptBranches` (`[String]`). Both are `Codable`
+and encoded as the tool results.
 
 ## Depends on
 

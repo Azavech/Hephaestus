@@ -671,16 +671,16 @@ call with its text. `<tool>` is the tool's name and `<branch>` the configured br
    - `forge_push_docs`: the session's item takes the event of [Items](#items); then, when it is `docsPushed`, the join
      rule; then a check; then the `tool` trigger. For a coordinator, its items are those of the tasks of its bundle:
      a task without an item gets a new one first (`state` `docsPushed`, `title` = the task name, `feedbackSessionID` =
-     the coordinator, `created` = `updated` = now), and `<task id>` below is the bundle id. Result, the first matching
-     row:
+     the coordinator, `created` = `updated` = now), unless the task no longer exists; `<task id>` below is the bundle
+     id. Result, the first matching row:
 
-     | Situation                                                            | Text                                                                                                                                                                                  |
-     |----------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-     | the item is in the active cycle (it joined now or was in it already) | `Pushed docs commit <sha8> for <task id>. It is part of the regeneration in progress.`                                                                                                |
-     | the `tool` trigger started a cycle                                   | `Pushed docs commit <sha8> for <task id>. Regeneration started.`                                                                                                                      |
-     | a cycle is active                                                    | `Pushed docs commit <sha8> for <task id>. It will be regenerated after the regeneration in progress.`                                                                                 |
-     | `forge.autoRegenerate` is off                                        | `Pushed docs commit <sha8> for <task id>. Regenerate automatically is off: the user starts the regeneration from the Forge screen.`                                                   |
-     | `head` is not trusted                                                | `Pushed docs commit <sha8> for <task id>. Commits pushed to <branch> outside the Forge are not trusted yet: the regeneration waits until they are (Forge screen).`                    |
+     | Situation                                                                                                            | Text                                                                                                                                                                                  |
+     |----------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+     | the item is in the active cycle (it joined now or was in it already); for a coordinator, every item of its bundle is | `Pushed docs commit <sha8> for <task id>. It is part of the regeneration in progress.`                                                                                                |
+     | the `tool` trigger started a cycle                                                                                   | `Pushed docs commit <sha8> for <task id>. Regeneration started.`                                                                                                                      |
+     | a cycle is active                                                                                                    | `Pushed docs commit <sha8> for <task id>. It will be regenerated after the regeneration in progress.`                                                                                 |
+     | `forge.autoRegenerate` is off                                                                                        | `Pushed docs commit <sha8> for <task id>. Regenerate automatically is off: the user starts the regeneration from the Forge screen.`                                                   |
+     | `head` is not trusted                                                                                                | `Pushed docs commit <sha8> for <task id>. Commits pushed to <branch> outside the Forge are not trusted yet: the regeneration waits until they are (Forge screen).`                    |
 
    - `forge_push_regen`: `regenCommit` = `<sha>`, `pushedAt` = now, state `regenPushed`, join rule, polling starts.
      Result: `Pushed regeneration commit <sha8>. The Forge now waits for the CI run and the release.`.

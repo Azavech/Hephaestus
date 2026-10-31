@@ -254,7 +254,7 @@ its feedback into a task ([prompts.md](prompts.md#feedback-part)). Forge session
 web tabs, sessions or skills of the mesh beyond their own feedback task, none that changes them beyond the name,
 description, status and comments of that task, and none that runs a command or starts a session, so nothing they call
 can push around the Forge push gate ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). `MCPToolKinds.swift`
-holds this table and nothing else: `kinds(for:)` names each tool of the table (the first row: the 17 tools of 6.1–6.6,
+holds this table and nothing else: `kinds(for:)` names each tool of the table (the first row: the 16 tools of 6.1–6.6,
 6.8, 6.10, 6.13 and 6.16–6.22) and returns an empty set for any other name, so a tool added to the catalog is listed
 and callable in no session until the table names it.
 
@@ -912,8 +912,9 @@ empty after trimming counts as absent. Result: the `SessionInfo`.
 
 `BundleService.finish`. Result: `{"bundle":<BundleItem>,"keptBranches":[…]}`.
 
-The bundle tools call `MCPHost.bundleTool(_:projectID:bundleID:arguments:)` with the token's `projectID` and
-`bundleID`.
+The bundle tools check their arguments first (section 6); then a session without a `bundleID` gets the tool error
+`Only the coordinator of a bundle can use this tool.`, and the others call
+`MCPHost.bundleTool(_:projectID:bundleID:arguments:)` with the token's `projectID` and `bundleID`.
 
 ## 7. Locating a project and forwarding
 

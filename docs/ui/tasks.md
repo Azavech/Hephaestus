@@ -59,7 +59,8 @@ Several tasks can be selected at once (Multi-selection); `selection.item` is the
 
 In compact width the detail is pushed with `navigationDestination(item:)` on a binding over `selection.item`; Back sets
 `selection.item` to nil. An item set from elsewhere, or already set when the section appears, pushes its detail at
-once; New Task success pushes the new task.
+once; New Task success pushes the new task. In the Select mode (Multi-selection) the binding reads nil, so choosing
+rows pushes nothing; New Bundle success ends the Select mode and pushes the new bundle.
 
 ## Task list
 
@@ -72,9 +73,9 @@ In compact width the New Task button is in the navigation bar.
 `TaskListState` holds `selectedIDs` (`Set<String>`), the selection of the list:
 
 - Regular width: `List(selection:)` on `selectedIDs`; ⌘-click and ⇧-click add rows, as in any list.
-- Compact width: a "Select" button in the navigation bar turns on `EditMode.active`, in which task rows show selection
-  circles; "Done" turns it off and empties the selection. A bottom bar then shows "New Bundle" and the "Add to Bundle"
-  menu (below), enabled when a task is selected.
+- Compact width: a "Select" button in the navigation bar turns on the Select mode, `EditMode.active`, in which task
+  rows show selection circles; "Done" turns it off and empties the selection. A bottom bar then shows "New Bundle" and
+  the "Add to Bundle" menu (below), enabled when a task is selected.
 - Only tasks can be selected together: when a change adds a bundle id, `selectedIDs` becomes that bundle id alone;
   broken tasks are never added to a selection of several rows.
 - One id selected: `selection.item` = that id. Several: `selection.item` = nil and the detail area shows
@@ -125,12 +126,12 @@ header is `exclamationmark.triangle`, "Broken" and the count.
 
 ### Empty states
 
-| Condition                           | Content                                                             |
-|-------------------------------------|---------------------------------------------------------------------|
-| the project has no task             | "No tasks yet" and a "New Task" button                              |
-| the filter hides every task         | "No matching tasks" and a "Clear Filter" button (restores defaults) |
-| regular width, no task selected     | the detail area shows "Select a task"                               |
-| the selected id is not in the store | the detail area shows "<ID> was deleted."                           |
+| Condition                                    | Content                                                             |
+|----------------------------------------------|---------------------------------------------------------------------|
+| the project has no task                      | "No tasks yet" and a "New Task" button                              |
+| the filter hides every task and every bundle | "No matching tasks" and a "Clear Filter" button (restores defaults) |
+| regular width, no task selected              | the detail area shows "Select a task"                               |
+| the selected id is not in the store          | the detail area shows "<ID> was deleted."                           |
 
 ## New task (⌘N)
 
@@ -163,8 +164,8 @@ requests are `createBundle`, `updateBundle`, `deleteBundle`, `startBundle` and `
 ### Bundle row
 
 - Line 1: the id (monospaced, caption, secondary); trailing, `sparkles` (accent color) when the coordinator or a task
-  session of the bundle is `starting` or `running`, `hand.raised.fill` (orange) when one is `waitingPermission`, then
-  the `BundleStatusBadge`.
+  session of the bundle is `starting` or `running`, `hand.raised.fill` (orange) when one is `waitingPermission` (both
+  can show), then the `BundleStatusBadge`.
 - Line 2: the name (body, up to 2 lines).
 - Line 3 (caption, secondary): "<d> of <n> done", `d` the tasks of the bundle whose status is `done`.
 - Context menu: Work on Bundle (`draft`) or Stop (`running`, `review`); Copy ID; Delete… (`draft`, `done`).
@@ -178,8 +179,10 @@ requests are `createBundle`, `updateBundle`, `deleteBundle`, `startBundle` and `
   while more than one remains.
 - Buttons: Cancel (Escape) and Create (⌘↩, default action), with the twin ⌘↩ button of the New Task sheet; Create is
   enabled when the name is valid and no request is in flight.
-- Create calls `createBundle(projectID:name:taskIDs:)`. Success: the sheet dismisses itself, `selectedIDs` is emptied
-  and `selection.item` is the new bundle. Failure: the message shows in red; the sheet stays open.
+- Create calls `createBundle(projectID:name:taskIDs:)`. Success: the sheet dismisses itself, the Select mode ends,
+  `selectedIDs` is emptied and `selection.item` is the new bundle (it reaches the store through `bundle.changed`,
+  [../client/workspace.md](../client/workspace.md#conventions)). Failure: the message shows in red; the sheet stays
+  open.
 
 ### Bundle detail
 
@@ -200,7 +203,7 @@ requests are `createBundle`, `updateBundle`, `deleteBundle`, `startBundle` and `
   its `TaskStatusBadge`, and, when its `sessionID` names a session of the store, its `SessionStatusIndicator` and an
   "Open Session" button that navigates to section `.claude` with that session. Choosing a row navigates to section
   `.tasks` with the task id. In `draft` and `done`, rows can be reordered (`onMove`) and have the context menu item
-  "Remove from Bundle", disabled for the last task; both call `updateBundle` with `BundlePatch(taskIDs:)`.
+  "Remove from Bundle", disabled while the bundle has one task; both call `updateBundle` with `BundlePatch(taskIDs:)`.
 - Delete Bundle…: a confirmation "Delete <ID>?" with the message "Its worktrees are removed, and the branches whose
   work was brought in are deleted. Its tasks and sessions are kept." and the buttons Delete (destructive) and Cancel;
   Delete calls `deleteBundle`; after success `selection.item` is cleared.
