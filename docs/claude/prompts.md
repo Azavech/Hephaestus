@@ -359,7 +359,6 @@ Implement {taskID}:
 2. Keep the documentation in {docsFolder} in sync with your changes.
 3. Build the project and run its tests, and fix what fails.
 4. Add a comment to {taskID} with mcp__hephaestus__comment_task that summarizes what you changed and how you checked it.
-5. Set the status of {taskID} to review with mcp__hephaestus__update_task.
 {forgeImplementLines}
 ````
 
@@ -451,7 +450,7 @@ Tasks of the bundle when this session started:
 
 Bundle tools: get_bundle, start_bundle_task (start the session of a task, or send instructions to it), update_bundle (set the status to review or running), finish_bundle (remove the worktrees and branches once the work is brought in).
 
-1. Start the task sessions with mcp__hephaestus__start_bundle_task, in the bundle's order, at most {maxParallel} at a time. Each one implements its task, commits on its branch, comments a summary on its task and sets it to review.
+1. Start the task sessions with mcp__hephaestus__start_bundle_task, in the bundle's order, at most {maxParallel} at a time. Each one implements its task, commits on its branch and comments a summary on its task; Hephaestus sets the task to review when its session ends its turn.
 2. Hephaestus sends you a message when a task session ends its turn, fails or waits for a permission answer. Then read the task's comments with mcp__hephaestus__get_task and its work with git log and git diff {base}...task/<task id>, start the next waiting task, and send instructions with start_bundle_task when the work is incomplete. Tell the user when a session waits for them.
 3. When every task is in review, call mcp__hephaestus__update_bundle with the status review, show the user a summary of each task and of the combined changes, and wait for their agreement. Send the changes they ask for to the task sessions, with the status running while they work.
 4. When the user agrees, bring the work into {codeFolder} on {base}, one task at a time in the bundle's order: git cherry-pick {base}..task/<task id>. Resolve conflicts yourself, then git cherry-pick --continue; ask the user when a conflict needs a decision.

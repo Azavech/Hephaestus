@@ -231,7 +231,9 @@ failure shows the message in red.
   text.
 - Status: a `Menu` whose label is the `TaskStatusBadge`; its items are the four statuses (current checked) and send
   `TaskPatch(status:)`. The badge shows the chosen status at once and returns to the stored status when the request
-  fails.
+  fails. The Main also sets the status itself: In Progress when a Claude session of the task starts a turn, Review when
+  it ends its turn, stops or fails
+  ([../services/host.md](../services/host.md#81-status-of-a-task-while-its-sessions-work)); only the user sets Done.
 - Dates: "Created <date>" (abbreviated date, shortened time) · "Updated <relative time>" (refreshed every minute; the
   absolute date in the help tag).
 
@@ -346,13 +348,13 @@ equal to the task id, in the store's order (by `created`).
 - Mode: five selectable rows (checkmark on the chosen one), each with the mode's `displayName` and a description;
   default Implement.
 
-| `SessionMode` | Description                                                                                                |
-|---------------|------------------------------------------------------------------------------------------------------------|
-| `implement`   | Implement the task, keep the docs in sync, build and test, comment a summary and set the status to Review. |
-| `debug`       | Find the root cause, explain it, and propose or apply a fix after your confirmation.                       |
-| `review`      | Review the work done for the task and comment the findings.                                                |
-| `plan`        | Write a plan as a comment, without changing code.                                                          |
-| `custom`      | Follow your instructions.                                                                                  |
+| `SessionMode` | Description                                                                          |
+|---------------|--------------------------------------------------------------------------------------|
+| `implement`   | Implement the task, keep the docs in sync, build and test, and comment a summary.    |
+| `debug`       | Find the root cause, explain it, and propose or apply a fix after your confirmation. |
+| `review`      | Review the work done for the task and comment the findings.                          |
+| `plan`        | Write a plan as a comment, without changing code.                                    |
+| `custom`      | Follow your instructions.                                                            |
 
 - Custom adds an "Instructions" `TextEditor` (min height 100 pt); it is required (not empty after trimming).
 - Buttons: Cancel (Escape) and Start (⌘↩, default action), with the twin ⌘↩ button of the New Task sheet.

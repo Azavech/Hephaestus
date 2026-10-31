@@ -598,7 +598,7 @@ Calls `tasks.delete {projectID, taskID}`. Result: `{"deleted":"HEPH-12"}`.
 ```json
 {
   "name": "start_task_session",
-  "description": "Start a Claude session that works on a task. It runs on the Main hosting the task's project, and the user can follow and answer it from any device. Modes: implement (implement the task, keep the docs in sync, build and test, comment a summary, set the status to review), debug (find the root cause, explain it, fix it after the user confirms), review (review the work done for the task and comment the findings), plan (comment an implementation plan, no code changes), custom (follow the given instructions).",
+  "description": "Start a Claude session that works on a task. It runs on the Main hosting the task's project, and the user can follow and answer it from any device. Modes: implement (implement the task, keep the docs in sync, build and test, comment a summary), debug (find the root cause, explain it, fix it after the user confirms), review (review the work done for the task and comment the findings), plan (comment an implementation plan, no code changes), custom (follow the given instructions). The task goes to in_progress when the session starts a turn and to review when it ends it.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -784,7 +784,7 @@ Result: `BundleDetails` ([../services/bundles.md](../services/bundles.md#swift-a
 ```json
 {
   "name": "start_bundle_task",
-  "description": "Start the task session of a task of your bundle: it implements the task in its own git worktree, on the branch task/<task id>, commits there and sets the task to review. When the task already has a session, send that session instructions instead.",
+  "description": "Start the task session of a task of your bundle: it implements the task in its own git worktree, on the branch task/<task id>, commits there and comments a summary; the task goes to review when its session ends its turn. When the task already has a session, send that session instructions instead.",
   "inputSchema": {
     "type": "object",
     "properties": {

@@ -384,8 +384,10 @@ public actor EventHub {
 - `HostService.emit(_:)` calls `publish` when `event.topic` is set and `broadcast` otherwise. Then, for
   `sessionChanged`, it records the session's pending permission count with
   `registry.setPendingPermissions(projectID, sessionID: session.id, count: session.pendingPermissions.count)`, and
-  for `sessionRemoved` with `count: 0` (§6.1). For `sessionChanged` it then calls
-  `bundles.sessionChanged(projectID:session:)` ([bundles.md](bundles.md#observing-the-task-sessions)). Last, it
+  for `sessionRemoved` with `count: 0` (§6.1). For `sessionChanged` it then awaits
+  `tasks.sessionChanged(projectID:session:)` (§8.1), so the task's new status is in the cache, then calls
+  `bundles.sessionChanged(projectID:session:)` ([bundles.md](bundles.md#observing-the-task-sessions)); for
+  `sessionRemoved` it calls `tasks.sessionRemoved(sessionID:)`. Last, it
   notifies the Forge of the events it follows ([../forge/pipeline.md](../forge/pipeline.md)): `sessionChanged` →
   `forge.sessionChanged(projectID:session:)`, `sessionRemoved` → `forge.sessionRemoved(projectID:sessionID:)` (the
   id's `uuidString`), `taskChanged` → `forge.taskChanged(projectID:task:)`, `taskRemoved` →
@@ -743,6 +745,9 @@ actor TaskService: HostMethodHandler {
     // FileWatcher (§11.3)
     func reload(projectID: String, taskID: TaskID) async
     func rescan(projectID: String) async
+    // sessions (§8.1)
+    func sessionChanged(projectID: String, session: SessionInfo) async
+    func sessionRemoved(sessionID: UUID)
 }
 ```
 
@@ -808,6 +813,27 @@ Watcher entry points:
 - `reload(projectID:taskID:)`: `TaskFile.loadOne`. `nil` (file gone): when cached, removed and `taskRemoved` emitted.
   Otherwise the `TaskItem` is stored and `taskChanged` emitted when it differs from the cache or was not cached.
 - `rescan(projectID:)`: `TaskFile.loadAll`, applied like `reload` to every task of the result and every cached task.
+
+### 8.1 Status of a task while its sessions work
+
+The status of a task follows the turns of its Claude sessions: the `task` sessions of every mode and the `feedback`
+session of a feedback task ([../forge/pipeline.md](../forge/pipeline.md#feedback-intake)). `sessionChanged` keeps in
+memory the last status of every session it is given, per session id (unknown before the first call, so after a restart
+of the Main); `sessionRemoved` forgets it. For a session of kind `task` or `feedback` with a `taskID`, a change of
+status sets the status of that task with `update(projectID:taskID:patch: TaskPatch(status:))`:
+
+| Previous status of the session                     | New status                       | Task status set |
+|----------------------------------------------------|----------------------------------|-----------------|
+| unknown, `stopped`, `starting`, `idle` or `failed` | `running` or `waitingPermission` | `in_progress`   |
+| `running` or `waitingPermission`                   | `idle`, `stopped` or `failed`    | `review`        |
+
+- The rule applies whatever the task's status: a `done` task goes back to `in_progress` when a session works on it
+  again. Nothing is written when the task already has the status to set.
+- Any other change (a turn waiting for a permission and resuming, an idle session stopped by its idle timer, a session
+  that fails while `starting`) leaves the task as it is.
+- A task that does not exist or is broken is left alone. A failure of the update is logged, not returned.
+- The user and Claude can still set any status with `tasks.update`; the next turn of a session sets it again. Hephaestus
+  never sets a task to `done` by itself: only the user does, with `tasks.update`.
 
 ## 9. TabService
 

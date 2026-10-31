@@ -426,7 +426,7 @@ When step 4 fails, no item is created, the task stays, and the error is returned
 | `regenPushed`, `building`, `released`        | `forge_push_docs` pushed `<sha>` for its task     | unchanged         | `docsCommit` = `<sha>`                                                        |
 | `docsPushed`, `failed`                       | the join rule matches                             | the cycle's state | `cycleID` = the cycle; task id added to `itemTaskIDs`                         |
 | in a cycle                                   | the cycle changes state                           | the cycle's state | `error` = the cycle's error when `failed`, else nil                           |
-| `released`                                   | Completion writes its comment                     | `done`            | comment, task status `done`                                                   |
+| `released`                                   | Completion writes its comment                     | `done`            | comment; the task's status is left as it is                                   |
 | any                                          | its task changes name (`task.changed`)            | unchanged         | `title` = the new name                                                        |
 | any                                          | its task is deleted (`task.removed`)              | (removed)         | removed from `items` and from its cycle's `itemTaskIDs`                       |
 
@@ -813,8 +813,10 @@ When the release of the cycle's run is found:
    ([update.md](update.md#schedule)).
 2. For each item of the cycle still `released`, in order:
    `host.tasks.addComment(projectID:taskID:body:attachments:author:)` with the body below, no attachment and author =
-   this Main's device name, then `host.tasks.update(projectID:taskID:patch:)` with status `done`; the item becomes
-   `done`; `forge.json` is written. A task that no longer exists (`notFound`) removes its item. Any other error stops
+   this Main's device name; the item becomes `done`; `forge.json` is written. The task's status is not changed: its
+   feedback session left it in `review`
+   ([../services/host.md](../services/host.md#81-status-of-a-task-while-its-sessions-work)), and the user sets it to
+   `done`. A task that no longer exists (`notFound`) removes its item. Any other error stops
    Completion: `lastError` is its message and the cycle stays `released`.
    Completion runs again from this step after every check while the cycle is `released`, whatever the check's outcome
    ([Checks and triggers](#checks-and-triggers)), and at the next enabling

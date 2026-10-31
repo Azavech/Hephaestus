@@ -227,17 +227,15 @@ tool's arguments are checked.
   4. The worktree is created when missing ([Worktrees](#worktrees)), `<base>` being the bundle's `base`, or the
      current branch (`git symbolic-ref --short HEAD` in the code folder) when the bundle has none.
   5. `sessions.start(SessionStart(projectID:, kind: .task, taskID:, mode: .implement, message: instructions,
-     deviceID: <this Main>, bundleID:))`; the item's `session` = its id; the task's status becomes `in_progress`
-     (`tasks.update`) when it is `todo`, a failure of that update being logged, not returned. Result: the
-     `SessionInfo`.
+     deviceID: <this Main>, bundleID:))`; the item's `session` = its id. Result: the `SessionInfo`. The task's
+     status follows the turns of its session ([host.md](host.md#81-status-of-a-task-while-its-sessions-work)).
 - `setStatus(projectID:bundleID:status:)`, for `update_bundle`: `status` must be `running` or `review` (`badRequest`
   `Invalid arguments: status must be one of running, review.`), and so must the bundle (`conflict` `<bundle id> is not
   running.`).
 - `finish(projectID:bundleID:)`, for `finish_bundle`, while the bundle is `running` or `review` (`conflict` `<bundle id>
   is not running.`): Removing the work
-  ([Worktrees](#worktrees)); the bundle becomes `done`; outside the Forge source project, every task of the bundle
-  whose branch was deleted gets the status `done` with `tasks.update`, a failure being logged, not returned (in the
-  Forge source project, Completion sets it, [../forge/pipeline.md](../forge/pipeline.md#completion)). Result:
+  ([Worktrees](#worktrees)); the bundle becomes `done`. The statuses of its tasks are left as they are: the user sets
+  a task to `done` ([host.md](host.md#81-status-of-a-task-while-its-sessions-work)). Result:
   `{"bundle":<BundleItem>,"keptBranches":[…]}`, the branches kept because their work is not on `base`.
 
 ### Working folder of a task session
