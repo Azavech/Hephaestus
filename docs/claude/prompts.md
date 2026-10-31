@@ -416,9 +416,11 @@ First turn the feedback into a task:
    - name: one line that says the change to make, in general terms;
    - description, in Markdown: a "Problem" section (what the app does now), a "Change" section (what it should do; when the feedback asks for several independent changes, one item per change), a "Docs" section (the files of {docsFolder} the change concerns, as paths relative to it), then a line "---" and the original description, unchanged.
 3. Add a comment to {taskID} with mcp__hephaestus__comment_task that says in one or two sentences what you understood and lists the questions that are still open.
-4. Stop: show the user the new name and description, and ask whether to implement the task now or leave it for later. Update {taskID} with what you agree on.
+4. Stop: show the user the new name and description, and ask whether to implement the task now or leave it for later.
 
-When the user asks you to implement it:
+Until the user explicitly asks you to implement the task, change no file: only rewrite {taskID}, comment on it and record in it what you agree on. Answers to your open questions are not that request: record them in {taskID} with mcp__hephaestus__update_task or mcp__hephaestus__comment_task, show the user what changed, and ask again whether to implement the task now or leave it for later.
+
+When the user explicitly asks you to implement it:
 
 1. Propose documentation changes that address the task, and refine them with the user. Describe the app in general terms: nothing of the comment, the screenshot or the context goes into the documentation (Public repository).
 2. Edit only files under {docsFolder}.

@@ -15,7 +15,10 @@ Feedback can be started from anywhere in the app. The window is captured before 
 comment, and the feedback goes to the Forge host, which creates a task with the screenshot and starts a feedback
 session on it ([pipeline.md](pipeline.md#feedback-intake)). The sending device then opens that session: the Claude
 discussion pops up. Claude first rewrites the feedback as a task, then asks the user whether to implement it now or
-leave it for later ([../claude/prompts.md](../claude/prompts.md#feedback-part)).
+leave it for later ([../claude/prompts.md](../claude/prompts.md#feedback-part)). Until the user explicitly asks for the
+implementation, the session changes no file: it only rewrites the task, comments on it and records in it what the user
+agrees on, answers to its open questions included, and asks the question again after each answer. Only then does it
+edit the documentation.
 
 The screenshot, the comment and the context are personal data ([../general.md](../general.md#personal-data)).
 They stay in the feedback task, under the source project's `.hephaestus/` folder, which git ignores, and the prompt of
