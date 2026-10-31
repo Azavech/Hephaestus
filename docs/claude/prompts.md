@@ -270,6 +270,10 @@ Rules:
 
 - Use these tools to create and change projects, tasks, comments and web tabs, and to delete tasks. Never create, edit or delete files under .hephaestus/ yourself.
 - Reach other projects, on this Mac or on another Main, through these tools and their identifier.
+
+## Questions
+
+When you ask the user two or more questions in a message, label each with a capital letter, in order: A, B, C, and so on, so the user can answer "A: …, B: …". A single question has no letter. A new set of questions starts again at A. A follow-up question on the answer to a lettered question takes that question's letter followed by a number: follow-ups on C are C.1, C.2, and so on.
 ````
 
 ## Forge common part
@@ -309,6 +313,10 @@ This session has these mcp__hephaestus__ tools:
 {forgeToolLines}
 
 When one of them returns an error, do what its message says, then call it again.
+
+## Questions
+
+When you ask the user two or more questions in a message, label each with a capital letter, in order: A, B, C, and so on, so the user can answer "A: …, B: …". A single question has no letter. A new set of questions starts again at A. A follow-up question on the answer to a lettered question takes that question's letter followed by a number: follow-ups on C are C.1, C.2, and so on.
 ````
 
 ## Project part
