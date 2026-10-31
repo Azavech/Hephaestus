@@ -48,7 +48,7 @@ public struct PermissionBroker: Sendable {
         return request
     }
 
-    /// Removes and returns every pending request of the session (cancellation).
+    /// Removes and returns every pending request of the session, oldest first (cancellation, Allow All Tools §4.4).
     public mutating func takeAll(sessionID: UUID) -> [PermissionRequest] {
         guard var requests = sessions[sessionID] else { return [] }
         let pending = requests.pending
@@ -57,14 +57,14 @@ public struct PermissionBroker: Sendable {
         return pending
     }
 
-    /// The answer line of §4.2, without the trailing newline. `input` and `suggestions` are parsed back from their JSON
+    /// The answer line of §4.2, without the trailing newline; allowAll gives the allow answer. `input` and `suggestions` are parsed back from their JSON
     /// text, so the original input object is sent back unchanged.
     public static func answer(to request: PermissionRequest, decision: PermissionDecision, message: String?,
                               deviceName: String) -> Data {
         let input = parse(request.input) ?? [String: Any]()
         var answer: [String: Any]
         switch decision {
-        case .allow:
+        case .allow, .allowAll:
             answer = ["behavior": "allow", "updatedInput": input]
         case .allowAlways:
             answer = ["behavior": "allow", "updatedInput": input]

@@ -233,9 +233,10 @@ public enum PreviewData {
 
     static let sessions: [SessionInfo] = [
         SessionInfo(id: planSessionID, kind: .project, title: "Plan the release", created: at(20, 0, 0),
-                    updated: at(20, 0, 6), permissionMode: .acceptEdits, status: .idle, pendingPermissions: []),
+                    updated: at(20, 0, 6), permissionMode: .acceptEdits, allowsAllTools: false, status: .idle,
+                    pendingPermissions: []),
         SessionInfo(id: taskSessionID, kind: .task, taskID: "HEPH-2", mode: .implement, title: "Implement HEPH-2",
-                    created: at(20, 30, 0), updated: at(20, 30, 5), permissionMode: .acceptEdits,
+                    created: at(20, 30, 0), updated: at(20, 30, 5), permissionMode: .acceptEdits, allowsAllTools: false,
                     status: .waitingPermission, pendingPermissions: [permissionRequest]),
     ]
 

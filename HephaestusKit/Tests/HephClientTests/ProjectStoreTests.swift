@@ -10,7 +10,7 @@ final class ProjectStoreTests: XCTestCase {
 
     private func session(_ id: UUID = UUID(), created: Date, pending: [PermissionRequest] = []) -> SessionInfo {
         SessionInfo(id: id, kind: .project, title: "Chat", created: created, updated: created,
-                    permissionMode: .acceptEdits, status: pending.isEmpty ? .idle : .waitingPermission,
+                    permissionMode: .acceptEdits, allowsAllTools: false, status: pending.isEmpty ? .idle : .waitingPermission,
                     pendingPermissions: pending)
     }
 

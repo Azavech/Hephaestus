@@ -25,10 +25,13 @@ struct SessionOptionsMenu: View {
                     model: info.model,
                     permissionModeDefaultTitle: nil,
                     modelDefaultTitle: "Default",
-                    isPermissionModeEnabled: ClaudeLabels.offersPermissionMode(info.kind),
+                    allowsAllTools: info.allowsAllTools,
                     onPermissionMode: { mode in
                         guard let mode else { return }
                         perform { try await model.update(permissionMode: mode) }
+                    },
+                    onAllowAllTools: { allows in
+                        perform { try await model.update(allowsAllTools: allows) }
                     },
                     onModel: { alias in
                         perform { try await model.update(model: alias ?? "") }

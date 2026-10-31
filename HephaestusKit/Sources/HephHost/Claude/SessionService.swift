@@ -238,6 +238,10 @@ public actor SessionService: HostMethodHandler {
                         message: String?, device: DeviceInfo) async throws {
         let session = try await session(projectID, sessionID)
         try await host.checkWritable(projectID)
+        // Only the Main records allowAll (4.4).
+        if decision == .allowAll {
+            throw ProtocolError(.badRequest, "Use sessions.update to allow all tools.")
+        }
         let request = try broker.take(sessionID: sessionID, requestID: requestID)
         if let live = session.process {
             let answer = PermissionBroker.answer(to: request, decision: decision, message: message,
@@ -259,15 +263,11 @@ public actor SessionService: HostMethodHandler {
         let session = try await session(projectID, sessionID)
         try await host.checkWritable(projectID)
         let title = try patch.title.map(Self.validTitle)
-        // Feedback and regeneration sessions keep the permission mode acceptEdits, and so do the sessions of 3.5 whose
-        // permission mode 5.2 fixed: bundle sessions and the task sessions of a bundle (3.5).
-        if patch.permissionMode != nil, try await hasFixedPermissionMode(session) {
-            throw ProtocolError(.badRequest, "The permission mode of Forge sessions cannot be changed.")
-        }
         let archive = try await host.sessionArchive(projectID)
         let previous = session.file
         let model = patch.model
         let permissionMode = patch.permissionMode
+        let allowsAllTools = patch.allowsAllTools
         session.file = try await archive.update(sessionID) { file in
             if let title {
                 file.title = title
@@ -275,9 +275,16 @@ public actor SessionService: HostMethodHandler {
             if let permissionMode {
                 file.permissionMode = permissionMode
             }
+            if let allowsAllTools {
+                file.allowsAllTools = allowsAllTools
+            }
             if let model {
                 file.model = model.isEmpty ? nil : model
             }
+        }
+        // Allow All Tools applies at once: the pending requests are answered after the file is saved (4.4).
+        if session.file.allowsAllTools, !previous.allowsAllTools {
+            await allowPending(session)
         }
         await changed(session)
         // A new permission mode or model applies at the next process start.
@@ -783,16 +790,6 @@ public actor SessionService: HostMethodHandler {
 
     /// The permission mode that sessions.update cannot change: that of feedback and regeneration sessions, and of
     /// the bundle sessions and task sessions of a bundle that are sessions of 3.5 (5.2), as read now.
-    private func hasFixedPermissionMode(_ session: Session) async throws -> Bool {
-        let kind = session.file.kind
-        if kind == .feedback || kind == .regeneration {
-            return true
-        }
-        guard Self.belongsToBundle(kind, bundleID: session.file.bundleID) else { return false }
-        let project = try await host.claudeProject(session.projectID)
-        return await isPublicRepositorySession(kind, project: project, settings: await host.settings())
-    }
-
     /// A session of 3.5, which works in the public repository: a feedback or regeneration session, or, while the
     /// setting forge.enabled is true, a session whose project, or an ancestor reached through claudeProject(_:) of each
     /// parent, is forge.sourceProjectID, or one of whose ancestors cannot be read (claudeProject(_:) throws, which ends
@@ -917,7 +914,20 @@ public actor SessionService: HostMethodHandler {
             if live.publicRepository {
                 request.suggestions = "[]"
             }
-            turnStarted(session)
+            let started = turnStarted(session)
+            if session.file.allowsAllTools {
+                // Allow All Tools (4.4): answered at once, never pending; the status stays running.
+                await record(SessionEvent(id: UUID().uuidString, at: Date(), type: .permission, input: request.input,
+                                          requestID: request.requestID, toolName: request.toolName,
+                                          description: request.description, suggestions: request.suggestions,
+                                          blockedPath: request.blockedPath),
+                             in: session)
+                await allow(request, in: session, live: live)
+                if started {
+                    await changed(session)
+                }
+                return
+            }
             broker.add(sessionID: sessionID, request: request)
             setStatus(.waitingPermission, session)
             await host.permissionRequested(projectID: projectID, sessionID: sessionID, request: request)
@@ -1049,6 +1059,33 @@ public actor SessionService: HostMethodHandler {
         let localID = await host.localDevice().id
         for request in pending {
             await resolved(session, requestID: request.requestID, decision: .deny, deviceID: localID)
+        }
+    }
+
+    // MARK: - 4.4 Allow All Tools
+
+    /// Answers a request with the allow answer and records it as allowAll of this Main.
+    private func allow(_ request: PermissionRequest, in session: Session, live: LiveProcess?) async {
+        let local = await host.localDevice()
+        if let live {
+            let answer = PermissionBroker.answer(to: request, decision: .allowAll, message: nil, deviceName: local.name)
+            do {
+                try live.process.send(.permission(answer: answer))
+            } catch {
+                Log.host.error("Could not write a permission answer of session \(session.file.id.uuidString, privacy: .public): \(String(describing: error))")
+            }
+        }
+        await resolved(session, requestID: request.requestID, decision: .allowAll, deviceID: local.id)
+    }
+
+    /// Allow All Tools was turned on: every pending request, oldest first, is answered; the status becomes running.
+    private func allowPending(_ session: Session) async {
+        let pending = broker.takeAll(sessionID: session.file.id)
+        for request in pending {
+            await allow(request, in: session, live: session.process)
+        }
+        if session.status == .waitingPermission {
+            setStatus(.running, session)
         }
     }
 
@@ -1236,7 +1273,8 @@ public actor SessionService: HostMethodHandler {
         let file = session.file
         return SessionInfo(id: file.id, kind: file.kind, taskID: file.taskID, mode: file.mode,
                            bundleID: file.bundleID, title: file.title, created: file.created, updated: file.updated,
-                           permissionMode: file.permissionMode, model: file.model, status: session.status,
+                           permissionMode: file.permissionMode, allowsAllTools: file.allowsAllTools,
+                           model: file.model, status: session.status,
                            statusLine: session.statusLine,
                            error: session.status == .failed ? session.error : nil,
                            pendingPermissions: session.process == nil ? [] : broker.pending(sessionID: file.id))

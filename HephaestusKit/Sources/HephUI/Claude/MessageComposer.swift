@@ -56,7 +56,6 @@ public struct MessageComposer: View {
             HStack(alignment: .bottom, spacing: 8) {
                 AttachmentPickerButton(onAdd: add)
                     .fixedSize()
-                    .padding(.bottom, 6)
                 ComposerTextView(text: $draft.text, placeholder: placeholder, focusOnAppear: focusOnAppear,
                                  onSend: send, onAttach: add)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
@@ -69,10 +68,8 @@ public struct MessageComposer: View {
                             .foregroundStyle(.red)
                     }
                     .buttonStyle(.plain)
-                    .padding(.bottom, 4)
                 }
                 sendButton
-                    .padding(.bottom, 4)
             }
         }
         .attachmentDrop(onAdd: add)

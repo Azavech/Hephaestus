@@ -125,6 +125,10 @@ struct PermissionCard: View {
                         }
                         .buttonStyle(.bordered)
                     }
+                    Button("Allow All") {
+                        allowAll()
+                    }
+                    .buttonStyle(.bordered)
                     Menu {
                         Button("Deny with Message…") {
                             isDenyMessagePresented = true
@@ -170,6 +174,13 @@ struct PermissionCard: View {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                 }
+            case .allowAll:
+                Label {
+                    Text("Allowed automatically")
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
             case .deny:
                 Label {
                     Text("Denied" + suffix)
@@ -181,16 +192,30 @@ struct PermissionCard: View {
         }
     }
 
-    /// `model.respond(requestID:decision:message:)`; `conflict` and `notFound` show the card as expired until a
-    /// decision arrives; every error shows the error banner.
+    /// `model.respond(requestID:decision:message:)`, or `model.update(allowsAllTools:)` for Allow All; `conflict` and
+    /// `notFound` show the card as expired until a decision arrives; every error shows the error banner.
     private func respond(_ decision: PermissionDecision, message: String?) {
+        let requestID = item.requestID
+        perform {
+            try await model.respond(requestID: requestID, decision: decision, message: message)
+        }
+    }
+
+    /// Allow All: `model.update(allowsAllTools: true)`; the Main answers this card and every other pending request of
+    /// the session with `allowAll`, and the cards turn resolved when their decisions arrive.
+    private func allowAll() {
+        perform {
+            try await model.update(allowsAllTools: true)
+        }
+    }
+
+    private func perform(_ request: @escaping @MainActor () async throws -> Void) {
         guard !isResponding else { return }
         isResponding = true
-        let requestID = item.requestID
         Task {
             await banners.perform {
                 do {
-                    try await model.respond(requestID: requestID, decision: decision, message: message)
+                    try await request()
                     isDenyMessagePresented = false
                     denyMessage = ""
                 } catch let error as ProtocolError where error.code == .conflict || error.code == .notFound {

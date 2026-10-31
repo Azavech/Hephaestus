@@ -49,15 +49,6 @@ public enum ClaudeLabels {
         case .stopped, .failed: return false
         }
     }
-
-    /// The options menu and the session context menu offer Permission Mode for kinds other than `feedback` and
-    /// `regeneration`.
-    static func offersPermissionMode(_ kind: SessionKind) -> Bool {
-        switch kind {
-        case .project, .task, .bundle: return true
-        case .feedback, .regeneration: return false
-        }
-    }
 }
 
 /// The indicator of a session status: green dot, small progress view, orange hand, gray dot or red octagon; the dots

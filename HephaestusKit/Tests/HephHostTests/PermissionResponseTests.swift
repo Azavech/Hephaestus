@@ -33,6 +33,13 @@ final class PermissionResponseTests: XCTestCase {
         XCTAssertEqual(answer["type"] as? String, "control_response")
     }
 
+    func testAllowAll() throws {
+        let request = try recordedRequest()
+        let allowAll = PermissionBroker.answer(to: request, decision: .allowAll, message: nil, deviceName: "Mac")
+        let allow = PermissionBroker.answer(to: request, decision: .allow, message: nil, deviceName: "Mac")
+        XCTAssertEqual(try object(allowAll), try object(allow))
+    }
+
     func testDeny() throws {
         let request = try recordedRequest()
         let denied = try object(PermissionBroker.answer(to: request, decision: .deny, message: nil, deviceName: "Mac"))

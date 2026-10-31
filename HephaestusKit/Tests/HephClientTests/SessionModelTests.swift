@@ -18,8 +18,8 @@ final class SessionModelTests: XCTestCase {
         -> (model: SessionModel, fakeMain: FakeMain) {
         let mainID = UUID()
         let session = SessionInfo(id: sessionID, kind: .project, title: "Chat", created: TestMesh.updatedAt,
-                                  updated: TestMesh.updatedAt, permissionMode: .acceptEdits, status: .idle,
-                                  pendingPermissions: [])
+                                  updated: TestMesh.updatedAt, permissionMode: .acceptEdits, allowsAllTools: false,
+                                  status: .idle, pendingPermissions: [])
         let (workspace, fakeMain, _) = try await connectedWorkspace(
             projects: [TestMesh.summary("HEPH", mainID: mainID)], mainID: mainID
         ) { fakeMain in

@@ -13,12 +13,14 @@ public struct SessionFile: Codable, Sendable, Equatable {
     public var created: Date
     public var updated: Date
     public var permissionMode: PermissionMode
+    public var allowsAllTools: Bool
     public var model: String?
     public var status: SessionStatus
 
     /// The values as given, except `created` and `updated`, which pass through YAMLCoding.wholeSeconds(_:).
     public init(id: UUID, kind: SessionKind, taskID: String?, mode: SessionMode?, bundleID: String?, title: String,
-                created: Date, updated: Date, permissionMode: PermissionMode, model: String?, status: SessionStatus) {
+                created: Date, updated: Date, permissionMode: PermissionMode, allowsAllTools: Bool = false,
+                model: String?, status: SessionStatus) {
         self.id = id
         self.kind = kind
         self.taskID = taskID
@@ -28,14 +30,55 @@ public struct SessionFile: Codable, Sendable, Equatable {
         self.created = YAMLCoding.wholeSeconds(created)
         self.updated = YAMLCoding.wholeSeconds(updated)
         self.permissionMode = permissionMode
+        self.allowsAllTools = allowsAllTools
         self.model = model
         self.status = status
     }
 
-    /// .mapping of the eleven keys, each .value.
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, taskID, mode, bundleID, title, created, updated, permissionMode, allowsAllTools, model, status
+    }
+
+    /// Custom coding for allowsAllTools only: an absent key decodes as false, false is not encoded.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        kind = try container.decode(SessionKind.self, forKey: .kind)
+        taskID = try container.decodeIfPresent(String.self, forKey: .taskID)
+        mode = try container.decodeIfPresent(SessionMode.self, forKey: .mode)
+        bundleID = try container.decodeIfPresent(String.self, forKey: .bundleID)
+        title = try container.decode(String.self, forKey: .title)
+        created = try container.decode(Date.self, forKey: .created)
+        updated = try container.decode(Date.self, forKey: .updated)
+        permissionMode = try container.decode(PermissionMode.self, forKey: .permissionMode)
+        allowsAllTools = try container.decodeIfPresent(Bool.self, forKey: .allowsAllTools) ?? false
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        status = try container.decode(SessionStatus.self, forKey: .status)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(kind, forKey: .kind)
+        try container.encodeIfPresent(taskID, forKey: .taskID)
+        try container.encodeIfPresent(mode, forKey: .mode)
+        try container.encodeIfPresent(bundleID, forKey: .bundleID)
+        try container.encode(title, forKey: .title)
+        try container.encode(created, forKey: .created)
+        try container.encode(updated, forKey: .updated)
+        try container.encode(permissionMode, forKey: .permissionMode)
+        if allowsAllTools {
+            try container.encode(true, forKey: .allowsAllTools)
+        }
+        try container.encodeIfPresent(model, forKey: .model)
+        try container.encode(status, forKey: .status)
+    }
+
+    /// .mapping of the twelve keys, each .value.
     public static let shape: YAMLShape = .mapping([
         "id": .value, "kind": .value, "taskID": .value, "mode": .value, "bundleID": .value, "title": .value,
-        "created": .value, "updated": .value, "permissionMode": .value, "model": .value, "status": .value,
+        "created": .value, "updated": .value, "permissionMode": .value, "allowsAllTools": .value, "model": .value,
+        "status": .value,
     ])
 
     /// id.uuidString.lowercased(): the name of the files and folder, and the CLI session id.

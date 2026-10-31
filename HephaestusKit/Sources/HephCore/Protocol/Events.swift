@@ -313,7 +313,8 @@ public struct PermissionRequestedPayload: Codable, Sendable, Hashable {
     }
 }
 
-/// `permission.resolved`: the first answer to a request, or its cancellation (`deny` from the Main itself).
+/// `permission.resolved`: the first answer to a request, its cancellation (`deny` from the Main itself), or the Main's
+/// automatic answer when the session allows all tools (`allowAll`).
 public struct PermissionResolvedPayload: Codable, Sendable, Hashable {
     public var projectID: String
     public var sessionID: UUID

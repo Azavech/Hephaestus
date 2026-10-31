@@ -76,8 +76,9 @@ public struct ClaudeModelField: View {
     }
 }
 
-/// The Permission Mode and Model submenus of the options menu, the session context menu and the new chat
-/// (docs/ui/sessions.md, "Options menu", "Session context menu", "New chat"); the current choices are checked.
+/// The Permission Mode and Model submenus of the options menu, the session context menu and the new chat, with Allow
+/// All Tools between them for a session (docs/ui/sessions.md, "Options menu", "Session context menu", "New chat"); the
+/// current choices are checked.
 struct SessionOptionMenus: View {
     /// The current permission mode; nil is the default choice.
     let permissionMode: PermissionMode?
@@ -87,30 +88,32 @@ struct SessionOptionMenus: View {
     let permissionModeDefaultTitle: String?
     /// The first choice of Model.
     let modelDefaultTitle: String
-    /// Whether Permission Mode is listed: the session context menu leaves it out for `feedback` and `regeneration`.
-    var showsPermissionMode = true
-    /// Whether Permission Mode is enabled: the options menu disables it for `feedback` and `regeneration`.
-    var isPermissionModeEnabled = true
+    /// A session's Allow All Tools, checked when true; nil leaves the item out (new chat).
+    var allowsAllTools: Bool? = nil
     let onPermissionMode: (PermissionMode?) -> Void
+    /// Called with the opposite of `allowsAllTools`.
+    var onAllowAllTools: (Bool) -> Void = { _ in }
     /// Called with nil for the default choice, else the alias.
     let onModel: (String?) -> Void
     let onOtherModel: () -> Void
 
     var body: some View {
-        if showsPermissionMode {
-            Menu("Permission Mode") {
-                if let permissionModeDefaultTitle {
-                    SessionCheckedItem(title: permissionModeDefaultTitle, isChecked: permissionMode == nil) {
-                        onPermissionMode(nil)
-                    }
-                }
-                ForEach(ClaudeLabels.permissionModes, id: \.self) { mode in
-                    SessionCheckedItem(title: ClaudeLabels.title(mode), isChecked: permissionMode == mode) {
-                        onPermissionMode(mode)
-                    }
+        Menu("Permission Mode") {
+            if let permissionModeDefaultTitle {
+                SessionCheckedItem(title: permissionModeDefaultTitle, isChecked: permissionMode == nil) {
+                    onPermissionMode(nil)
                 }
             }
-            .disabled(!isPermissionModeEnabled)
+            ForEach(ClaudeLabels.permissionModes, id: \.self) { mode in
+                SessionCheckedItem(title: ClaudeLabels.title(mode), isChecked: permissionMode == mode) {
+                    onPermissionMode(mode)
+                }
+            }
+        }
+        if let allowsAllTools {
+            SessionCheckedItem(title: "Allow All Tools", isChecked: allowsAllTools) {
+                onAllowAllTools(!allowsAllTools)
+            }
         }
         Menu("Model") {
             SessionCheckedItem(title: modelDefaultTitle, isChecked: (model ?? "").isEmpty) {

@@ -82,6 +82,8 @@ public enum PermissionDecision: String, Codable, Sendable, Hashable, CaseIterabl
     case allow
     /// Allow, and apply the request's suggestions.
     case allowAlways
+    /// Allowed by the Main because the session allows all tools; never sent by a client.
+    case allowAll
     /// Deny.
     case deny
 }
@@ -109,6 +111,8 @@ public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
     public var created: Date
     public var updated: Date
     public var permissionMode: PermissionMode
+    /// Allow All Tools: the Main answers every permission request itself.
+    public var allowsAllTools: Bool
     public var model: String?
     public var status: SessionStatus
     public var statusLine: String?
@@ -125,6 +129,7 @@ public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
         created: Date,
         updated: Date,
         permissionMode: PermissionMode,
+        allowsAllTools: Bool,
         model: String? = nil,
         status: SessionStatus,
         statusLine: String? = nil,
@@ -140,6 +145,7 @@ public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
         self.created = created
         self.updated = updated
         self.permissionMode = permissionMode
+        self.allowsAllTools = allowsAllTools
         self.model = model
         self.status = status
         self.statusLine = statusLine
@@ -152,11 +158,14 @@ public struct SessionInfo: Codable, Sendable, Hashable, Identifiable {
 public struct SessionPatch: Codable, Sendable, Hashable {
     public var title: String?
     public var permissionMode: PermissionMode?
+    public var allowsAllTools: Bool?
     public var model: String?
 
-    public init(title: String? = nil, permissionMode: PermissionMode? = nil, model: String? = nil) {
+    public init(title: String? = nil, permissionMode: PermissionMode? = nil, allowsAllTools: Bool? = nil,
+                model: String? = nil) {
         self.title = title
         self.permissionMode = permissionMode
+        self.allowsAllTools = allowsAllTools
         self.model = model
     }
 }

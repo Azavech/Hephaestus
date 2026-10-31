@@ -2,8 +2,8 @@ import HephClient
 import HephCore
 import SwiftUI
 
-/// The header of a session: title, context, permission mode and model capsules, options menu (docs/ui/sessions.md,
-/// "Header").
+/// The header of a session: title, context, permission mode, model and All Tools Allowed capsules, options menu
+/// (docs/ui/sessions.md, "Header").
 struct SessionHeaderView: View {
     let model: SessionModel
     let store: ProjectStore
@@ -23,6 +23,9 @@ struct SessionHeaderView: View {
                 Spacer(minLength: 8)
                 SessionHeaderCapsule(text: ClaudeLabels.title(info.permissionMode))
                 SessionHeaderCapsule(text: info.model ?? "Default model")
+                if info.allowsAllTools {
+                    SessionHeaderCapsule(text: "All Tools Allowed")
+                }
                 SessionOptionsMenu(model: model, info: info, isConnected: store.connection?.isConnected == true)
             } else {
                 if store.phase != .loaded {
@@ -99,7 +102,7 @@ struct SessionHeaderView: View {
     }
 }
 
-/// A capsule of the header: the permission mode title, or the model.
+/// A capsule of the header: the permission mode title, the model, or All Tools Allowed.
 private struct SessionHeaderCapsule: View {
     let text: String
 

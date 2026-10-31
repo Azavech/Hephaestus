@@ -47,10 +47,13 @@ struct SessionContextMenu: ViewModifier {
                     model: session.model,
                     permissionModeDefaultTitle: nil,
                     modelDefaultTitle: "Default",
-                    showsPermissionMode: ClaudeLabels.offersPermissionMode(session.kind),
+                    allowsAllTools: session.allowsAllTools,
                     onPermissionMode: { mode in
                         guard let mode else { return }
                         update(SessionPatch(permissionMode: mode))
+                    },
+                    onAllowAllTools: { allows in
+                        update(SessionPatch(allowsAllTools: allows))
                     },
                     onModel: { alias in
                         update(SessionPatch(model: alias ?? ""))

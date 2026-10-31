@@ -339,10 +339,12 @@ public final class SessionModel {
     }
 
     /// `update(model: "")` clears the session's model.
-    public func update(title: String? = nil, permissionMode: PermissionMode? = nil, model: String? = nil) async throws {
+    public func update(title: String? = nil, permissionMode: PermissionMode? = nil, allowsAllTools: Bool? = nil,
+                       model: String? = nil) async throws {
         _ = try await requireConnection().updateSession(projectID: projectID, sessionID: sessionID,
                                                         patch: SessionPatch(title: title,
                                                                             permissionMode: permissionMode,
+                                                                            allowsAllTools: allowsAllTools,
                                                                             model: model))
     }
 
