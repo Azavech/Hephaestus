@@ -165,16 +165,16 @@ project that is not broken (`notFound` `Task <id> does not exist.`, `conflict` `
 | `bundles.start`  | `draft`                         | Start (below)                                                                                                           |
 | `bundles.stop`   | `running`, `review`             | `sessions.stop` of the coordinator and of every task session of the bundle; status `draft`; worktrees and branches kept |
 
-A method in another status fails with `conflict`: `Stop <bundle id> first.` for `running` and `review`, `<bundle id>
-is done.` for `bundles.start` of a `done` bundle and for `bundles.update` with `taskIDs` of a `done` bundle (its tasks
-are frozen; a `name` alone still renames it), `<bundle id> is not running.` for `bundles.stop` of a `draft` or `done`
-bundle. The status is checked before the tasks. `bundles.create` and `bundles.update` without a task: `badRequest` `A bundle needs at least one task.`
-A name that is empty or holds a line break: `badRequest` `The name must not be empty and must be on one line.` The
-`taskIDs` of `bundles.update` are not deduplicated: a task given twice breaks the file's rule (`badRequest`
-`tasks[<i>].task must be a task of <projectID> listed once`). A task is in at most one bundle that is not `done`, since
-it has one worktree, which another bundle would remove: a task of `bundles.create`, or of the `taskIDs` of
-`bundles.update`, that is in another bundle of the project whose status is not `done` fails with `conflict` `<task id>
-is in <bundle id>.`, the first such task and bundle in order.
+A method in another status fails with `conflict`: `Stop <bundle id> first.` for `running` and `review`, `<bundle id> is
+done.` for `bundles.start` of a `done` bundle and for `bundles.update` with `taskIDs` of a `done` bundle (its tasks are
+frozen; a `name` alone still renames it), `<bundle id> is not running.` for `bundles.stop` of a `draft` or `done`
+bundle. The status is checked before the tasks. `bundles.create` and `bundles.update` without a task: `badRequest` `A
+bundle needs at least one task.` A name that is empty or holds a line break: `badRequest` `The name must not be empty
+and must be on one line.` The `taskIDs` of `bundles.update` are not deduplicated: a task given twice breaks the file's
+rule (`badRequest` `tasks[<i>].task must be a task of <projectID> listed once`). A task is in at most one bundle that is
+not `done`, since it has one worktree, which another bundle would remove: a task of `bundles.create`, or of the
+`taskIDs` of `bundles.update`, that is in another bundle of the project whose status is not `done` fails with `conflict`
+`<task id> is in <bundle id>.`, the first such task and bundle in order.
 
 ### Start
 
