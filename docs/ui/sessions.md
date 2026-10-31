@@ -93,6 +93,9 @@ for example with `LabeledContent`.
 | regular, iPadOS | `HStack(spacing: 0)`: session list (300 pt), `Divider`, session area      |
 | compact         | `NavigationStack` rooted at the session list (below)                      |
 
+macOS: the session list and the session area each extend under the window's toolbar
+([shell.md](shell.md#92-toolbar-material-macos)).
+
 While the Claude section is shown, `selection.item` is the selected session id as a UUID string
 ([../client/workspace.md](../client/workspace.md#selection)). `isNewChatPresented` (view state of `ClaudeView`) is true
 while the new chat is shown ([New chat](#new-chat)); it becomes false when `selection.item` becomes non-nil.
@@ -181,6 +184,12 @@ its own `SessionModel` when it appears, calls `appear()` in `onAppear` and `disa
 - Capsules: the permission mode title; the model, or "Default model" when nil; "All Tools Allowed" when
   `allowsAllTools` is true.
 - Options: `SessionOptionsMenu` (button `ellipsis.circle`).
+
+macOS: the header is in `.safeAreaInset(edge: .top, spacing: 0)` of the transcript's `ScrollView`, with a `.bar`
+background and a `Divider` at its bottom. It stays pinned below the window's toolbar, and only the transcript scrolls
+under it and under the toolbar ([shell.md](shell.md#92-toolbar-material-macos)). The states of the
+[transcript](#transcript) without items keep the header pinned the same way. iPadOS and iOS keep the header above the
+transcript.
 
 ### Options menu
 

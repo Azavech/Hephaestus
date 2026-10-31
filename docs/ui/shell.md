@@ -425,6 +425,7 @@ NavigationSplitView(columnVisibility: $columnVisibility) {   // @State, initiall
 - Window title: `.navigationTitle` on the detail = the selected project's name, else "Hephaestus". macOS:
   `.toolbar(removing: .title)`, so the title names the window (Window menu) without taking toolbar space. iOS:
   `.navigationBarTitleDisplayMode(.inline)`.
+- macOS: the toolbar is translucent and both columns extend under it ([§9.2](#92-toolbar-material-macos)).
 - `MainShell` sets `context.isCompact` from `horizontalSizeClass` when it appears and when the class changes.
 - Regular: `.overlay { if context.isSearchPresented { SearchPalette() } }` on the split view, so the palette covers the
   whole window ([search.md](search.md)).
@@ -448,6 +449,9 @@ NavigationSplitView(columnVisibility: $columnVisibility) {   // @State, initiall
 The list's selection is a `Binding<SidebarSection?>`: it reads `selection.section`; setting a section calls
 `context.select(_:)`; setting nil (compact Back) sets `selection.section = nil`. In compact width the list carries the
 shell toolbar ([§9](#9-toolbar)) and the inline title of the selected project.
+
+macOS: the top of the sidebar column shows the toolbar material, and the list scrolls under it
+([§9.2](#92-toolbar-material-macos)).
 
 ### 6.3 Detail
 
@@ -481,6 +485,8 @@ when `mainDeviceID` and `projectID` are set and `workspace.summary(of:on:)` is n
 - `devices` and `forge` never show a state; `skills` shows only the "No Main selected" one (the Skills screen shows its
   own offline state, [skills.md](skills.md)).
 - In regular width the toolbar of [§9](#9-toolbar) is attached to `DetailView`.
+- macOS: every view the detail shows, the section views and the states of the table, extends under the toolbar
+  ([§9.2](#92-toolbar-material-macos)).
 
 #### Offline bar
 
@@ -668,6 +674,28 @@ both ways below reach the same router:
 (`.titleAndIcon`), `n` = `workspace.onlineDeviceCount` (this device included). Help: "<n> of <total> devices online",
 `total` = the non-revoked devices of `workspace.mesh`. Clicking it calls `context.select(.devices)` (compact: pushes the
 Devices screen).
+
+### 9.2 Toolbar material (macOS)
+
+macOS only; iPadOS and iOS keep the system bars. The window's toolbar, over the sidebar column and over the detail, is
+a translucent, blurred material, and the content of both columns extends under it: scrolled content shows through,
+blurred.
+
+- `SidebarView` and `DetailView` both apply `.toolbarBackgroundVisibility(.visible, for: .windowToolbar)` and
+  `.toolbarBackground(.bar, for: .windowToolbar)`, in every section and state, so the toolbar keeps the material even
+  when nothing is scrolled under it.
+- Neither column, nor any view between a column and its content, draws an opaque background over the top safe area,
+  and no view uses `.ignoresSafeArea` on the top edge.
+- A SwiftUI `ScrollView` or `List` that reaches the top of its column extends under the toolbar and keeps the default
+  safe-area behavior: its first row starts below the toolbar, and only scrolled content passes under it. The sidebar
+  list ([§6.2](#62-sidebar)) does so.
+- A bar or header pinned above a scroll view (the [offline bar](#offline-bar), the session header of
+  [sessions.md](sessions.md#header), the search scope bar of [search.md](search.md)) is in the scroll view's
+  `.safeAreaInset(edge: .top)` with a `.bar` background: it stays pinned below the toolbar and the scroll view extends
+  under both.
+- A view hosted from AppKit or WebKit (the editor of [editor.md](editor.md), the page of a web tab of [web.md](web.md))
+  and a view without a scroll view (an `EmptyStateView`, a `ProgressView`) start below the toolbar; the material then
+  shows what is behind it, the column's background.
 
 ## 10. No Main online
 
