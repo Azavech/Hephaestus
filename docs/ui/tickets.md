@@ -276,7 +276,7 @@ A `ScrollView` with the Description section then the Comments section; the comme
 ### Broken ticket
 
 The detail of a broken ticket shows the id, "This ticket file cannot be read.", the parse error (monospaced,
-selectable), the file path `.hephaestus/tasks/<ID>.yml` and a "Delete Ticket…" button. It has no segment, no comments
+selectable), the file path `.hephaestus/tickets/<ID>.yml` and a "Delete Ticket…" button. It has no segment, no comments
 and no composer.
 
 ## Comments
@@ -327,7 +327,7 @@ the trimmed text and `draft.uploads`. Success clears the draft; failure keeps it
 
 From the detail's actions menu, the row's context menu and the broken-ticket detail. Confirmation dialog: title "Delete
 <ID>?", message "“<name>” and its attachments are deleted. This cannot be undone." (a broken ticket: "The file
-.hephaestus/tasks/<ID>.yml is deleted. This cannot be undone."), buttons Delete (destructive) and Cancel. Delete calls
+.hephaestus/tickets/<ID>.yml is deleted. This cannot be undone."), buttons Delete (destructive) and Cancel. Delete calls
 `deleteTicket(projectID:ticketID:)`. The ticket's sessions are kept. After success, `selection.item` is cleared when it
 was this ticket.
 

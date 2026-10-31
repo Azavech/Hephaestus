@@ -50,7 +50,7 @@ the other files refine it.
 | [protocol/methods.md](protocol/methods.md)   | Every method: params, result, errors, side effects, events emitted                                                     |
 | [protocol/events.md](protocol/events.md)     | Every event: params, who emits it, who receives it                                                                     |
 | [data/project-yml.md](data/project-yml.md)   | `.hephaestus/project.yml`                                                                                              |
-| [data/ticket-yml.md](data/ticket-yml.md)     | `.hephaestus/tasks/<TICKET-ID>.yml` and ticket attachments                                                             |
+| [data/ticket-yml.md](data/ticket-yml.md)     | `.hephaestus/tickets/<TICKET-ID>.yml` and ticket attachments                                                           |
 | [data/sessions.md](data/sessions.md)         | Session metadata and event files under `.hephaestus/sessions/`                                                         |
 | [data/app-storage.md](data/app-storage.md)   | Application Support files, `settings.json` keys, Keychain items, per-window UI state                                   |
 | [claude/cli.md](claude/cli.md)               | Locating and running the Claude CLI, the stream-json session process, permissions, child processes                     |

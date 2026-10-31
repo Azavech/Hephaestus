@@ -743,15 +743,14 @@ When not enabled: `config`, `head`, `cycle`, `latestRelease` and `lastError` are
 ## Files on disk
 
 The files on disk are read and written through their own file types, defined by the docs in the last column; they map
-to these wire types. The files keep the names they had before tasks were renamed tickets: the folder
-`.hephaestus/tasks/`, the key `taskCounter` of project.yml, and the key `taskID` and the kind `task` of session files.
-`forge.json` uses the new names; the Forge renames the old ones when it loads the file
-([forge/pipeline.md](../forge/pipeline.md#forgejson)).
+to these wire types. Files written before tasks were renamed tickets are migrated to the new names
+([data/ticket-yml.md](../data/ticket-yml.md#data-from-before-tickets),
+[forge/pipeline.md](../forge/pipeline.md#forgejson)).
 
 | File                              | Wire type                                                           | Spec                                          |
 |-----------------------------------|---------------------------------------------------------------------|-----------------------------------------------|
 | `.hephaestus/project.yml`         | `Project` without `deviceID`, `rootPath`, `migrating`, `parseError` | [data/project-yml.md](../data/project-yml.md) |
-| `.hephaestus/tasks/<id>.yml`      | `TicketItem` without `parseError`                                   | [data/ticket-yml.md](../data/ticket-yml.md)   |
+| `.hephaestus/tickets/<id>.yml`    | `TicketItem` without `parseError`                                   | [data/ticket-yml.md](../data/ticket-yml.md)   |
 | `.hephaestus/sessions/<id>.yml`   | `SessionInfo` without `statusLine`, `error`, `pendingPermissions`   | [data/sessions.md](../data/sessions.md)       |
 | `.hephaestus/sessions/<id>.jsonl` | One `SessionEvent` per line                                         | [data/sessions.md](../data/sessions.md)       |
 | `registry.json`                   | `MeshSnapshot`                                                      | [data/app-storage.md](../data/app-storage.md) |

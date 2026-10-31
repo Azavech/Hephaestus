@@ -6,13 +6,12 @@ files:
 
 ---
 
-Each ticket is one YAML file, `<project root>/.hephaestus/tasks/<TICKET-ID>.yml`. The files attached to its comments
+Each ticket is one YAML file, `<project root>/.hephaestus/tickets/<TICKET-ID>.yml`. The files attached to its comments
 are in `<project root>/.hephaestus/attachments/<TICKET-ID>/`. The YAML coding, unknown-key and read-modify-write rules
 of [project-yml.md](project-yml.md#yaml-coding-all-yaml-files) apply.
 
-The folder `tasks` keeps the name it had before tasks were renamed tickets, and so do the keys of the files that
-`TicketFile` reads and writes ([project-yml.md](project-yml.md#yaml-coding-all-yaml-files)): existing projects are
-read as they are, with no migration.
+Projects written before tasks were renamed tickets are migrated when the Main registers them
+([Data from before tickets](#data-from-before-tickets)).
 
 ## Ticket id
 
@@ -105,14 +104,14 @@ is not a UUID is `comments[<i>].id: invalid value`; Yams writes it in canonical 
 ## Id allocation
 
 `TicketFile.allocateID(projectRoot:feedback:)` reserves the number of a new ticket with one `ProjectFile.update` of the
-project's `project.yml` ([project-yml.md](project-yml.md)). Each series has its counter: `taskCounter` for tickets
+project's `project.yml` ([project-yml.md](project-yml.md)). Each series has its counter: `ticketCounter` for tickets
 (`feedback` false), `feedbackCounter` for feedback tickets (`feedback` true). `<prefix>` below is `<projectID>-` for
 tickets and `<projectID>-F` for feedback tickets.
 
 1. `highest` = `TicketFile.highestNumber(projectRoot:projectID:feedback:)`: the largest `n` among the entries of
-   `.hephaestus/tasks/` whose name is `<prefix><n>.yml` (valid and broken files alike); `0` when there is none.
+   `.hephaestus/tickets/` whose name is `<prefix><n>.yml` (valid and broken files alike); `0` when there is none.
 2. `n` = `max(<counter>, highest) + 1`.
-3. While `.hephaestus/tasks/<prefix><n>.yml` exists, `n` = `n + 1`.
+3. While `.hephaestus/tickets/<prefix><n>.yml` exists, `n` = `n + 1`.
 4. `<counter>` = `n`; `project.yml` is written.
 5. The function returns `TicketID(projectID:number: n, feedback:)`. The caller then writes the ticket file with
    `TicketFile.create`.
@@ -131,18 +130,42 @@ tickets and `<projectID>-F` for feedback tickets.
 
 ## Loading the tickets of a project
 
-`TicketFile.loadAll(projectRoot:projectID:)` lists `.hephaestus/tasks/` (one level):
+`TicketFile.loadAll(projectRoot:projectID:)` lists `.hephaestus/tickets/` (one level):
 
 - An entry is a ticket file when it is a regular file and `TicketID(fileName:)` parses its name with the project's
   identifier. Every other entry is ignored: other names, ids of another project, temporary files of `AtomicFile`,
   folders.
 - Each ticket file is read and decoded. Success gives `.valid(TicketFile)`; any failure gives `.broken(...)` (next
   section).
-- Results are sorted by ticket number. A missing `tasks` folder gives no ticket.
+- Results are sorted by ticket number. A missing `tickets` folder gives no ticket.
 
 The host reloads one ticket file when the file watcher reports it ([services/host.md](../services/host.md)) with
 `TicketFile.loadOne(projectRoot:id:)`, which returns the same result for one file, or `nil` when the file no longer
 exists.
+
+## Data from before tickets
+
+Earlier versions called tickets tasks and wrote that name to disk. `TicketFile.migrateFromTasks(projectRoot:)` moves a
+project's data to the new names, once; the host runs it when it registers a project
+([services/host.md](../services/host.md#64-registerrootparentid)), before anything of the project is read. Each step
+runs whatever the result of the others, and nothing is ever written back under an old name:
+
+1. **Folder.** When `.hephaestus/tasks/` is a folder: when `.hephaestus/tickets/` does not exist, `tasks` is renamed
+   `tickets` (`FileManager.moveItem(at:to:)`). Otherwise each entry of `tasks` is moved into `tickets` when `tickets`
+   has no entry of that name; then `tasks` is removed when it is empty. An entry whose name is in both folders stays in
+   `tasks`.
+2. **project.yml.** When its top-level mapping has the key `taskCounter`: one `ProjectFile.update(projectRoot:)` that
+   changes nothing, which writes `ticketCounter` and drops `taskCounter`
+   ([project-yml.md](project-yml.md#renamed-keys)).
+3. **Session files.** Each `.hephaestus/sessions/<id>.yml` whose top-level mapping has the key `taskID` or the `kind`
+   `task`: decoded with `SessionFile.decode` and written again with `encode(preserving:)` and `AtomicFile.write`, which
+   writes `ticketID` and the kind `ticket` ([sessions.md](sessions.md#metadata-file)).
+4. **Bundle files.** Each `.hephaestus/bundles/<id>.yml` whose top-level mapping has the key `tasks`: rewritten the same
+   way with `BundleFile`, which writes `tickets` and its items' `ticket`
+   ([../services/bundles.md](../services/bundles.md#bundle-file)).
+
+A file that cannot be read or decoded is left as it is, and a failed step is logged; the step is tried again the next
+time the project is registered. The attachments folder, `.hephaestus/attachments/<ticket id>/`, has no old name.
 
 ## Broken files
 
@@ -263,8 +286,9 @@ A broken file maps as described in Broken files.
 ## Logging
 
 `TicketFile` logs with `Log.core` ([architecture.md](../architecture.md#logging)): `error` for each broken ticket file
-found by `loadAll` or `loadOne` (its name and the `DataError` message). Ticket texts and comment bodies are never
-logged.
+found by `loadAll` or `loadOne` (its name and the `DataError` message), and for each failed step of `migrateFromTasks`
+and each entry it leaves in `tasks` (the path and the error); `info` for each folder or file it migrates. Ticket texts
+and comment bodies are never logged.
 
 ## Swift API
 
@@ -314,9 +338,9 @@ public struct TicketFile: Codable, Sendable, Equatable {
     /// A new ticket: created = updated = YAMLCoding.now(), no comments.
     public init(id: TicketID, name: String, description: String?, status: TicketStatus)
 
-    /// <projectRoot>/.hephaestus/tasks
+    /// <projectRoot>/.hephaestus/tickets
     public static func folder(projectRoot: URL) -> URL
-    /// <projectRoot>/.hephaestus/tasks/<id>.yml
+    /// <projectRoot>/.hephaestus/tickets/<id>.yml
     public static func url(projectRoot: URL, id: TicketID) -> URL
     /// <projectRoot>/.hephaestus/attachments/<id>
     public static func attachmentsFolder(projectRoot: URL, id: TicketID) -> URL
@@ -333,6 +357,8 @@ public struct TicketFile: Codable, Sendable, Equatable {
     /// The largest number of the series among the ticket file names (Id allocation step 1).
     public static func highestNumber(projectRoot: URL, projectID: String, feedback: Bool) -> Int
     public static func allocateID(projectRoot: URL, feedback: Bool = false) throws -> TicketID
+    /// Data from before tickets: moves the old folder and rewrites the files that hold old names; logs its failures.
+    public static func migrateFromTasks(projectRoot: URL)
     /// Fails with .invalid("<id> is not a ticket id") when `file.id` is not a ticket id, and with
     /// .invalid("<id>.yml already exists") when the file exists.
     public static func create(_ file: TicketFile, projectRoot: URL) throws
@@ -384,7 +410,7 @@ protocol's `TicketAttachment` values; `TicketFile.Comment` maps to `TicketCommen
 
 ## Example
 
-`.hephaestus/tasks/HEPH-12.yml`, exactly as the app writes it:
+`.hephaestus/tickets/HEPH-12.yml`, exactly as the app writes it:
 
 ```yaml
 id: HEPH-12

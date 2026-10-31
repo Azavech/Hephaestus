@@ -78,11 +78,6 @@ empty: ''
   seconds; quoted or not), booleans `true` `false` `yes` `no` `on` `off`, decimal integers.
 - A key absent from the file takes its default: each struct implements `init(from:)` with `decodeIfPresent` for every
   key that has a default. A required key that is absent, or a value that cannot be decoded, makes the file invalid.
-- The data on disk keeps the names it had before tasks were renamed tickets, so that no project needs a migration: the
-  folder `.hephaestus/tasks/` ([ticket-yml.md](ticket-yml.md)), the key `taskCounter` of this file, the key `taskID`
-  and the kind `task` of session files ([sessions.md](sessions.md#metadata-file)), and the keys `tasks` and `task` of
-  bundle files ([../services/bundles.md](../services/bundles.md#bundle-file)). A Swift property named after tickets is
-  coded with the old key through its `CodingKeys`.
 - Keys that are not in the schema are ignored by decoding and kept when the file is rewritten (next section).
 - After decoding, the struct is normalized and validated by the rules of its file.
 - Errors are `DataError` values ([app-storage.md](app-storage.md#errors)) whose message is `<file name>: <problem>`:
@@ -143,7 +138,23 @@ Consequences:
 
 A retired key is a key that earlier versions of the app wrote and this version no longer knows. Decoding ignores it,
 whatever its value, like any unknown key; step 2 removes it, so the next write of the file drops it. project.yml has
-one retired key, `runs` (the run configurations of earlier versions). The ticket and session files have none.
+two retired keys, `runs` (the run configurations of earlier versions) and `taskCounter` (Renamed keys). Session files
+have one, `taskID`, and bundle files one, `tasks` (Renamed keys); ticket files have none.
+
+### Renamed keys
+
+Earlier versions called tickets tasks. A key they wrote under the old name is read when the file has no key of the new
+name, and is a retired key, so the next write of the file writes the new name only:
+
+| File                                                            | Old key or value                 | New key or value                     |
+|-----------------------------------------------------------------|----------------------------------|--------------------------------------|
+| project.yml                                                     | `taskCounter`                    | `ticketCounter`                      |
+| session files ([sessions.md](sessions.md))                      | `taskID`; `kind` value `task`    | `ticketID`; `kind` value `ticket`    |
+| bundle files ([../services/bundles.md](../services/bundles.md)) | `tasks`, and `task` in its items | `tickets`, and `ticket` in its items |
+
+Each struct's `init(from:)` reads the old key with `decodeIfPresent` when the new one is absent; `SessionFile` reads the
+`kind` `task` as `.ticket`. `TicketFile.migrateFromTasks(projectRoot:)` rewrites the files that still hold an old name
+([ticket-yml.md](ticket-yml.md#data-from-before-tickets)).
 
 ### Read-modify-write
 
@@ -176,7 +187,7 @@ Top level, in this order:
 | `created`         | timestamp            | yes      |         | always              | Creation time.                                                                   |
 | `code`            | string               | no       | `.`     | always              | Code folder, relative to the project root.                                       |
 | `docs`            | string               | no       | `docs`  | always              | Docs folder, relative to the code folder.                                        |
-| `taskCounter`     | integer              | no       | `0`     | always              | Last ticket number used ([ticket-yml.md](ticket-yml.md#id-allocation)).          |
+| `ticketCounter`   | integer              | no       | `0`     | always              | Last ticket number used ([ticket-yml.md](ticket-yml.md#id-allocation)).          |
 | `feedbackCounter` | integer              | no       | `0`     | always              | Last feedback ticket number used ([ticket-yml.md](ticket-yml.md#id-allocation)). |
 | `subprojects`     | sequence of strings  | no       | `[]`    | always              | Roots of the sub projects, relative to this project's root.                      |
 | `webTabs`         | sequence of web tabs | no       | `[]`    | always              | Web tabs, in tab strip order.                                                    |
@@ -219,7 +230,7 @@ so the message is that of the first broken rule.
 | `description`           | empty string becomes absent                                         | none                                           |                                                               |
 | `code`                  | relative path normalization                                         | valid relative path                            | `code must be a relative path inside the project`             |
 | `docs`                  | relative path normalization                                         | valid relative path                            | `docs must be a relative path inside the code folder`         |
-| `taskCounter`           | none                                                                | 0 or more                                      | `taskCounter must not be negative`                            |
+| `ticketCounter`         | none                                                                | 0 or more                                      | `ticketCounter must not be negative`                          |
 | `feedbackCounter`       | none                                                                | 0 or more                                      | `feedbackCounter must not be negative`                        |
 | `subprojects[i]`        | relative path normalization; repeated paths removed, the first kept | valid relative path, not `.`                   | `subprojects[<i>] must be a relative path inside the project` |
 | `webTabs[i].id`         | none                                                                | unique in the file                             | `webTabs[<i>].id must be unique`                              |
@@ -297,14 +308,14 @@ one. The new file has:
 | `created`         | `YAMLCoding.now()`                          |
 | `code`            | `.`                                         |
 | `docs`            | `docs`                                      |
-| `taskCounter`     | `0`                                         |
+| `ticketCounter`   | `0`                                         |
 | `feedbackCounter` | `0`                                         |
 | `subprojects`     | `[]`                                        |
 | `webTabs`         | `[]`                                        |
 | `skills`          | `[]`                                        |
 | `claude`          | absent                                      |
 
-`create` also creates `.hephaestus/tasks/` and the docs folder `<code>/<docs>` when they are missing. It fails with
+`create` also creates `.hephaestus/tickets/` and the docs folder `<code>/<docs>` when they are missing. It fails with
 `.invalid("<project root> already has a .hephaestus/project.yml")` when the file exists. Adding a sub project to its
 parent's `subprojects` is a separate `ProjectFile.update` of the parent made by the host.
 
@@ -312,10 +323,10 @@ parent's `subprojects` is a separate `ProjectFile.update` of the parent made by 
 
 The host builds the types of [protocol/types.md](../protocol/types.md) from `ProjectFile`:
 
-- `Project` carries every key of the schema under the same name and nesting, except `taskCounter`, which is
-  `Project.ticketCounter`: `webTabs` items become `WebTab` values (`id`, `title`, `url`, `locked`), and `claude` the
+- `Project` carries every key of the schema under the same name and nesting: `webTabs` items become `WebTab` values
+  (`id`, `title`, `url`, `locked`), and `claude` the
   `ClaudeDefaults` value (both fields `nil` when the file has no `claude`).
-- `Project.ticketCounter` is the number the host uses: the larger of the file's `taskCounter` and the highest ticket
+- `Project.ticketCounter` is the number the host uses: the larger of the file's `ticketCounter` and the highest ticket
   file number ([ticket-yml.md](ticket-yml.md#id-allocation)); `Project.feedbackCounter` the same for `feedbackCounter`
   and the highest feedback ticket file number.
 - `ProjectSummary` takes `id`, `name` and `description` from the file; its `children` follow the order of
@@ -385,7 +396,6 @@ public struct ProjectFile: Codable, Sendable, Equatable {
     public var created: Date
     public var code: String
     public var docs: String
-    /// The key taskCounter of the file, which keeps its name.
     public var ticketCounter: Int
     public var feedbackCounter: Int
     public var subprojects: [String]
@@ -396,7 +406,7 @@ public struct ProjectFile: Codable, Sendable, Equatable {
     /// ".hephaestus/project.yml"
     public static let relativePath: String
     public static let shape: YAMLShape
-    /// ["runs"]: dropped by `encode(preserving:)`.
+    /// ["runs", "taskCounter"]: dropped by `encode(preserving:)`.
     public static let retiredKeys: Set<String>
     /// A new file with the values of "New file"; `created` = YAMLCoding.now().
     public init(id: String, name: String, description: String?)
@@ -430,7 +440,7 @@ public struct ProjectFile: Codable, Sendable, Equatable {
 ```swift
 .mapping([
     "id": .value, "name": .value, "description": .value, "created": .value, "code": .value, "docs": .value,
-    "taskCounter": .value, "feedbackCounter": .value, "subprojects": .value, "skills": .value,
+    "ticketCounter": .value, "feedbackCounter": .value, "subprojects": .value, "skills": .value,
     "webTabs": .list(identity: "id", item: .mapping(["id": .value, "title": .value, "url": .value, "locked": .value])),
     "claude": .mapping(["model": .value, "permissionMode": .value]),
 ])
@@ -452,7 +462,7 @@ description: Multi-device project workbench
 created: 2026-10-29T21:00:00Z
 code: .
 docs: docs
-taskCounter: 12
+ticketCounter: 12
 feedbackCounter: 3
 subprojects:
 - services/api
@@ -479,7 +489,7 @@ name: API
 created: 2026-10-30T09:12:45Z
 code: .
 docs: docs
-taskCounter: 0
+ticketCounter: 0
 feedbackCounter: 0
 subprojects: []
 webTabs: []

@@ -89,7 +89,7 @@ and pushed, GitHub CI rebuilds the app, and every Mac updates and restarts itsel
 | project            | A folder on a Main with `.hephaestus/project.yml`                                                   |
 | project identifier | 2–8 uppercase letters set at creation, unique in the mesh, never changed (`HEPH`); the project's id |
 | sub project        | A normal project inside another project's folder                                                    |
-| ticket             | A unit of work of a project; formerly called task, a name its data on disk keeps                    |
+| ticket             | A unit of work of a project; earlier versions called it task                                        |
 | ticket id          | `<project identifier>-<number>` (`HEPH-12`); numbers are never reused                               |
 | comment            | A Markdown message on a ticket, with optional attached files                                        |
 | code folder        | The project's code root, relative to the project root (default: the project root)                   |

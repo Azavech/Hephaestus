@@ -140,7 +140,7 @@ configuration check fails with `The Forge source project <ID> is not on this Mai
   ([../services/host.md](../services/host.md#74-projectsimport)):
   `host.projects.importFolder(ProjectsImportParams(path: <folder>, name: <name>, identifier: <ID>))`. A project.yml
   that exists, which step 5 checked, is used as it is, with the sub projects it lists; without one, a project.yml is
-  written with that name and identifier, then `.hephaestus/tasks/` and the docs folder when they are missing. The
+  written with that name and identifier, then `.hephaestus/tickets/` and the docs folder when they are missing. The
   project is registered and added to `projects.json`, and `projects.changed` is sent, as for any import. A successful
   import is logged with `Log.host` at `notice` level, with the identifier; then the configuration checks go on.
 - The Forge never clones: it runs no `git clone` and registers only a folder that is already there.

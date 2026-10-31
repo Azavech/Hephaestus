@@ -31,26 +31,27 @@ events and keeps the live statuses. This doc defines what is stored and how `Ses
 `<id>.yml` follows the YAML coding, unknown-key and read-modify-write rules of
 [project-yml.md](project-yml.md#yaml-coding-all-yaml-files). Keys, in this order:
 
-| Key              | YAML type | Required                  | Written   | Meaning                                                                                                                 |
-|------------------|-----------|---------------------------|-----------|-------------------------------------------------------------------------------------------------------------------------|
-| `id`             | string    | yes                       | always    | Session id (a UUID); the id of the file name.                                                                           |
-| `kind`           | string    | yes                       | always    | `project`, `task` (a ticket session), `feedback`, `regeneration` or `bundle`.                                           |
-| `taskID`         | string    | for `task` and `feedback` | when set  | Id of the ticket the session belongs to.                                                                                |
-| `mode`           | string    | for `task`                | when set  | `implement`, `debug`, `review`, `plan` or `custom`.                                                                     |
-| `bundleID`       | string    | for `bundle`              | when set  | Id of the bundle the session coordinates or works for.                                                                  |
-| `title`          | string    | yes                       | always    | Title shown in the UI and passed to the CLI with `--name`; set at creation, by a generated title, by `sessions.update`. |
-| `created`        | timestamp | yes                       | always    | Creation time.                                                                                                          |
-| `updated`        | timestamp | yes                       | always    | Time of the last write (When it is written).                                                                            |
-| `permissionMode` | string    | yes                       | always    | Permission mode of the next process start.                                                                              |
-| `allowsAllTools` | boolean   | no                        | when true | The Main allows every permission request itself. Absent: false.                                                         |
-| `model`          | string    | no                        | when set  | Model passed with `--model`. Absent: no `--model`.                                                                      |
-| `status`         | string    | yes                       | always    | `stopped`, or `failed` when the last process failed (Status).                                                           |
-| `closed`         | timestamp | no                        | when set  | When Claude closed the session (Closed). Absent: open.                                                                  |
+| Key              | YAML type | Required                    | Written   | Meaning                                                                                                                 |
+|------------------|-----------|-----------------------------|-----------|-------------------------------------------------------------------------------------------------------------------------|
+| `id`             | string    | yes                         | always    | Session id (a UUID); the id of the file name.                                                                           |
+| `kind`           | string    | yes                         | always    | `project`, `ticket`, `feedback`, `regeneration` or `bundle`.                                                            |
+| `ticketID`       | string    | for `ticket` and `feedback` | when set  | Id of the ticket the session belongs to.                                                                                |
+| `mode`           | string    | for `ticket`                | when set  | `implement`, `debug`, `review`, `plan` or `custom`.                                                                     |
+| `bundleID`       | string    | for `bundle`                | when set  | Id of the bundle the session coordinates or works for.                                                                  |
+| `title`          | string    | yes                         | always    | Title shown in the UI and passed to the CLI with `--name`; set at creation, by a generated title, by `sessions.update`. |
+| `created`        | timestamp | yes                         | always    | Creation time.                                                                                                          |
+| `updated`        | timestamp | yes                         | always    | Time of the last write (When it is written).                                                                            |
+| `permissionMode` | string    | yes                         | always    | Permission mode of the next process start.                                                                              |
+| `allowsAllTools` | boolean   | no                          | when true | The Main allows every permission request itself. Absent: false.                                                         |
+| `model`          | string    | no                          | when set  | Model passed with `--model`. Absent: no `--model`.                                                                      |
+| `status`         | string    | yes                         | always    | `stopped`, or `failed` when the last process failed (Status).                                                           |
+| `closed`         | timestamp | no                          | when set  | When Claude closed the session (Closed). Absent: open.                                                                  |
 
 The values are those of `SessionKind`, `SessionMode`, `PermissionMode` and `SessionStatus`
-([protocol/types.md](../protocol/types.md)), except that the file keeps the names it had before tasks were renamed
-tickets: the kind `.ticket` is stored as `task`, and `SessionFile.ticketID` as the key `taskID`. How a new session gets
-its title, permission mode and model is defined in [claude/cli.md](../claude/cli.md).
+([protocol/types.md](../protocol/types.md)). How a new session gets its title, permission mode and model is defined in
+[claude/cli.md](../claude/cli.md). A file written before tasks were renamed tickets has the key `taskID` and the kind
+`task`; they are read as `ticketID` and `ticket`, and the next write uses the new names
+([project-yml.md](project-yml.md#renamed-keys)).
 
 ### Validation and normalization
 
@@ -61,8 +62,8 @@ rules are checked in the order of the table, so the message is that of the first
 | Key        | Normalization                                           | Rule                                                                                   | Message                                                                         |
 |------------|---------------------------------------------------------|----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------|
 | `id`       | none                                                    | the UUID of the file name                                                              | `id <id> does not match the file name <file name>`                              |
-| `taskID`   | `TicketID(_:)` form                                     | a ticket id; present for `task` and `feedback`, absent for the other kinds             | `taskID must be set for ticket and feedback sessions only`                      |
-| `mode`     | none                                                    | present for `task`, absent for the other kinds                                         | `mode must be set for ticket sessions only`                                     |
+| `ticketID` | `TicketID(_:)` form                                     | a ticket id; present for `ticket` and `feedback`, absent for the other kinds           | `ticketID must be set for ticket and feedback sessions only`                    |
+| `mode`     | none                                                    | present for `ticket`, absent for the other kinds                                       | `mode must be set for ticket sessions only`                                     |
 | `bundleID` | `BundleID(_:)` form                                     | a bundle id; present for `bundle`, absent for `project`, `feedback` and `regeneration` | `bundleID must be set for bundle sessions and allowed for ticket sessions only` |
 | `title`    | leading and trailing whitespace and line breaks removed | not empty, no line break                                                               | `the title must not be empty and must be on one line`                           |
 | `model`    | whitespace trimmed; empty becomes absent                | no line break                                                                          | `model must be on one line`                                                     |
@@ -71,7 +72,8 @@ A title has no maximum length; line breaks are those of
 [project-yml.md](project-yml.md#validation-and-normalization).
 
 `kind`, `mode`, `permissionMode` and `status` are checked by decoding (`<key>: invalid value`). The ticket does not have
-to exist: the sessions of a deleted ticket keep their `taskID` ([ticket-yml.md](ticket-yml.md#changes-made-by-the-app)).
+to exist: the sessions of a deleted ticket keep their `ticketID`
+([ticket-yml.md](ticket-yml.md#changes-made-by-the-app)).
 
 ### Status
 
@@ -111,11 +113,10 @@ Each write sets `updated` to `YAMLCoding.now()`.
 
 ### Mapping to SessionInfo
 
-`SessionInfo` ([protocol/types.md](../protocol/types.md)) carries the thirteen keys of the file under the same names,
-except `taskID`, which is `SessionInfo.ticketID`, and the kind `task`, which is `.ticket` (`allowsAllTools` false and
-`closed` nil when their key is absent). Its `status` is the live status while a process exists, else the file's
-(Status). `statusLine`, `error` and `pendingPermissions` are kept in memory by `SessionService` and are not
-stored.
+`SessionInfo` ([protocol/types.md](../protocol/types.md)) carries the thirteen keys of the file under the same names
+(`allowsAllTools` false and `closed` nil when their key is absent). Its `status` is the live status while a process
+exists, else the file's (Status). `statusLine`, `error` and `pendingPermissions` are kept in memory by `SessionService`
+and are not stored.
 
 ## Event log
 
@@ -324,12 +325,14 @@ public struct SessionFile: Codable, Sendable, Equatable {
     public init(id: UUID, kind: SessionKind, ticketID: String?, mode: SessionMode?, bundleID: String?, title: String,
                 created: Date, updated: Date, permissionMode: PermissionMode, allowsAllTools: Bool = false,
                 model: String?, status: SessionStatus, closed: Date? = nil)
-    /// Custom coding: ticketID is the key taskID; the kind .ticket is read and written as task (any other kind as its
-    /// raw value); an absent allowsAllTools decodes as false, false is not encoded.
+    /// Custom coding: an absent ticketID is read from the old key taskID, and the kind task is read as .ticket
+    /// (Renamed keys of project-yml.md); an absent allowsAllTools decodes as false, false is not encoded.
     public init(from decoder: any Decoder) throws
     public func encode(to encoder: any Encoder) throws
-    /// .mapping of the thirteen keys of the file (taskID among them), each .value.
+    /// .mapping of the thirteen keys, each .value.
     public static let shape: YAMLShape
+    /// ["taskID"]: dropped by `encode(preserving:)`.
+    public static let retiredKeys: Set<String>
     /// id.uuidString.lowercased(): the name of the files and folder, and the CLI session id.
     public static func fileStem(_ id: UUID) -> String
     /// <projectRoot>/.hephaestus/sessions
@@ -379,8 +382,8 @@ in [app-storage.md](app-storage.md); `YAMLShape` and `YAMLCoding` in [project-ym
 
 ```yaml
 id: 3F2B8C1E-9A4D-4F6B-8E2A-1C5D7E9F0A2B
-kind: task
-taskID: HEPH-12
+kind: ticket
+ticketID: HEPH-12
 mode: implement
 title: Implement HEPH-12
 created: 2026-10-29T22:01:00Z

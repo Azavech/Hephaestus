@@ -466,8 +466,8 @@ Creates a project, or a sub project when `parentID` is set.
   holds a `.hephaestus/project.yml` ("<path> is already a project."), when something that is not a folder exists at
   its path ("<path> already exists."), or when the parent's project.yml is invalid; `locked` (parent migrating).
 - Writes: the folder and its missing intermediate folders; `.hephaestus/project.yml` with `id`, `name`,
-  `description`, `created` (now), `code` `.`, `docs` `docs`, `taskCounter` 0, `feedbackCounter` 0;
-  `.hephaestus/tasks/`; the docs folder
+  `description`, `created` (now), `code` `.`, `docs` `docs`, `ticketCounter` 0, `feedbackCounter` 0;
+  `.hephaestus/tickets/`; the docs folder
   `docs/` when missing. Top-level: the root path is added to `projects.json`
   ([data/app-storage.md](../data/app-storage.md)). Sub project: the folder path is appended to the parent's
   `subprojects`. Steps and their order: [services/host.md](../services/host.md).
@@ -492,7 +492,7 @@ Registers an existing folder as a top-level project.
   `identifier` missing or invalid; existing project.yml invalid); `conflict` (the folder equals, is inside, or contains
   the root of a project of this Main; the identifier of the project or of one of its sub projects is already used, as
   for `projects.create`).
-- Writes, when the folder has no `.hephaestus/project.yml`: that file, then `.hephaestus/tasks/` and the docs folder
+- Writes, when the folder has no `.hephaestus/project.yml`: that file, then `.hephaestus/tickets/` and the docs folder
   `docs/` when they are missing, as `ProjectFile.create` does ([data/project-yml.md](../data/project-yml.md#new-file)).
   The path is added to `projects.json`.
 - Events: `projects.changed`.
@@ -655,9 +655,9 @@ Ticket storage: [data/ticket-yml.md](../data/ticket-yml.md). Attachment files:
 
 - Result: `TicketItem`, the new ticket (`created` and `updated` now, no comments), with a ticket id `<projectID>-<n>`:
   only the Forge creates feedback ticket ids ([forge.feedback](#forgefeedback)).
-- Errors: `conflict` (project.yml is invalid, so `taskCounter` cannot be saved); `badRequest` "no ticket number is left
-  in <projectID>" ([data/ticket-yml.md](../data/ticket-yml.md#id-allocation)).
-- Writes: `taskCounter` in project.yml, then `.hephaestus/tasks/<ticket id>.yml` with the next ticket number
+- Errors: `conflict` (project.yml is invalid, so `ticketCounter` cannot be saved); `badRequest` "no ticket number is
+  left in <projectID>" ([data/ticket-yml.md](../data/ticket-yml.md#id-allocation)).
+- Writes: `ticketCounter` in project.yml, then `.hephaestus/tickets/<ticket id>.yml` with the next ticket number
   ([data/ticket-yml.md](../data/ticket-yml.md)).
 - Events: `project.changed`, `ticket.changed`.
 

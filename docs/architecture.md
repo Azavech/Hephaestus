@@ -935,7 +935,7 @@ The iPad shows ticket `HEPH-12` of project `HEPH`, hosted by the Mac; a window o
    `{"id":57,"kind":"request","method":"tickets.update","params":{"patch":{"status":"review"},"projectID":"HEPH","ticketID":"HEPH-12"}}`.
 3. On the Mac, the `WebSocketListener` hands the frame to the connection's `RPCPeer`; the `HostService` routes
    `tickets.update` to the ticket service ([services/host.md](services/host.md)), which applies the patch, sets
-   `updated` and writes `.hephaestus/tasks/HEPH-12.yml` atomically ([data/ticket-yml.md](data/ticket-yml.md)).
+   `updated` and writes `.hephaestus/tickets/HEPH-12.yml` atomically ([data/ticket-yml.md](data/ticket-yml.md)).
 4. The `HostService` answers the request with the updated `TicketItem` and emits
    `ticket.changed {projectID: "HEPH", ticket}` to every authenticated connection: the iPad, the other remotes, and the
    Mac's own `Workspace` over the `LoopbackChannel` ([protocol/events.md](protocol/events.md)).

@@ -51,7 +51,7 @@ public struct ClaudeTicketContext: Sendable, Equatable {
     public var id: String
     public var name: String
     public var description: String              // TicketItem.description
-    public var yaml: String                     // the text of .hephaestus/tasks/<id>.yml
+    public var yaml: String                     // the text of .hephaestus/tickets/<id>.yml
     public var attachments: [URL]               // every comment attachment, in comment then attachment order
     public var parseError: String?              // TicketItem.parseError
 }

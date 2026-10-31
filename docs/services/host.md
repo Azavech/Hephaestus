@@ -498,15 +498,17 @@ folder has no valid project.yml, is logged and not registered; it stays in the Y
 Used by `load()`, `ProjectService` (create, import), `MigrationService` (the destination's commit), `FileWatcher` (a
 project.yml that appears or becomes valid) and `reloaded` (an entry added to `subprojects`).
 
-1. `ProjectFile.load(projectRoot: root)`: a `DataError` is thrown as it is (§6.9).
-2. `conflict` "<path> is already a project of this Main." when `realRoot` equals the `realRoot` of a registered project;
+1. `TicketFile.migrateFromTasks(projectRoot: root)`: the data of a project written before tasks were renamed tickets
+   moves to the new names ([../data/ticket-yml.md](../data/ticket-yml.md#data-from-before-tickets)); it does not throw.
+2. `ProjectFile.load(projectRoot: root)`: a `DataError` is thrown as it is (§6.9).
+3. `conflict` "<path> is already a project of this Main." when `realRoot` equals the `realRoot` of a registered project;
    `conflict` "Identifier <id> is already used by <name> on this Main." when a registered project has the identifier
    (this check is local; the mesh check is §6.7).
-3. Stores the `HostedProject`, creates its `ProjectWriteQueue`, calls `tickets.load(projectID:)` and
+4. Stores the `HostedProject`, creates its `ProjectWriteQueue`, calls `tickets.load(projectID:)` and
    `bundles.load(projectID:)`.
-4. Registers its sub projects (§6.3); a sub project that fails a check is logged and skipped.
-5. Top-level only: `ProjectsFile.add(root.path)` and save; `watcher.watch(root)`.
-6. Emits `projectsChanged {deviceID, projects: summaries()}`.
+5. Registers its sub projects (§6.3); a sub project that fails a check is logged and skipped.
+6. Top-level only: `ProjectsFile.add(root.path)` and save; `watcher.watch(root)`.
+7. Emits `projectsChanged {deviceID, projects: summaries()}`.
 
 ### 6.5 unregister(_:forget:)
 
@@ -650,7 +652,7 @@ its sub projects in `children`.
    - a folder without `.hephaestus/project.yml` is used as it is; nothing: step 6 creates the folder.
 5. `registry.checkIdentifiersAvailable([identifier])`.
 6. `ProjectFile.create(ProjectFile(id:name:description:), projectRoot: target)`: writes project.yml (creating the
-   folder when missing), `.hephaestus/tasks/` and the docs folder when missing.
+   folder when missing), `.hephaestus/tickets/` and the docs folder when missing.
 7. Top-level: `registry.register(root: target, parentID: nil)`. Sub project: `registry.write(parentID)` with
    `ProjectFile.update(projectRoot: parent root)` appending the normalized folder path to `subprojects` (a `.refused`
    is `conflict`), then `registry.reloaded(parentID, ...)`, which registers the new sub project and emits
@@ -674,7 +676,7 @@ when step 6 created it; in a folder that existed before, the `.hephaestus/projec
      validated as in §7.3; `identifier`.
 4. `registry.checkIdentifiersAvailable(...)`.
 5. Without project.yml: `ProjectFile.create(ProjectFile(id:name:description: nil), projectRoot: path)` (project.yml,
-   `.hephaestus/tasks/`, and the docs folder when missing, [../data/project-yml.md](../data/project-yml.md#new-file)).
+   `.hephaestus/tickets/`, and the docs folder when missing, [../data/project-yml.md](../data/project-yml.md#new-file)).
 6. `registry.register(root: path, parentID: nil)`, which also registers the listed sub projects.
 7. Returns the `ProjectSummary`.
 
@@ -966,13 +968,13 @@ The events of one batch are emitted in this order: project events (`projectsChan
 
 `rel` is the path relative to the owner's root. Every path also goes into `filesChanged`, whatever its row.
 
-| `rel`                                                                     | Action                                                                            |
-|---------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
-| `.hephaestus/project.yml`                                                 | re-read (below)                                                                   |
-| `.hephaestus/tasks/<name>` with `TicketID(fileName: <name>)` of the owner | `tickets.reload(projectID:ticketID:)`                                             |
-| `.hephaestus/tasks`                                                       | `tickets.rescan(projectID:)`                                                      |
-| `<s>/.hephaestus/project.yml`, `<s>` an entry of `subprojects`            | `registry.register` of `<owner root>/<s>` with the owner as parent; errors logged |
-| anything else                                                             | nothing more                                                                      |
+| `rel`                                                                       | Action                                                                            |
+|-----------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
+| `.hephaestus/project.yml`                                                   | re-read (below)                                                                   |
+| `.hephaestus/tickets/<name>` with `TicketID(fileName: <name>)` of the owner | `tickets.reload(projectID:ticketID:)`                                             |
+| `.hephaestus/tickets`                                                       | `tickets.rescan(projectID:)`                                                      |
+| `<s>/.hephaestus/project.yml`, `<s>` an entry of `subprojects`              | `registry.register` of `<owner root>/<s>` with the owner as parent; errors logged |
+| anything else                                                               | nothing more                                                                      |
 
 Re-reading project.yml (`ProjectFile.load`):
 

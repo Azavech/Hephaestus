@@ -34,9 +34,9 @@ logged.
 ## Bundle file
 
 `<project root>/.hephaestus/bundles/<bundle id>.yml`. The YAML coding, unknown-key and read-modify-write rules of
-[../data/project-yml.md](../data/project-yml.md#yaml-coding-all-yaml-files) apply. The keys `tasks` and `task` keep
-the names they had before tasks were renamed tickets; `BundleFile.tickets` and `BundleFile.Item.ticket` are coded with
-them. Top level, in this order:
+[../data/project-yml.md](../data/project-yml.md#yaml-coding-all-yaml-files) apply. A file written before tasks were
+renamed tickets has the key `tasks`, whose items have `task`; they are read as `tickets` and `ticket`, and the next
+write uses the new names ([../data/project-yml.md](../data/project-yml.md#renamed-keys)). Top level, in this order:
 
 | Key           | YAML type         | Required | Default | Written  | Meaning                                                                 |
 |---------------|-------------------|----------|---------|----------|-------------------------------------------------------------------------|
@@ -47,26 +47,26 @@ them. Top level, in this order:
 | `updated`     | timestamp         | yes      |         | always   | Time of the last change made by the app.                                |
 | `base`        | string            | no       | absent  | when set | The branch the worktrees branch from; set by the first `bundles.start`. |
 | `coordinator` | string            | no       | absent  | when set | UUID of the coordinator session; set by the first `bundles.start`.      |
-| `tasks`       | sequence of items | no       | `[]`    | always   | The tickets, in the bundle's order.                                     |
+| `tickets`     | sequence of items | no       | `[]`    | always   | The tickets, in the bundle's order.                                     |
 
-Item of `tasks`:
+Item of `tickets`:
 
 | Key       | YAML type | Required | Default | Written  | Meaning                                                         |
 |-----------|-----------|----------|---------|----------|-----------------------------------------------------------------|
-| `task`    | string    | yes      |         | always   | Ticket id, of the bundle's project.                             |
+| `ticket`  | string    | yes      |         | always   | Ticket id, of the bundle's project.                             |
 | `session` | string    | no       | absent  | when set | UUID of the ticket session the bundle started for it, the last. |
 
 Validation, applied as in [../data/ticket-yml.md](../data/ticket-yml.md#validation-and-normalization):
 
-| Key             | Normalization                                           | Rule                                                    | Message                                                       |
-|-----------------|---------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------------|
-| `id`            | none                                                    | a bundle id equal to the file name without `.yml`       | `id <id> does not match the file name <file name>`            |
-| `name`          | leading and trailing whitespace and line breaks removed | not empty, no line break                                | `the name must not be empty and must be on one line`          |
-| `status`        | none                                                    | a `BundleStatus` value (checked by decoding)            | `status: invalid value`                                       |
-| `base`          | whitespace trimmed; empty becomes absent                | no whitespace, does not start with `-`                  | `base must be a branch name`                                  |
-| `tasks[i].task` | `TicketID(_:)` form                                     | a ticket id of the bundle's project, unique in the file | `tasks[<i>].task must be a ticket of <projectID> listed once` |
+| Key                 | Normalization                                           | Rule                                                    | Message                                                           |
+|---------------------|---------------------------------------------------------|---------------------------------------------------------|-------------------------------------------------------------------|
+| `id`                | none                                                    | a bundle id equal to the file name without `.yml`       | `id <id> does not match the file name <file name>`                |
+| `name`              | leading and trailing whitespace and line breaks removed | not empty, no line break                                | `the name must not be empty and must be on one line`              |
+| `status`            | none                                                    | a `BundleStatus` value (checked by decoding)            | `status: invalid value`                                           |
+| `base`              | whitespace trimmed; empty becomes absent                | no whitespace, does not start with `-`                  | `base must be a branch name`                                      |
+| `tickets[i].ticket` | `TicketID(_:)` form                                     | a ticket id of the bundle's project, unique in the file | `tickets[<i>].ticket must be a ticket of <projectID> listed once` |
 
-`coordinator` and `tasks[i].session` are decoded as `UUID`s. A file that breaks a rule, cannot be read or is not valid
+`coordinator` and `tickets[i].session` are decoded as `UUID`s. A file that breaks a rule, cannot be read or is not valid
 YAML is skipped and logged when the bundles are loaded; the app never writes it. The tickets need not exist: a ticket
 deleted later stays listed, and the UI shows it as deleted.
 
@@ -93,17 +93,17 @@ created: 2026-10-30T08:00:00Z
 updated: 2026-10-30T09:12:00Z
 base: main
 coordinator: 6A1F0C2E-3B4D-4E5F-8A9B-0C1D2E3F4A5B
-tasks:
-- task: HEPH-12
+tickets:
+- ticket: HEPH-12
   session: 0B1E5C6A-2F3D-4E5F-8A9B-0C1D2E3F4A5B
-- task: HEPH-14
+- ticket: HEPH-14
 ```
 
 ## Mapping to BundleItem
 
 `BundleItem` ([../protocol/types.md](../protocol/types.md#bundleitem)): `id`, `name`, `status`, `created`, `updated`,
 `base`, `coordinatorSessionID` = `coordinator`, `tickets` = one `BundleTicket {ticketID, sessionID}` per item of
-`tasks`.
+`tickets`.
 
 ## Worktrees
 
@@ -182,10 +182,10 @@ are frozen; a `name` alone still renames it), `<bundle id> is not running.` for 
 bundle. The status is checked before the tickets. `bundles.create` and `bundles.update` without a ticket: `badRequest`
 `A bundle needs at least one ticket.` A name that is empty or holds a line break: `badRequest` `The name must not be
 empty and must be on one line.` The `ticketIDs` of `bundles.update` are not deduplicated: a ticket given twice breaks
-the file's rule (`badRequest` `tasks[<i>].task must be a ticket of <projectID> listed once`). A ticket is in at most one
-bundle that is not `done`, since it has one worktree, which another bundle would remove: a ticket of `bundles.create`,
-or of the `ticketIDs` of `bundles.update`, that is in another bundle of the project whose status is not `done` fails
-with `conflict` `<ticket id> is in <bundle id>.`, the first such ticket and bundle in order.
+the file's rule (`badRequest` `tickets[<i>].ticket must be a ticket of <projectID> listed once`). A ticket is in at most
+one bundle that is not `done`, since it has one worktree, which another bundle would remove: a ticket of
+`bundles.create`, or of the `ticketIDs` of `bundles.update`, that is in another bundle of the project whose status is
+not `done` fails with `conflict` `<ticket id> is in <bundle id>.`, the first such ticket and bundle in order.
 
 ### Start
 
@@ -287,7 +287,7 @@ public struct BundleID: Hashable, Comparable, Sendable, Codable, CustomStringCon
 
 public struct BundleFile: Codable, Sendable, Equatable {
     public struct Item: Codable, Sendable, Equatable {
-        /// The key task of the item, which keeps its name.
+        /// Read from the old key task when ticket is absent (Renamed keys of project-yml.md).
         public var ticket: String
         public var session: UUID?
         public init(ticket: String, session: UUID?)
@@ -299,14 +299,16 @@ public struct BundleFile: Codable, Sendable, Equatable {
     public var updated: Date
     public var base: String?
     public var coordinator: UUID?
-    /// The key tasks of the file, which keeps its name.
+    /// Read from the old key tasks when tickets is absent (Renamed keys of project-yml.md).
     public var tickets: [Item]
 
     /// The values as given.
     public init(id: String, name: String, status: BundleStatus, created: Date, updated: Date, base: String?,
                 coordinator: UUID?, tickets: [Item])
 
-    public static let shape: YAMLShape    // as TicketFile.shape, "tasks" a list with identity "task"
+    public static let shape: YAMLShape    // as TicketFile.shape, "tickets" a list with identity "ticket"
+    /// ["tasks"]: dropped by `encode(preserving:)`.
+    public static let retiredKeys: Set<String>
     public static func folder(projectRoot: URL) -> URL
     public static func url(projectRoot: URL, id: BundleID) -> URL
     public static func decode(_ text: String, fileID: BundleID) throws -> BundleFile
