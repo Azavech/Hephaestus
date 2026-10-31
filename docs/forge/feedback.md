@@ -101,9 +101,42 @@ progress. Otherwise:
 
 ### macOS
 
+The window is captured with ScreenCaptureKit, which draws it as it is on screen, the sidebar's translucent background
+and content and the web views included. ScreenCaptureKit needs the Screen Recording permission; while the app does not
+have it, the window is drawn by AppKit (Fallback capture), which leaves the sidebar blank.
+
+1. Permission: `CGPreflightScreenCaptureAccess()`. When it returns false, the window is captured by the fallback
+   capture, then, at the first feedback since the app launched (a static flag), `CGRequestScreenCaptureAccess()` is
+   called: macOS shows its Screen Recording prompt when it has not shown it yet. The request comes after the capture,
+   so the prompt is not in the image. Each feedback checks the permission again: the fallback capture is used until
+   `CGPreflightScreenCaptureAccess()` returns true.
+2. With the permission, the window is captured with ScreenCaptureKit (ScreenCaptureKit capture). When that capture
+   fails (the window is not in the shareable content, or a call throws), the fallback capture is used.
+
+The capture (either one) ends with the PNG: `rep.representation(using: .png, properties: [:])`.
+
+#### ScreenCaptureKit capture
+
+1. `content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)`; the window is
+   the `SCWindow` of `content.windows` whose `windowID` is `CGWindowID(window.windowNumber)`. None: the capture fails.
+2. `filter = SCContentFilter(desktopIndependentWindow: scWindow)`: that window alone, whatever covers it.
+3. `config = SCStreamConfiguration()`: `width` = `Int(filter.contentRect.width * CGFloat(filter.pointPixelScale))`,
+   `height` the same with `contentRect.height`, `showsCursor = false`, `ignoreShadowsSingleWindow = true`,
+   `capturesShadowsOnly = false`.
+4. `image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)`;
+   `rep = NSBitmapImageRep(cgImage: image)`, `rep.size = window.frame.size` (points, so that the drawing of step 5 is
+   in points).
+5. Attached sheets: when `window.attachedSheet` is set, it is captured the same way (steps 1–4, its own attached sheet
+   included) and drawn into `rep` through `NSGraphicsContext(bitmapImageRep: rep)` (point coordinates, origin bottom
+   left) at `(sheet.frame.minX - window.frame.minX, sheet.frame.minY - window.frame.minY)`, at its frame size. A sheet
+   that cannot be captured is left out.
+
+#### Fallback capture
+
 1. The frame view is `window.contentView?.superview` (title bar and toolbar included). No frame view: no screenshot.
 2. `rep = frameView.bitmapImageRepForCachingDisplay(in: frameView.bounds)`, then
-   `frameView.cacheDisplay(in: frameView.bounds, to: rep)`.
+   `frameView.cacheDisplay(in: frameView.bounds, to: rep)`. The sidebar's material is not drawn by `cacheDisplay`: the
+   sidebar column is blank in this image.
 3. Web views are drawn by WebKit in another process and are blank in that image. Every `WKWebView` of the frame view's
    subtree (depth first) with `isHiddenOrHasHiddenAncestor` false and a non-empty `visibleRect` is snapshotted with
    `try await webView.takeSnapshot(configuration: nil)` and drawn into `rep` through `NSGraphicsContext(bitmapImageRep:
@@ -112,7 +145,6 @@ progress. Otherwise:
    `frameView.bounds.height - rect.maxY`. A failing snapshot leaves its area as captured.
 4. Attached sheets: when `window.attachedSheet` is set, it is captured the same way (its own attached sheet included)
    and drawn at `(sheet.frame.minX - window.frame.minX, sheet.frame.minY - window.frame.minY)`.
-5. PNG: `rep.representation(using: .png, properties: [:])`.
 
 ### iOS and iPadOS
 
