@@ -837,9 +837,10 @@ exit $status
 
 ## Forge push gate
 
-Forge feedback and regeneration sessions never push ([Claude permissions](#claude-permissions)). After committing,
-Claude calls the MCP tool of its session, with no arguments: `forge_push_docs` in a feedback session, `forge_push_regen`
-in a regeneration session ([claude/mcp.md](claude/mcp.md)). The Forge then checks and pushes, in this order; the first
+The sessions that work in the repository never push ([Claude permissions](#claude-permissions)). After committing,
+Claude calls the MCP tool of its session, with no arguments: `forge_push_docs` in a task session that is not of a
+bundle and in a bundle session, `forge_push_regen` in a regeneration session ([claude/mcp.md](claude/mcp.md)). A
+feedback session changes no file and has no push tool. The Forge then checks and pushes, in this order; the first
 failure ends the call with a text that tells Claude what to do next
 ([forge/pipeline.md](forge/pipeline.md#mcp-tools)):
 
@@ -894,7 +895,7 @@ allow rules. As tried with Claude CLI 2.1.309:
   `git push` from a hook, script, test or build fails, and keeps commits on the identity of git's configuration, with
   UTC dates.
 - Anything else shows the user a permission card: a fetch or pull from another repository or of another ref,
-  `git restore` and `git reset` in another form, `scripts/check-public.sh` with other arguments in a feedback session
+  `git restore` and `git reset` in another form, `scripts/check-public.sh` with other arguments in a Forge session
   (its `--commits` passes them to `git rev-list`, whose `--output` empties a file), `git mv`, a command with an
   environment assignment before it, `git -C <folder> …`, `bash -c "…"`. These cards offer no "Always Allow".
   Feedback, regeneration and bundle sessions start in `acceptEdits`, a `project` or `task` session in its own mode;

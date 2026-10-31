@@ -362,7 +362,8 @@ Mode of a task session. `public var displayName: String` returns the last column
 | `failed`            | The last process failed; `error` gives the reason                                               |
 
 Transitions and the next process start: [claude/cli.md](../claude/cli.md). The session file stores only `stopped` and
-`failed` ([data/sessions.md](../data/sessions.md)).
+`failed` ([data/sessions.md](../data/sessions.md)). A closed session (`SessionInfo.closed` set) has no process once its
+last turn ends, and never starts one again.
 
 ### PermissionMode
 
@@ -380,23 +381,24 @@ How each value is passed to the CLI: [claude/cli.md](../claude/cli.md).
 
 A Claude session ([data/sessions.md](../data/sessions.md)). Identifiable.
 
-| Field                | Type                  | Meaning                                                                                                  |
-|----------------------|-----------------------|----------------------------------------------------------------------------------------------------------|
-| `id`                 | `UUID`                | Session id, also the Claude CLI session id ([claude/cli.md](../claude/cli.md))                           |
-| `kind`               | `SessionKind`         | Kind                                                                                                     |
-| `taskID`             | `String?`             | Task and feedback sessions: the task                                                                     |
-| `mode`               | `SessionMode?`        | Task sessions: the mode                                                                                  |
-| `bundleID`           | `String?`             | Bundle sessions, and task sessions started by a bundle: the bundle                                       |
-| `title`              | `String`              | Title                                                                                                    |
-| `created`            | `Date`                | Creation date                                                                                            |
-| `updated`            | `Date`                | Last change of a stored field                                                                            |
-| `permissionMode`     | `PermissionMode`      | Permission mode                                                                                          |
-| `allowsAllTools`     | `Bool`                | Allow All Tools: the Main answers every permission request itself ([claude/cli.md](../claude/cli.md))    |
-| `model`              | `String?`             | Model alias; `nil`: the CLI's default                                                                    |
-| `status`             | `SessionStatus`       | Status                                                                                                   |
-| `statusLine`         | `String?`             | Live status line during a turn ([claude/cli.md](../claude/cli.md))                                       |
-| `error`              | `String?`             | When `status` is `failed`: the reason (tail of the CLI's standard error, or the start error)             |
-| `pendingPermissions` | `[PermissionRequest]` | Permission requests of the current process waiting for an answer, oldest first; empty when there is none |
+| Field                | Type                  | Meaning                                                                                                          |
+|----------------------|-----------------------|------------------------------------------------------------------------------------------------------------------|
+| `id`                 | `UUID`                | Session id, also the Claude CLI session id ([claude/cli.md](../claude/cli.md))                                   |
+| `kind`               | `SessionKind`         | Kind                                                                                                             |
+| `taskID`             | `String?`             | Task and feedback sessions: the task                                                                             |
+| `mode`               | `SessionMode?`        | Task sessions: the mode                                                                                          |
+| `bundleID`           | `String?`             | Bundle sessions, and task sessions started by a bundle: the bundle                                               |
+| `title`              | `String`              | Title                                                                                                            |
+| `created`            | `Date`                | Creation date                                                                                                    |
+| `updated`            | `Date`                | Last change of a stored field                                                                                    |
+| `permissionMode`     | `PermissionMode`      | Permission mode                                                                                                  |
+| `allowsAllTools`     | `Bool`                | Allow All Tools: the Main answers every permission request itself ([claude/cli.md](../claude/cli.md))            |
+| `model`              | `String?`             | Model alias; `nil`: the CLI's default                                                                            |
+| `status`             | `SessionStatus`       | Status                                                                                                           |
+| `closed`             | `Date?`               | When Claude closed the session; `nil` while it is open ([claude/cli.md](../claude/cli.md#511-closing-a-session)) |
+| `statusLine`         | `String?`             | Live status line during a turn ([claude/cli.md](../claude/cli.md))                                               |
+| `error`              | `String?`             | When `status` is `failed`: the reason (tail of the CLI's standard error, or the start error)                     |
+| `pendingPermissions` | `[PermissionRequest]` | Permission requests of the current process waiting for an answer, oldest first; empty when there is none         |
 
 `statusLine`, `error` and `pendingPermissions` are kept in memory by the Main and are not stored in the session file.
 A client that connects later rebuilds its permission cards from `pendingPermissions`
@@ -642,7 +644,7 @@ The state of a feedback item or of a cycle, in pipeline order: `discussing`, `do
 
 ### ForgeTrigger
 
-What started a cycle: `tool` (`forge_push_docs` pushed the commits of a feedback session), `manual`
+What started a cycle: `tool` (`forge_push_docs` pushed the commits of a task or bundle session), `manual`
 (`forge.regenerate`), `automatic` (a check found the docs ahead of the code).
 
 ### ForgeHead
@@ -712,7 +714,7 @@ The pipeline state of one feedback task. Identifiable by `taskID` (`var id: Stri
 | `projectID`         | `String`     | The source project when the item was created                      |
 | `title`             | `String`     | The task name, kept current                                       |
 | `state`             | `ForgeStage` | State                                                             |
-| `feedbackSessionID` | `UUID`       | The feedback session                                              |
+| `feedbackSessionID` | `UUID`       | The session that created the item: feedback, task or coordinator  |
 | `docsCommit`        | `String?`    | Full SHA of the last commit `forge_push_docs` pushed for the item |
 | `cycleID`           | `UUID?`      | The cycle the item is in                                          |
 | `error`             | `String?`    | The cycle's error while the item is `failed`                      |

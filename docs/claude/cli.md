@@ -492,8 +492,10 @@ allowed rule and start in their own permission mode. The user can change the per
 and allow all its tools (4.4, 5.6); the denied rules and the environment below stay.
 
 Their commits are meant to reach GitHub only through the Forge push tools, which check them for personal data first
-([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)); a `project` or `task` session has no push tool, and the user
-pushes its commits by hand, outside the session. The rules and the environment below stop the direct ways of pushing
+([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). A `task` session that is not of a bundle pushes its
+documentation commits with `forge_push_docs`, and a `bundle` session those of its tasks; a `project` session has no
+push tool, and the user pushes its commits by hand, outside the session. A `feedback` session changes no file
+([prompts.md](prompts.md#feedback-part)). The rules and the environment below stop the direct ways of pushing
 that were tried. In a session, the environment makes a push fail even when the user approves its permission card
 (`git -C <folder> push …`), but not a push that overrides its git settings:
 `git -C <folder> -c url.<url>.pushInsteadOf=<url> push …` pushed despite it, since git uses the longest matching
@@ -851,6 +853,8 @@ public actor SessionService {
                         message: String?, device: DeviceInfo) async throws
     public func update(projectID: String, sessionID: UUID, patch: SessionPatch) async throws -> SessionInfo
     public func delete(projectID: String, sessionID: UUID) async throws
+    /// MCP tool close_session (5.11).
+    public func close(projectID: String, sessionID: UUID) async throws
 
     // other areas
     /// projects.snapshot, Forge: the project's sessions, newest `updated` first.
@@ -877,7 +881,7 @@ types of [../protocol/types.md](../protocol/types.md); `SessionsHistoryResult` i
 
 Storage: `SessionService` reads and writes session files only through the project's `SessionArchive`: `create` at
 creation, `update` at every `user` and `result` event, at `sessions.update`, when a generated title arrives (5.10),
-when a process ends (status `stopped` or
+when the session is closed (5.11), when a process ends (status `stopped` or
 `failed`) and when it cannot start (status `failed`, 5.3), `append` for every event (5.8), `saveAttachment`,
 `history`, `delete`. Live statuses exist only in memory; a session without a process has the file's status.
 
@@ -885,7 +889,8 @@ when a process ends (status `stopped` or
 1…5000 (paging and the 16 MiB cut of [../protocol/methods.md](../protocol/methods.md#sessionshistory),
 [../data/sessions.md](../data/sessions.md#reading-events)).
 
-`SessionInfo` fields: the twelve keys of the session file (`allowsAllTools` false when the file has none); `status`
+`SessionInfo` fields: the thirteen keys of the session file (`allowsAllTools` false and `closed` nil when the file has
+none); `status`
 (live while a process exists); `statusLine` (the last status line text of the current process; nil when there is no
 process and when a user message is written); `error` (the reason of the last failure, nil unless the status is
 `failed`); `pendingPermissions` (`PermissionBroker.pending` of the session, oldest first; empty when there is no
@@ -990,7 +995,8 @@ fails the request and leaves the session unchanged.
 
 ### 5.4 Sending (`sessions.send`)
 
-1. Checks: the session exists (`notFound`); the project is writable (`locked`); `text` (not trimmed) is not empty or
+1. Checks: the session exists (`notFound`); it is not closed (`conflict`, `This conversation is over.`, 5.11); the
+   project is writable (`locked`); `text` (not trimmed) is not empty or
    there is at least one attachment (`badRequest`, `The message is empty.`); when the session has no process, steps 1
    and 2 of 5.3 succeed (`unavailable` with their message); last, `uploads.claim(attachments, projectID:)`
    ([../services/files.md](../services/files.md#7-uploads)), with the upload errors of
@@ -1054,12 +1060,14 @@ Transitions (every change emits `session.changed`):
 | `running`                                          | `can_use_tool`, `allowsAllTools` false                                                    | `waitingPermission` | `permission` event                                                               |
 | `running`                                          | `can_use_tool`, `allowsAllTools` true                                                     | `running`           | answered at once (4.4)                                                           |
 | `waitingPermission`                                | the last pending request is answered or cancelled, or `allowsAllTools` becomes true (4.4) | `running`           | —                                                                                |
-| `running`, `waitingPermission`                     | `result`                                                                                  | `idle`              | pending requests cancelled; restart when one is pending (5.6); idle timer starts |
+| `running`, `waitingPermission`                     | `result` in an open session                                                               | `idle`              | pending requests cancelled; restart when one is pending (5.6); idle timer starts |
 | `idle`                                             | no activity for `sessionIdleMinutes`                                                      | `stopped`           | process terminated                                                               |
 | `starting`, `running`, `waitingPermission`, `idle` | `sessions.stop`                                                                           | `stopped`           | process terminated; `system` event `Stopped` when a turn was in progress (5.6)   |
 | `starting`, `running`, `waitingPermission`, `idle` | the process exits by itself with exit code 0                                              | `stopped`           | 5.7                                                                              |
 | `starting`, `running`, `waitingPermission`, `idle` | the process exits by itself otherwise                                                     | `failed`            | 5.7                                                                              |
 | `starting`, `running`, `waitingPermission`, `idle` | `stopAll`                                                                                 | `stopped`           | process terminated                                                               |
+| `idle`                                             | the session is closed (5.11)                                                              | `stopped`           | process terminated                                                               |
+| `running`, `waitingPermission`                     | `result` in a closed session (5.11)                                                       | `stopped`           | pending requests cancelled; process terminated, no idle timer                    |
 | any                                                | `sessions.delete`                                                                         | (removed)           | 5.9                                                                              |
 
 A status set by a stop (`stopped`) is applied when the process has exited. While a stop is in progress, new messages
@@ -1091,7 +1099,8 @@ wait for it and then start a new process.
   without a message: `starting` → `idle`); in `starting`, `running` or `waitingPermission` a restart is marked pending
   and runs when the status next becomes `idle`. The restart is an operation of its own, after the response:
   `sessions.update` answers before it ends, and clients then get `session.changed` with `stopped` (the old process
-  ended, 5.7), `starting`, then `idle`.
+  ended, 5.7), `starting`, then `idle`. A closed session (5.11) accepts every field but is never restarted: a pending
+  restart is dropped when it is closed.
 
 ### 5.7 Errors and the end of a process
 
@@ -1209,6 +1218,30 @@ public enum SessionTitler {
     public static func sessionTitle(_ title: String, kind: SessionKind, id: String?) -> String
 }
 ```
+
+### 5.11 Closing a session
+
+Claude closes its own session with the MCP tool `close_session` ([mcp.md](mcp.md#626-close_session)), which calls
+`close(projectID:sessionID:)` with the session of its token. Only Claude closes a session: no protocol method does,
+and the app offers no way to reopen one. The prompts say when ([prompts.md](prompts.md)): a `feedback` session as soon
+as no question is open; a `project`, `task` or `bundle` session only when the user says the conversation is done or
+asks to close it. A `regeneration` session has no `close_session` tool.
+
+1. Checks: the session exists (`notFound`); its kind is not `regeneration` (`badRequest`, `A regeneration session
+   cannot be closed.`); the project is writable (`locked`). A session that is already closed is left as it is, and
+   the call succeeds.
+2. `closed` = now is written to the session file (`SessionArchive.update`); a pending restart (5.6) is dropped;
+   `session.changed` is emitted.
+3. The process: in `starting`, `running` or `waitingPermission` (the turn that called the tool), it is terminated when
+   that turn's `result` has been handled, its pending requests cancelled; in `idle`, it is terminated at once; without
+   a process, nothing. It ends as a process the app terminated (5.7): status `stopped`, no `error` event. The tool's
+   result reaches Claude before the process stops.
+
+A closed session keeps its transcript, its attachments and its file; `sessions.history`, `sessions.readAttachment`,
+`sessions.update`, `sessions.stop` and `sessions.delete` work as for any session. It never starts a process again:
+`sessions.send` fails with `conflict` `This conversation is over.` (5.4), and so do the instructions that
+`start_bundle_task` sends to it ([../services/bundles.md](../services/bundles.md)). The UI replaces its composer with
+the text "This conversation is over" ([../ui/sessions.md](../ui/sessions.md#composer)).
 
 ## Depends on
 

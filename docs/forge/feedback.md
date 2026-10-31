@@ -14,11 +14,14 @@ files:
 Feedback can be started from anywhere in the app. The window is captured before anything appears, the user writes a
 comment, and the feedback goes to the Forge host, which creates a task with the screenshot and starts a feedback
 session on it ([pipeline.md](pipeline.md#feedback-intake)). The sending device then opens that session: the Claude
-discussion pops up. Claude first rewrites the feedback as a task, then asks the user whether to implement it now or
-leave it for later ([../claude/prompts.md](../claude/prompts.md#feedback-part)). Until the user explicitly asks for the
-implementation, the session changes no file: it only rewrites the task, comments on it and records in it what the user
-agrees on, answers to its open questions included, and asks the question again after each answer. Only then does it
-edit the documentation.
+discussion pops up. The feedback session only turns the feedback into a task
+([../claude/prompts.md](../claude/prompts.md#feedback-part)): it rewrites the task, comments on it, asks its open
+questions and records the answers in the task. It changes no file, and neither offers to implement the task nor
+implements it. Once no question is open, right after the rewrite when it has none, Claude closes the session
+([../claude/cli.md](../claude/cli.md#511-closing-a-session)): its transcript stays, and "This conversation is over"
+replaces its composer ([../ui/sessions.md](../ui/sessions.md#composer)). The user implements the task later, from the
+task: a task session in mode implement, or a task bundle, whose `forge_push_docs` pushes the documentation it commits
+([pipeline.md](pipeline.md#mcp-tools)).
 
 The screenshot, the comment and the context are personal data ([../general.md](../general.md#personal-data)).
 They stay in the feedback task, under the source project's `.hephaestus/` folder, which git ignores, and the prompt of

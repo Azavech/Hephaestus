@@ -1020,9 +1020,10 @@ Reads a range of a file attached to a message of the session, as `attachments.re
   `TaskAttachment` values, the caller's `deviceID`); starts the process when none is alive; sends the message to the
   CLI with the absolute paths of the attached files ([claude/cli.md](../claude/cli.md)). A message sent during a turn
   is queued by the CLI. When the request fails, the uploads stay as they were ([Using uploads](#using-uploads)).
-- Errors: `notFound` (session; an unknown upload); `badRequest` (empty text and no attachment; an upload named twice,
-  of another project, or incomplete); `conflict` (an upload in use by another request); `unavailable` (no process is
-  alive and the Claude CLI or the Hephaestus tools are not available).
+- Errors: `notFound` (session; an unknown upload); `conflict` `This conversation is over.` (the session is closed,
+  [claude/cli.md](../claude/cli.md#511-closing-a-session)); `badRequest` (empty text and no attachment; an upload named
+  twice, of another project, or incomplete); `conflict` (an upload in use by another request); `unavailable` (no
+  process is alive and the Claude CLI or the Hephaestus tools are not available).
 - Events: `session.event` (`user`), `session.changed` as the status changes, then the events of the turn.
 
 ### sessions.interrupt
@@ -1076,8 +1077,8 @@ Answers a permission request. The first answer wins.
 - Effects: saves the session file. A new title shows at once and reaches the Claude CLI at its next process start
   (`--name`); Claude renames its own session through this method (`rename_session`,
   [claude/mcp.md](../claude/mcp.md#625-rename_session)). A new `permissionMode` or `model` applies at the next process
-  start; an idle process is restarted at once ([claude/cli.md](../claude/cli.md)). Every session kind accepts every
-  field, Forge
+  start; an idle process is restarted at once ([claude/cli.md](../claude/cli.md)), except in a closed session, which
+  never starts a process again. Every session kind accepts every field, Forge
   sessions included. `allowsAllTools` applies at once, without a restart; when it becomes true, every pending
   permission request of the session is answered with `allow` and recorded as `allowAll` with the Main's own device id
   ([claude/cli.md](../claude/cli.md#44-allow-all-tools)).
@@ -1094,6 +1095,13 @@ Answers a permission request. The first answer wins.
   CLI's own transcript is kept.
 - Errors: `notFound` (session).
 - Events: `session.removed`.
+
+### Closing a session
+
+No method closes a session: Claude closes its own session with the MCP tool `close_session`
+([claude/mcp.md](../claude/mcp.md#626-close_session)), and a closed session cannot be reopened
+([claude/cli.md](../claude/cli.md#511-closing-a-session)). Closing sets `SessionInfo.closed`, writes the session file
+and emits `session.changed`; the process stops when the turn in progress ends.
 
 ## Search
 

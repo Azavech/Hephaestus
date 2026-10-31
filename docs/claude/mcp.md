@@ -75,6 +75,8 @@ public protocol MCPHost: Sendable {
     /// ProtocolError whose message is the error text.
     func forgePushDocs(sessionID: UUID) async throws -> String
     func forgePushRegen(sessionID: UUID) async throws -> String
+    /// SessionService.close (cli.md 5.11): closes the session of the token. Failures throw ProtocolError.
+    func closeSession(projectID: String, sessionID: UUID) async throws
     /// The BundleService function of a bundle tool (6.21–6.24): its result as JSON text, or a thrown ProtocolError
     /// whose message is the error text.
     func bundleTool(_ name: String, projectID: String, bundleID: String, arguments: Data) async throws -> String
@@ -243,19 +245,20 @@ given by `MCPToolKinds.kinds(for:)` from this table:
 | 6.1–6.6, 6.8, 6.10, 6.13–6.18                          | `project`, `task`, `bundle`                                 |
 | 6.7 `get_task`, 6.9 `update_task`, 6.11 `comment_task` | `project`, `task`, `bundle`, `feedback` (its own task only) |
 | 6.12 `start_task_session`                              | `project`, `task`                                           |
-| 6.19 `forge_push_docs`                                 | `feedback`, `bundle`                                        |
+| 6.19 `forge_push_docs`                                 | `task`, `bundle`                                            |
 | 6.20 `forge_push_regen`                                | `regeneration`                                              |
 | 6.21–6.24 the bundle tools                             | `bundle`                                                    |
 | 6.25 `rename_session`                                  | `project`, `task`, `bundle`, `feedback`, `regeneration`     |
+| 6.26 `close_session`                                   | `project`, `task`, `bundle`, `feedback`                     |
 
-A `feedback` session therefore lists `get_task`, `update_task`, `comment_task`, `forge_push_docs` and
-`rename_session`, and a `regeneration` session lists `forge_push_regen` and `rename_session`. A feedback session
-uses `update_task` and `comment_task` to turn its feedback into a task ([prompts.md](prompts.md#feedback-part)). Forge sessions write to the public repository
-([../public-repository.md](../public-repository.md)): they get no tool that reads the devices, projects, tasks,
-web tabs, sessions or skills of the mesh beyond their own feedback task, none that changes them beyond the name,
-description, status and comments of that task and the title of their own session, and none that runs a command or
-starts a session, so nothing they call
-can push around the Forge push gate ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). `MCPToolKinds.swift`
+A `feedback` session therefore lists `get_task`, `update_task`, `comment_task`, `rename_session` and `close_session`,
+and a `regeneration` session lists `forge_push_regen` and `rename_session`. A feedback session uses `update_task` and
+`comment_task` to turn its feedback into a task, then `close_session` once no question is open
+([prompts.md](prompts.md#feedback-part)); it has no push tool, since it changes no file. Forge sessions write to the
+public repository ([../public-repository.md](../public-repository.md)): they get no tool that reads the devices,
+projects, tasks, web tabs, sessions or skills of the mesh beyond their own feedback task, none that changes them beyond
+the name, description, status and comments of that task and the title of their own session, and none that runs a
+command or starts a session, so nothing they call can push around the Forge push gate ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). `MCPToolKinds.swift`
 holds this table and nothing else: `kinds(for:)` names each tool of the table (the first row: the 14 tools of 6.1–6.6,
 6.8, 6.10 and 6.13–6.18) and returns an empty set for any other name, so a tool added to the catalog is listed
 and callable in no session until the table names it.
@@ -263,7 +266,12 @@ and callable in no session until the table names it.
 A `bundle` session, the coordinator of a bundle ([../services/bundles.md](../services/bundles.md)), gets the tools
 that read and change projects and tasks, the bundle tools and `forge_push_docs`, which pushes only for the bundles of
 the Forge source project. It starts its task sessions with `start_bundle_task` alone, and gets no tool that runs a
-command: in the Forge source project it holds a push tool, like a feedback session.
+command: in the Forge source project it holds a push tool.
+
+A `task` session lists `forge_push_docs` too. It pushes only for a task session of the Forge source project, on the
+Forge host, that is not a session of a bundle ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)): implementing a
+feedback task there pushes its documentation and starts the regeneration, as a bundle does. The task sessions of a
+bundle leave the push to their coordinator.
 
 ```swift
 struct MCPToolDefinition: Sendable {
@@ -734,12 +742,12 @@ Calls `skills.files {name}` and `skills.readFile {name, path: "SKILL.md"}` on th
 3. `skills.writeFile {name, path: "SKILL.md", data: <content as UTF-8>}`.
 4. Result: the skill's `SkillSummary` from `skills.list`.
 
-### 6.19 forge_push_docs (feedback and bundle sessions)
+### 6.19 forge_push_docs (task and bundle sessions)
 
 ```json
 {
   "name": "forge_push_docs",
-  "description": "Check the documentation commits of this feedback or bundle that are not on GitHub yet for personal data, then push them. Commit first, once the user agrees. On an error, do what the message says, then call it again.",
+  "description": "Check the documentation commits of this task or bundle that are not on GitHub yet for personal data, then push them. Commit first, once the user agrees. On an error, do what the message says, then call it again.",
   "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false}
 }
 ```
@@ -851,6 +859,20 @@ sessionID, patch: {title}}` with the token's `projectID` and `sessionID` on this
 same rules as Rename… in the app apply, and the running process is not restarted: the title shows at once and reaches
 the CLI at its next start ([cli.md](cli.md#56-interrupt-stop-idle-stop-option-changes)). Result: the `SessionInfo`.
 
+### 6.26 close_session
+
+```json
+{
+  "name": "close_session",
+  "description": "Close this session for good: it keeps its transcript, accepts no more messages and cannot be reopened. Its Claude process stops once this turn ends. Close a feedback session as soon as no question is open; close any other session only when the user says the conversation is done or asks you to close it.",
+  "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false}
+}
+```
+
+Calls `MCPHost.closeSession(projectID:sessionID:)` with the token's `projectID` and `sessionID`
+([cli.md](cli.md#511-closing-a-session)). Result: `This conversation is over. End your turn now: the session accepts no
+more messages.`
+
 ## 7. Locating a project and forwarding
 
 A tool acting on a project (every tool with `project`, `task` or `parent`) finds the Main hosting it:
@@ -864,8 +886,8 @@ A tool acting on a project (every tool with `project`, `task` or `parent`) finds
 The tool's protocol calls then go to that Main with `MCPHost.perform(_:params:on:)`: on this Main they run in process,
 on another Main they are requests over the peer link ([../services/host.md](../services/host.md)), exactly like the
 requests of a remote device. Nothing else is forwarded: `list_devices` and the skills tools use this Main (the registry
-and the skills library are synced between Mains), `rename_session` renames a session of this Main, and the Forge and
-bundle tools call the local hooks.
+and the skills library are synced between Mains), `rename_session` renames a session of this Main, and the Forge,
+bundle and close tools call the local hooks.
 
 ## 8. Results and errors
 
@@ -881,7 +903,7 @@ bundle tools call the local hooks.
 | an argument is missing, of the wrong type, or breaks a rule of section 6 | true      | `Invalid arguments: <what is wrong>.`                                   |
 | a protocol call fails with `ProtocolError`                               | true      | `<code>: <message>`, for example `locked: Project HEPH is being moved.` |
 | a tool-specific check fails                                              | true      | the message given in section 6                                          |
-| a Forge or bundle tool's `MCPHost` call throws (6.19–6.24)               | true      | the error's message alone                                               |
+| a Forge, bundle or close tool's `MCPHost` call throws (6.19–6.24, 6.26)  | true      | the error's message alone                                               |
 
 ## Depends on
 
@@ -894,4 +916,4 @@ bundle tools call the local hooks.
 | the public repository rule that limits the tools of Forge sessions                                                                                                                                                                 | [../public-repository.md](../public-repository.md) |
 | `Log.host`, logging rules                                                                                                                                                                                                          | [../architecture.md](../architecture.md)           |
 | SKILL.md validation                                                                                                                                                                                                                | [skills.md](skills.md)                             |
-| token registration by session processes                                                                                                                                                                                            | [cli.md](cli.md)                                   |
+| token registration by session processes, `SessionService.close` (closing a session)                                                                                                                                                | [cli.md](cli.md)                                   |

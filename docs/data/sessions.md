@@ -45,6 +45,7 @@ events and keeps the live statuses. This doc defines what is stored and how `Ses
 | `allowsAllTools` | boolean   | no                        | when true | The Main allows every permission request itself. Absent: false.                                                         |
 | `model`          | string    | no                        | when set  | Model passed with `--model`. Absent: no `--model`.                                                                      |
 | `status`         | string    | yes                       | always    | `stopped`, or `failed` when the last process failed (Status).                                                           |
+| `closed`         | timestamp | no                        | when set  | When Claude closed the session (Closed). Absent: open.                                                                  |
 
 The values are those of `SessionKind`, `SessionMode`, `PermissionMode` and `SessionStatus`
 ([protocol/types.md](../protocol/types.md)). How a new session gets its title, permission mode and model is defined in
@@ -77,6 +78,13 @@ The live statuses `idle`, `starting`, `running` and `waitingPermission` exist on
 The file holds `stopped`, or `failed` when the last process failed ([claude/cli.md](../claude/cli.md)). When a file is
 read, `SessionFile.decode` reads any value other than `failed` as `stopped`.
 
+### Closed
+
+A session whose file has `closed` is closed: Claude closed it with the MCP tool `close_session`
+([claude/cli.md](../claude/cli.md#511-closing-a-session)). The key is written once and never removed: a closed session
+cannot be reopened. Its transcript, its attachments and the rest of its file stay as they are, and it is deleted like
+any other session.
+
 ### When it is written
 
 `SessionService` writes the file through `SessionArchive`:
@@ -85,6 +93,7 @@ read, `SessionFile.decode` reads any value other than `failed` as `stopped`.
 - when a `user` or a `result` event is appended;
 - on each `sessions.update` (title, permission mode, model, Allow All Tools), Claude's `rename_session` included;
 - when the title generated from the first message arrives ([claude/cli.md](../claude/cli.md) 5.10);
+- when Claude closes the session (`closed`);
 - when a process ends (status `stopped` or `failed`), and when a process cannot be started (status `failed`,
   [claude/cli.md](../claude/cli.md) 5.3).
 
@@ -101,8 +110,8 @@ Each write sets `updated` to `YAMLCoding.now()`.
 
 ### Mapping to SessionInfo
 
-`SessionInfo` ([protocol/types.md](../protocol/types.md)) carries the twelve keys of the file under the same names
-(`allowsAllTools` false when the key is absent). Its `status` is the live status while a process exists, else the
+`SessionInfo` ([protocol/types.md](../protocol/types.md)) carries the thirteen keys of the file under the same names
+(`allowsAllTools` false and `closed` nil when their key is absent). Its `status` is the live status while a process exists, else the
 file's (Status). `statusLine`, `error` and `pendingPermissions` are kept in memory by `SessionService` and are not
 stored.
 
@@ -306,15 +315,17 @@ public struct SessionFile: Codable, Sendable, Equatable {
     public var allowsAllTools: Bool
     public var model: String?
     public var status: SessionStatus
+    public var closed: Date?
 
-    /// The values as given, except `created` and `updated`, which pass through YAMLCoding.wholeSeconds(_:).
+    /// The values as given, except `created`, `updated` and `closed`, which pass through
+    /// YAMLCoding.wholeSeconds(_:).
     public init(id: UUID, kind: SessionKind, taskID: String?, mode: SessionMode?, bundleID: String?, title: String,
                 created: Date, updated: Date, permissionMode: PermissionMode, allowsAllTools: Bool = false,
-                model: String?, status: SessionStatus)
+                model: String?, status: SessionStatus, closed: Date? = nil)
     /// Custom coding for allowsAllTools only: an absent key decodes as false, false is not encoded.
     public init(from decoder: any Decoder) throws
     public func encode(to encoder: any Encoder) throws
-    /// .mapping of the twelve keys, each .value.
+    /// .mapping of the thirteen keys, each .value.
     public static let shape: YAMLShape
     /// id.uuidString.lowercased(): the name of the files and folder, and the CLI session id.
     public static func fileStem(_ id: UUID) -> String

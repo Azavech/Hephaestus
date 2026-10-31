@@ -198,15 +198,17 @@ transcript.
 
 | Item                                                                 | Enabled          | Action                                                       |
 |----------------------------------------------------------------------|------------------|--------------------------------------------------------------|
-| Permission Mode ▸ the five modes, current checked                    | always           | `update(permissionMode:)`                                    |
-| Allow All Tools (checked when `allowsAllTools` is true)              | always           | `update(allowsAllTools:)`, the opposite of the current value |
-| Model ▸ Default, `opus`, `sonnet`, `haiku` (current checked), Other… | always           | `update(model:)`; Default sends `""`                         |
+| Permission Mode ▸ the five modes, current checked                    | open session     | `update(permissionMode:)`                                    |
+| Allow All Tools (checked when `allowsAllTools` is true)              | open session     | `update(allowsAllTools:)`, the opposite of the current value |
+| Model ▸ Default, `opus`, `sonnet`, `haiku` (current checked), Other… | open session     | `update(model:)`; Default sends `""`                         |
 | Rename…                                                              | always           | rename sheet, then `update(title:)`                          |
 | Stop Process                                                         | live CLI process | `stop()`                                                     |
 | Delete Session…                                                      | always           | confirmation, then `delete()`                                |
 
 - While the project's Main is not connected, every item is disabled, as in the
   [session context menu](#session-context-menu).
+- "Open session": `closed` is nil. In a closed session, which never starts Claude again, Permission Mode, Allow All
+  Tools and Model are disabled, and so are those of the session context menu.
 - Model ▸ Other… opens a sheet with a model text field (trimmed, required), Cancel and Set.
 - The rename sheet has a Title field prefilled with the title, Cancel and Save (disabled when the trimmed title is
   empty or holds a line break; a title has no maximum length).
@@ -431,6 +433,11 @@ Behavior:
 
 The session's composer is `MessageComposer` ([Message composer](#message-composer)) with the placeholder "Message
 Claude", `mainDeviceID: store.mainDeviceID` and `projectID: store.projectID`.
+
+- Closed session (`model.info?.closed` set, [../claude/cli.md](../claude/cli.md#511-closing-a-session)): no composer.
+  In its place, the text "This conversation is over" (secondary, centered, with the vertical padding of the composer).
+  A closed session cannot be reopened, so nothing else is offered; the transcript stays as it is. The draft of the
+  view is discarded when the session becomes closed while it is shown.
 
 - Send is possible when the Main is connected and `model.info` is known, whatever the status: a message sent during a
   turn is queued by the CLI ([../protocol/methods.md](../protocol/methods.md#sessionssend)). Send calls

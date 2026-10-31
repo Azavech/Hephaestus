@@ -1023,6 +1023,8 @@ migration checks, [../devices/migration.md](../devices/migration.md#outcome-chec
 - `localProjectRoot(_:)`: `registry.hosted(_:).root`, `nil` when not hosted.
 - `forgePushDocs(sessionID:)`: `forge.pushDocs(sessionID: sessionID)`.
 - `forgePushRegen(sessionID:)`: `forge.pushRegen(sessionID: sessionID)`.
+- `closeSession(projectID:sessionID:)`: `sessions.close(projectID: projectID, sessionID: sessionID)`
+  ([../claude/cli.md](../claude/cli.md#511-closing-a-session)).
 - `bundleTool(_:projectID:bundleID:arguments:)`: the `BundleService` function of the tool
   ([bundles.md](bundles.md#tools-of-the-coordinator)), its result encoded as the tool's JSON text.
 
