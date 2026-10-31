@@ -296,10 +296,10 @@ A bundle. Identifiable.
 
 Changes for `bundles.update`. A `nil` field leaves the value unchanged.
 
-| Field       | Type        | Meaning                                                  |
-|-------------|-------------|----------------------------------------------------------|
-| `name`      | `String?`   | New name, trimmed: not empty, on one line                |
-| `ticketIDs` | `[String]?` | Replaces the tickets, in order (`draft` and `done` only) |
+| Field       | Type        | Meaning                                       |
+|-------------|-------------|-----------------------------------------------|
+| `name`      | `String?`   | New name, trimmed: not empty, on one line     |
+| `ticketIDs` | `[String]?` | Replaces the tickets, in order (`draft` only) |
 
 ## Files (FileTypes.swift)
 
