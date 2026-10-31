@@ -158,15 +158,14 @@ The `error` member is `{"code": <code>, "message": <text>}`. The codes, with the
 | Topic                 | Events                                           |
 |-----------------------|--------------------------------------------------|
 | `session:<sessionID>` | `session.event`, `session.delta` of that session |
-| `run:<runID>`         | `run.output` of that run                         |
 
 - The id is written in canonical uppercase form; a server parses it case-insensitively (`Topic`).
 - `subscribe {topics}` and `unsubscribe {topics}` ([methods.md](methods.md#subscribe)) change the subscriptions of the
   connection they are sent on. Subscriptions end when the connection closes.
 - Subscribing to a topic already subscribed, or unsubscribing a topic not subscribed, changes nothing. A topic whose
-  session or run does not exist (yet or any more) is accepted.
-- A client subscribes to the topics of what it shows (an open session, a run console) and subscribes again after each
-  reconnect. It subscribes before fetching what the topic streams (`sessions.history`, `runs.output`), so that nothing
+  session does not exist (yet or any more) is accepted.
+- A client subscribes to the topics of what it shows (an open session) and subscribes again after each
+  reconnect. It subscribes before fetching what the topic streams (`sessions.history`), so that nothing
   is lost between the fetch and the first event.
 
 ## Delivery rules
@@ -178,16 +177,16 @@ The `error` member is `{"code": <code>, "message": <text>}`. The codes, with the
   the events of each Main on its own connection to that Main.
 - Frames on one connection arrive in the order they were sent. There is no order across connections.
 - No replay: events emitted while a connection is down are lost. After each successful handshake the client fetches
-  again everything it shows (`projects.list`, `projects.snapshot`, `sessions.history`, `runs.output`, …) and
+  again everything it shows (`projects.list`, `projects.snapshot`, `sessions.history`, …) and
   subscribes again ([client/workspace.md](../client/workspace.md)).
-- Each event carries the complete new state of what it names, or its removal, except `session.delta` and `run.output`,
-  which carry an increment. A client applies events as follows:
+- Each event carries the complete new state of what it names, or its removal, except `session.delta`,
+  which carries an increment. A client applies events as follows:
   - An event about something the client does not mirror is ignored.
   - While a request that loads a mirror is in flight (`hello` for the mesh snapshot, `projects.list`, `skills.list`,
     `projects.snapshot`, `sessions.history`), the events for that mirror are queued. Right after the response is
     stored, the queued events are applied in arrival order. This is required: an event can arrive before the response
     to a request the server answered from older state.
-  - `run.output` and `session.delta` follow the rules of [events.md](events.md).
+  - `session.delta` follows the rules of [events.md](events.md).
 
 ## Timeouts
 
@@ -236,8 +235,7 @@ public struct EmptyPayload: Codable, Sendable, Hashable {
 /// A subscription topic.
 public enum Topic: RawRepresentable, Hashable, Sendable {
     case session(UUID)
-    case run(UUID)
-    public init?(rawValue: String)        // "session:<uuid>" or "run:<uuid>", uuid in either case; anything else is nil
+    public init?(rawValue: String)        // "session:<uuid>", uuid in either case; anything else is nil
     public var rawValue: String { get }   // uuid in canonical uppercase form
 }
 

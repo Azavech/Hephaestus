@@ -196,15 +196,12 @@ default value. `ClaudeDefaults`, `SessionKind` and `SessionMode` are wire types 
   `- list_tasks, get_task, create_task, update_task, delete_task: the tasks of a project.`,
   `- comment_task: add a comment to a task, with files.`,
   `- start_task_session: start a Claude session that works on a task (implement, debug, review, plan, or custom instructions).`,
-  `- list_runs, start_run, stop_run, get_run_output: the run configurations of a project and their runs.`,
   `- list_web_tabs, open_web_tab: the web tabs of a project.`,
   `- search: search projects, tasks, comments, docs, code, skills, web tabs, sessions and devices.`,
   `- list_skills, get_skill, save_skill: the Hephaestus skills library.` and the rename line;
-- bundle: the same lines without the `start_task_session` line, and with
-  `- list_runs, get_run_output: the run configurations of a project and the output of their runs.` in place of the
-  `list_runs` line.
+- bundle: the same lines without the `start_task_session` line.
 
-The rename line, last of the tool lines of every kind ([mcp.md](mcp.md#629-rename_session)):
+The rename line, last of the tool lines of every kind ([mcp.md](mcp.md#625-rename_session)):
 `- rename_session: rename this session when the user asks you to.`
 
 ## Common part
@@ -233,7 +230,7 @@ Devices of the mesh:
 
 Hephaestus keeps the data of the project in {projectRoot}/.hephaestus/:
 
-- project.yml: the project (identifier, name, description, code and docs folders, sub projects, web tabs, run configurations, enabled skills, Claude defaults).
+- project.yml: the project (identifier, name, description, code and docs folders, sub projects, web tabs, enabled skills, Claude defaults).
 - tasks/<task id>.yml: one file per task, for example tasks/{projectID}-12.yml.
 - attachments/<task id>/: the files attached to the comments of a task.
 - sessions/: the Claude sessions of the project, this one included.
@@ -272,8 +269,6 @@ The mcp__hephaestus__ tools act on the data of every Main of the mesh, and every
 Rules:
 
 - Use these tools to create and change projects, tasks, comments and web tabs, and to delete tasks. Never create, edit or delete files under .hephaestus/ yourself.
-- Run configurations are created and changed by the user, in the app.
-- To run a run configuration of a project, use start_run.
 - Reach other projects, on this Mac or on another Main, through these tools and their identifier.
 ````
 
@@ -362,7 +357,7 @@ Implement {taskID}:
 ````text
 ## Mode: debug
 
-Debug {taskID}: find the root cause of the problem it describes. Reproduce the problem or collect evidence from the code, logs and runs, then explain the root cause to the user with that evidence. Propose a fix, and apply it only after the user confirms.
+Debug {taskID}: find the root cause of the problem it describes. Reproduce the problem or collect evidence from the code and logs, then explain the root cause to the user with that evidence. Propose a fix, and apply it only after the user confirms.
 ````
 
 ### Mode review

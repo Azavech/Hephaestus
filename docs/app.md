@@ -17,7 +17,7 @@ One multiplatform app target and one Swift package hold the whole app ([architec
 
 ## Devices
 
-- **Main**: a Mac where projects live. It runs the host service: the network listener, Claude CLI sessions, runs, file
+- **Main**: a Mac where projects live. It runs the host service: the network listener, Claude CLI sessions, file
   watching, search, the skills library, and the Forge when configured. Only Macs can be Mains, because Mains run the
   Claude CLI and the user's toolchains. A Mac becomes a Main with "Use this Mac as a Main".
 - **Remote**: every device. It connects to every Main of the mesh and can view and control everything on it.
@@ -43,7 +43,6 @@ A project is a folder on a Main with a `.hephaestus/project.yml` file ([data/pro
 | Docs         | Markdown files of the docs folder (default `docs/` in the code folder), viewed and edited  | [ui/docs.md](ui/docs.md)                                         |
 | Web tabs     | Integrated browser tabs shared by all devices; locked tabs cannot be closed                | [ui/web.md](ui/web.md)                                           |
 | Claude       | Project chat sessions; task sessions; Claude acts on Hephaestus through its tools          | [ui/sessions.md](ui/sessions.md), [claude/cli.md](claude/cli.md) |
-| Runs         | Run configurations (name, command) executed on the Main, with live output                  | [ui/runs.md](ui/runs.md)                                         |
 | Skills       | Which skills of the library the project's sessions get                                     | [claude/skills.md](claude/skills.md)                             |
 
 Workspace features, not tied to a project: Devices, Skills (the skills library), Forge, Search, Feedback.
@@ -51,7 +50,7 @@ Workspace features, not tied to a project: Devices, Skills (the skills library),
 ## User interface
 
 - A path bar at the top selects `{Main} ▸ {project} ▸ {sub project}`, like Xcode's; every segment is a menu.
-- A sidebar lists the project sections Overview, Tasks, Code, Docs, Web, Claude, Runs, and the workspace sections
+- A sidebar lists the project sections Overview, Tasks, Code, Docs, Web, Claude, and the workspace sections
   Devices, Skills, Forge.
 - Search (⌘K) covers projects, tasks, comments, docs, code, skills, web tabs, sessions and devices.
 - Feedback (⌘⇧F, toolbar, Help menu, shake on iOS/iPadOS) can be started anywhere.
@@ -67,7 +66,7 @@ Details: [ui/shell.md](ui/shell.md).
 ## Real time
 
 Every change on a Main is pushed to every connected device as it happens, whatever made it: a device, Claude, an
-editor, git. Session transcripts, run output and file changes stream live to the devices showing them
+editor, git. Session transcripts and file changes stream live to the devices showing them
 ([client/workspace.md](client/workspace.md), [protocol/events.md](protocol/events.md)).
 
 ## Feedback and Forge
@@ -98,7 +97,6 @@ and pushed, GitHub CI rebuilds the app, and every Mac updates and restarts itsel
 | web tab            | A browser tab stored in the project, shown on every device; a locked tab cannot be closed           |
 | session            | A Claude CLI conversation run on a Main: project chat, task session, feedback or regeneration       |
 | permission mode    | How a session asks before acting: `manual`, `acceptEdits`, `auto`, `plan`, `bypassPermissions`      |
-| run                | A run configuration (name, command) being executed on a Main                                        |
 | skill              | A Claude skill (folder with `SKILL.md`) of a Main's skills library, separate from `~/.claude`       |
 | Move to…           | Moving a project from one Main to another (migration)                                               |
 | Forge              | The feedback → docs → regeneration → CI → update pipeline                                           |

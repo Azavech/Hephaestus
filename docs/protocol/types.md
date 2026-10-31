@@ -7,7 +7,6 @@ files:
 - HephaestusKit/Sources/HephCore/Protocol/Types/BundleTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/FileTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/SessionTypes.swift
-- HephaestusKit/Sources/HephCore/Protocol/Types/RunTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/SearchTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/SkillTypes.swift
 - HephaestusKit/Sources/HephCore/Protocol/Types/MigrationTypes.swift
@@ -33,9 +32,9 @@ in [methods.md](methods.md), the event payloads in [events.md](events.md), the J
 - Identifiers: `projectID` is the project identifier (2–8 letters A–Z, [data/project-yml.md](../data/project-yml.md));
   `taskID` is `<projectID>-<n>`, or `<projectID>-F<n>` for a feedback task
   ([data/task-yml.md](../data/task-yml.md#task-id)); `bundleID` is `<projectID>-B<n>`
-  ([services/bundles.md](../services/bundles.md#bundle-id)); device, mesh, session, comment, web tab, run,
+  ([services/bundles.md](../services/bundles.md#bundle-id)); device, mesh, session, comment, web tab,
   migration, upload and Forge cycle ids are `UUID`s; session event ids are strings (`SessionEvent`).
-- Names (project, sub project, task, run configuration, session title) are trimmed of surrounding white space and line
+- Names (project, sub project, task, session title) are trimmed of surrounding white space and line
   breaks, must not be empty and must be on one line; they have no maximum length
   ([methods.md](methods.md#paths)).
 - Project-relative paths are `/`-separated, without a leading `/`; `""` is the project root.
@@ -137,7 +136,6 @@ Identifiable.
 | `feedbackCounter` | `Int`            | Last feedback task number used                               |
 | `subprojects`     | `[String]`       | Relative paths of the sub project roots                      |
 | `webTabs`         | `[WebTab]`       | Web tabs, in tab strip order                                 |
-| `runs`            | `[RunConfig]`    | Run configurations                                           |
 | `skills`          | `[String]`       | Names of the enabled library skills; empty means all skills  |
 | `claude`          | `ClaudeDefaults` | Defaults for new sessions                                    |
 | `deviceID`        | `UUID`           | The Main hosting the project                                 |
@@ -164,7 +162,6 @@ Changes for `projects.update`. A `nil` field leaves the value unchanged.
 |---------------|-------------------|-------------------------------------------------------------------------------------------------|
 | `name`        | `String?`         | New name, trimmed: not empty, on one line                                                       |
 | `description` | `String?`         | New description; an empty string removes it                                                     |
-| `runs`        | `[RunConfig]?`    | Replaces the run configurations                                                                 |
 | `skills`      | `[String]?`       | Replaces the enabled skills; empty means all skills                                             |
 | `claude`      | `ClaudeDefaults?` | Replaces the whole `claude` block: a `nil` field removes that key, and so does an empty `model` |
 
@@ -486,42 +483,6 @@ Kind of a streamed fragment (`session.delta`, [events.md](events.md#sessiondelta
 | `text`      | Assistant text               |
 | `thinking`  | Thinking text                |
 | `toolInput` | Partial JSON of a tool input |
-
-## Runs (RunTypes.swift)
-
-### RunConfig
-
-A run configuration of project.yml. Identifiable by `name` (`var id: String { name }`).
-
-| Field     | Type      | Meaning                                                      |
-|-----------|-----------|--------------------------------------------------------------|
-| `name`    | `String`  | Name, unique within the project: not empty, on one line      |
-| `command` | `String`  | Shell command ([services/runs.md](../services/runs.md))      |
-| `cwd`     | `String?` | Working folder relative to the project root; `nil`: the root |
-
-### RunState
-
-| Raw value   | Meaning                                                                                              |
-|-------------|------------------------------------------------------------------------------------------------------|
-| `running`   | The process runs                                                                                     |
-| `succeeded` | The process exited with status 0 and no stop was requested                                           |
-| `failed`    | No stop was requested, and the process exited with another status or was killed by a signal          |
-| `stopped`   | The process ended after a stop was requested: `runs.stop`, removal of the project, the Main stopping |
-
-### RunInfo
-
-An execution of a run configuration ([services/runs.md](../services/runs.md)). Identifiable.
-
-| Field       | Type       | Meaning                                                                                           |
-|-------------|------------|---------------------------------------------------------------------------------------------------|
-| `id`        | `UUID`     | Run id                                                                                            |
-| `projectID` | `String`   | Project                                                                                           |
-| `name`      | `String`   | Name of the run configuration                                                                     |
-| `command`   | `String`   | Command as it was started                                                                         |
-| `startedAt` | `Date`     | Start date                                                                                        |
-| `endedAt`   | `Date?`    | End date                                                                                          |
-| `exitCode`  | `Int?`     | Exit status; `128 + <signal number>` when the process was killed by a signal; `nil` while running |
-| `state`     | `RunState` | State                                                                                             |
 
 ## Search (SearchTypes.swift)
 

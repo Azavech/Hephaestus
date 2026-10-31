@@ -82,7 +82,7 @@ Validation, in this order; the first failing check gives the skill's `problem`:
 
 A skill with a `problem` is listed (so it can be fixed) but never linked into a session (section 6). Writes are not
 validated: the editor saves partial content while the user types. `save_skill` validates before writing
-([mcp.md](mcp.md#622-save_skill)).
+([mcp.md](mcp.md#618-save_skill)).
 
 Template written by `skills.create {name, description}`:
 

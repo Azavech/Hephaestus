@@ -131,8 +131,8 @@ is pushed).
 
 - Header "New Chat" and an options menu with only Permission Mode (first choice "Project Default") and Model (first
   choice "Project Default", then the aliases, then "Other…"). Both start at Project Default, which passes nil.
-- Body: "Chat with Claude about <project name>. Claude can plan, create and update tasks, edit code, start runs and
-  more." (secondary, centered).
+- Body: "Chat with Claude about <project name>. Claude can plan, create and update tasks, edit code and more."
+  (secondary, centered).
 - A `MessageComposer` (placeholder "Message Claude", the project's Main and identifier), focused when the view
   appears.
 - Send: `startSession(projectID:kind: .project, taskID: nil, mode: nil, title: nil, message: <trimmed text, nil when
@@ -212,7 +212,7 @@ transcript.
   empty or holds a line break; a title has no maximum length).
 - Both sheets close on Set or Save; the request then runs through `banners.perform`, so a failure shows in the
   window's error banner.
-- The sheets of this doc, [runs.md](runs.md) and [skills.md](skills.md) share one layout, `EditSheetLayout` (internal,
+- The sheets of this doc and [skills.md](skills.md) share one layout, `EditSheetLayout` (internal,
   in `SessionOptionsMenu.swift`): the fields in a `Form`, the sheet's error message in red under them, then, trailing,
   Cancel (Escape) and the confirm button (default action); ⌘↩ is a twin confirm button behind it, invisible (opacity
   0) and hidden from accessibility, with the same action and enabled state; 20 pt padding; at least 420 pt wide on
@@ -334,19 +334,19 @@ width: .narrow)`.
 `ToolSummary` (also used by permission cards, the indicator and the banner) parses the input JSON text as an object;
 any other input gives an empty summary.
 
-| Tool name                            | Summary                                                                       |
-|--------------------------------------|-------------------------------------------------------------------------------|
-| `Bash`                               | first line of `command`                                                       |
-| `Read`, `Write`, `Edit`, `MultiEdit` | `file_path`                                                                   |
-| `NotebookEdit`                       | `notebook_path`                                                               |
-| `Grep`                               | `pattern`, plus " in <path>" when `path` is set                               |
-| `Glob`                               | `pattern`                                                                     |
-| `WebFetch`                           | `url`                                                                         |
-| `WebSearch`                          | `query`                                                                       |
-| `Task`, `Agent`                      | `description`                                                                 |
-| `TodoWrite`                          | "<n> items", n = number of elements of `todos`                                |
-| `mcp__hephaestus__*`                 | the first string value among `task`, `project`, `name`, `query`, `url`, `run` |
-| any other                            | the first string value of the top-level keys in alphabetical order, else ""   |
+| Tool name                            | Summary                                                                     |
+|--------------------------------------|-----------------------------------------------------------------------------|
+| `Bash`                               | first line of `command`                                                     |
+| `Read`, `Write`, `Edit`, `MultiEdit` | `file_path`                                                                 |
+| `NotebookEdit`                       | `notebook_path`                                                             |
+| `Grep`                               | `pattern`, plus " in <path>" when `path` is set                             |
+| `Glob`                               | `pattern`                                                                   |
+| `WebFetch`                           | `url`                                                                       |
+| `WebSearch`                          | `query`                                                                     |
+| `Task`, `Agent`                      | `description`                                                               |
+| `TodoWrite`                          | "<n> items", n = number of elements of `todos`                              |
+| `mcp__hephaestus__*`                 | the first string value among `task`, `project`, `name`, `query`, `url`      |
+| any other                            | the first string value of the top-level keys in alphabetical order, else "" |
 
 - `file_path`, `notebook_path` and `path` values that start with `<projectRoot>/` are shown relative to it
   (`projectRoot` = `store.project?.rootPath`).

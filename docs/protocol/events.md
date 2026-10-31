@@ -29,8 +29,6 @@ events of its method.
 | `session.delta`        | `sessionDelta`        | `SessionDeltaPayload`        | subscribers of `session:<sessionID>` | the hosting Main                 |
 | `permission.requested` | `permissionRequested` | `PermissionRequestedPayload` | broadcast                            | the hosting Main                 |
 | `permission.resolved`  | `permissionResolved`  | `PermissionResolvedPayload`  | broadcast                            | the hosting Main                 |
-| `run.changed`          | `runChanged`          | `RunChangedPayload`          | broadcast                            | the hosting Main                 |
-| `run.output`           | `runOutput`           | `RunOutputPayload`           | subscribers of `run:<runID>`         | the hosting Main                 |
 | `skills.changed`       | `skillsChanged`       | `SkillsChangedPayload`       | broadcast                            | every Main                       |
 | `migration.progress`   | `migrationProgress`   | `MigrationProgressPayload`   | broadcast                            | the source Main                  |
 | `forge.changed`        | `forgeChanged`        | `ForgeChangedPayload`        | broadcast                            | a Main whose Forge state changed |
@@ -67,15 +65,13 @@ public enum ServerEvent: Sendable, Hashable {
     case sessionDelta(SessionDeltaPayload)
     case permissionRequested(PermissionRequestedPayload)
     case permissionResolved(PermissionResolvedPayload)
-    case runChanged(RunChangedPayload)
-    case runOutput(RunOutputPayload)
     case skillsChanged(SkillsChangedPayload)
     case migrationProgress(MigrationProgressPayload)
     case forgeChanged(ForgeChangedPayload)
 
     public var name: EventName { get }
-    /// The topic of a subscriber event (`session.event`, `session.delta`: `.session(sessionID)`;
-    /// `run.output`: `.run(runID)`); `nil` for broadcast events.
+    /// The topic of a subscriber event (`session.event`, `session.delta`: `.session(sessionID)`); `nil` for
+    /// broadcast events.
     public var topic: Topic? { get }
     /// The complete event frame (`WireCoding.encodeEvent(name: name.rawValue, params: payload)`).
     public func encodeFrame() throws -> Data
@@ -316,39 +312,6 @@ public enum ServerEvent: Sendable, Hashable {
   `permission.requested`. The request leaves the session's `pendingPermissions` (`session.changed`) and
   the project's `pendingPermissionCount` (`projects.changed`).
 - Client: removes the permission card and shows the decision with the device's name.
-
-### run.changed
-
-`RunChangedPayload`:
-
-| Field       | Type      | Meaning                  |
-|-------------|-----------|--------------------------|
-| `projectID` | `String`  | Project                  |
-| `run`       | `RunInfo` | The run after the change |
-
-- Emitted when a run starts and when it ends.
-- Client: inserts or replaces the run in its mirror, then trims the mirror as
-  [client/workspace.md](../client/workspace.md#projectstore) says: while more than 20 runs are kept, the oldest run
-  that is not `running` is dropped ([ui/runs.md](../ui/runs.md)).
-
-### run.output
-
-`RunOutputPayload`:
-
-| Field       | Type     | Meaning                                                  |
-|-------------|----------|----------------------------------------------------------|
-| `projectID` | `String` | Project                                                  |
-| `runID`     | `UUID`   | Run                                                      |
-| `text`      | `String` | Output text (standard output and error merged) to append |
-| `seq`       | `Int`    | Number of this batch within the run: 1, 2, 3…            |
-
-- Emitted to the subscribers of `run:<runID>` as the run writes output, in batches
-  ([services/runs.md](../services/runs.md)). `seq` lets a client drop the output that a `runs.output` result already
-  contains.
-- Client: subscribes to `run:<runID>`, then calls `runs.output`; it keeps the events received meanwhile, replaces its
-  console text with the result's `text`, and appends the events whose `seq` is greater than the result's `seq`,
-  ignoring the others. Afterwards it appends each event whose `seq` is greater than the last one applied
-  ([ui/runs.md](../ui/runs.md)).
 
 ### skills.changed
 

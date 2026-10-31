@@ -20,10 +20,9 @@ Mains. One `Workspace` exists per process ([ui/shell.md](../ui/shell.md)). Every
 `Selection`. On a Main, the Workspace reaches the local host service through a loopback connection, exactly as it
 reaches the other Mains over the network ([architecture.md](../architecture.md#process-model)).
 
-The Workspace creates and feeds three models specified by other docs: `SessionCenter`
-([ui/sessions.md](../ui/sessions.md#sessioncenter)), `RunOutputCenter` ([ui/runs.md](../ui/runs.md#runoutputcenter))
-and `ForgeModel` ([ui/forge.md](../ui/forge.md#forgemodel)). Other client models use its API: `SessionModel`
-([ui/sessions.md](../ui/sessions.md)), `RunOutputModel` ([ui/runs.md](../ui/runs.md)), `FileTreeModel` and
+The Workspace creates and feeds two models specified by other docs: `SessionCenter`
+([ui/sessions.md](../ui/sessions.md#sessioncenter)) and `ForgeModel` ([ui/forge.md](../ui/forge.md#forgemodel)). Other
+client models use its API: `SessionModel` ([ui/sessions.md](../ui/sessions.md)), `FileTreeModel` and
 `EditorDocument` ([ui/code.md](../ui/code.md)), `SearchModel` ([services/search.md](../services/search.md)). All the
 code of this doc logs with `Log.client` ([architecture.md](../architecture.md#logging)).
 
@@ -42,7 +41,7 @@ code of this doc logs with `Log.client` ([architecture.md](../architecture.md#lo
 | `UploadSource`         | `enum`                               | `MainConnection+Transfers.swift` | What an upload reads: bytes in memory or a local file                        |
 | `TransferProgress`     | `struct`                             | `MainConnection+Transfers.swift` | Bytes done and total of an upload or a download                              |
 | `AttachmentCache`      | `struct`                             | `AttachmentCache.swift`          | The device's cache of downloaded files: folder and paths                     |
-| `ProjectStore`         | `@MainActor @Observable final class` | `ProjectStore.swift`             | One per opened project: project, tasks, sessions, runs                       |
+| `ProjectStore`         | `@MainActor @Observable final class` | `ProjectStore.swift`             | One per opened project: project, tasks, sessions                             |
 | `Selection`            | `@MainActor @Observable final class` | `Selection.swift`                | What one window shows: Main, project, section, item                          |
 | `SidebarSection`       | `enum`                               | `Selection.swift`                | The sidebar sections                                                         |
 | `PresenceModel`        | `enum` of static functions           | `PresenceModel.swift`            | Registry merge and presence merge (pure functions)                           |
@@ -144,7 +143,6 @@ app. Afterwards:
 | `migrations`       | `[UUID: MigrationProgressPayload]` | Latest `migration.progress` per migration id, from every connected Main, kept while the app runs                        |
 | `topologyRevision` | `Int`                              | Incremented when the registry, the set of connections, a connection state, a projects list or a migration state changes |
 | `sessionCenter`    | `SessionCenter`                    | Created by `init`, fed by the Workspace's calls ([ui/sessions.md](../ui/sessions.md#sessioncenter))                     |
-| `runOutputCenter`  | `RunOutputCenter`                  | Created by `init`, fed by the Workspace's calls ([ui/runs.md](../ui/runs.md#runoutputcenter))                           |
 | `forge`            | `ForgeModel`                       | Created by `init`, fed by the Workspace's calls ([ui/forge.md](../ui/forge.md#forgemodel))                              |
 | `isPreview`        | `Bool`                             | True for `Workspace.preview()`                                                                                          |
 
@@ -154,7 +152,7 @@ app. Afterwards:
 | `localConnection`   | `MainConnection?` | The loopback connection to this Mac's host service                                                     |
 | `onlineDeviceCount` | `Int`             | Number of `presence` entries that are online, this device included                                     |
 
-Outside `HephClient` every property is read-only. `sessionCenter`, `runOutputCenter` and `forge` are implicitly
+Outside `HephClient` every property is read-only. `sessionCenter` and `forge` are implicitly
 unwrapped and `@ObservationIgnored`: their initializers take the Workspace, so `init` sets them after every other
 stored property ([Swift API summary](#swift-api-summary)).
 
@@ -162,7 +160,7 @@ stored property ([Swift API summary](#swift-api-summary)).
 
 | Function                                         | Behavior                                                                                                                                                                                                                                                                                                                                                                              |
 |--------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `init(device:environment:)`                      | Stores its arguments, then creates `sessionCenter`, `runOutputCenter` and `forge`. No I/O, no connection.                                                                                                                                                                                                                                                                             |
+| `init(device:environment:)`                      | Stores its arguments, then creates `sessionCenter` and `forge`. No I/O, no connection.                                                                                                                                                                                                                                                                                                |
 | `start()`                                        | Does nothing when started. Loads the credentials; when present, loads the cached registry and keeps it when its `meshID` equals the credentials' `meshID` (compared as UUIDs); its presence `lastSeen` values seed the last-seen table. Starts browsing. Creates the connections (the loopback one too while a local host link is set) and starts connecting them.                    |
 | `stop()`                                         | Stops browsing, closes every connection (state `disconnected`), cancels the Workspace's tasks, writes a pending registry save. Keeps the data.                                                                                                                                                                                                                                        |
 | `restart()`                                      | `stop()`, then forgets the mirrored state (as `reset()`), then `start()`: credentials and registry are read again.                                                                                                                                                                                                                                                                    |
@@ -373,8 +371,8 @@ After a successful `hello` result:
 3. When the Workspace holds topics for this Main, one `subscribe` request with all of them is sent and awaited; a
    failure is logged. Topics that became held while it was in flight are subscribed the same way, with another
    request, until none is left; then step 4.
-4. State `connected`; `topologyRevision` is incremented; `sessionCenter.mainDidConnect(_:)`,
-   `runOutputCenter.mainDidConnect(_:)` and `forge.mainDidConnect(_:)` are called;
+4. State `connected`; `topologyRevision` is incremented; `sessionCenter.mainDidConnect(_:)` and
+   `forge.mainDidConnect(_:)` are called;
    `WorkspaceEvent.connected(mainDeviceID:)` is emitted.
 5. Concurrently: `host.info` sets `hostInfo` (a failure is logged); `projects.list` sets `projects` and
    `projectsLoaded` (a failure is reported); `skills.list` sets `skills` and `skillsLoaded` (a failure is logged);
@@ -406,7 +404,7 @@ projects tree and the stores ([Projects list](#projects-list)).
 | The connection is not `connected`        | `ProtocolError(.unavailable, "<name> is offline.")`; nothing is sent                    |
 | Error response, timeout, connection lost | As thrown by `RPCPeer.request` ([protocol/envelope.md](../protocol/envelope.md#errors)) |
 
-- Results update client state only as follows: a `TaskItem`, `SessionInfo` or `RunInfo` returned for a project whose
+- Results update client state only as follows: a `TaskItem` or `SessionInfo` returned for a project whose
   store does not contain that id yet is inserted into the store (an existing element is never replaced: events bring
   updates); `listProjects()` and `listSkills()` replace `projects` and `skills` ([Projects list](#projects-list));
   `meshSnapshot()`, `renameDevice` and `setAddresses` results are merged into the registry; `hostInfo()` sets
@@ -470,9 +468,6 @@ nil and `attachments` to `[]`.
 | Sessions | `respondToPermission(projectID: String, sessionID: UUID, requestID: String, decision: PermissionDecision, message: String?)`                                                                                          | `sessions.respond`        |
 | Sessions | `updateSession(projectID: String, sessionID: UUID, patch: SessionPatch) -> SessionInfo`                                                                                                                               | `sessions.update`         |
 | Sessions | `deleteSession(projectID: String, sessionID: UUID)`                                                                                                                                                                   | `sessions.delete`         |
-| Runs     | `startRun(projectID: String, name: String) -> RunInfo`                                                                                                                                                                | `runs.start`              |
-| Runs     | `stopRun(projectID: String, runID: UUID)`                                                                                                                                                                             | `runs.stop`               |
-| Runs     | `runOutput(projectID: String, runID: UUID) -> RunsOutputResult`                                                                                                                                                       | `runs.output`             |
 | Search   | `search(query: String, scopes: [SearchScope]?, projectID: String?, limit: Int?) -> [SearchResult]`                                                                                                                    | `search.query`            |
 | Skills   | `listSkills() -> [SkillSummary]`                                                                                                                                                                                      | `skills.list`             |
 | Skills   | `createSkill(name: String, description: String) -> SkillSummary`                                                                                                                                                      | `skills.create`           |
@@ -641,14 +636,12 @@ public final class ProjectStore {
     public private(set) var tasks: [TaskItem]        // by task number, ascending
     public private(set) var bundles: [BundleItem]    // by bundle number, ascending
     public private(set) var sessions: [SessionInfo]  // by created, then id
-    public private(set) var runs: [RunInfo]          // by startedAt, then id; trimmed to 20 (running runs stay)
     public private(set) var isRemoved: Bool
     public var connection: MainConnection? { get }
     public func reload() async
     public func task(_ id: String) -> TaskItem?
     public func bundle(_ id: String) -> BundleItem?
     public func session(_ id: UUID) -> SessionInfo?
-    public func run(_ id: UUID) -> RunInfo?
 }
 ```
 
@@ -656,17 +649,15 @@ public final class ProjectStore {
   creating it with phase `idle` when missing; a new store starts loading when its Main is connected. A store stays
   until its project leaves its Main's tree or its Main leaves the registry; `reset()` drops every store.
 - `reload()` returns at once while a load runs. Otherwise: phase `loading` (the data stays visible) and request
-  `projects.snapshot`; events for this store that arrive meanwhile are queued. On success `project`, `tasks`, `bundles`,
-  `sessions` and `runs` are replaced (sorted, runs trimmed), the queued events are applied in order, phase `loaded`,
+  `projects.snapshot`; events for this store that arrive meanwhile are queued. On success `project`, `tasks`, `bundles`
+  and `sessions` are replaced (sorted), the queued events are applied in order, phase `loaded`,
   then `sessionCenter.handleSessions(mainDeviceID:projectID:sessions:)` gets the store's `sessions`
   ([ui/sessions.md](../ui/sessions.md#sessioncenter)). On failure the queued events are dropped; `notFound` sets
   `isRemoved = true` and drops the store; otherwise a store that never loaded gets phase `failed(message)`, and a store
   that had data returns to `loaded` and the failure is reported ([Error reports](#error-reports)).
 - Sorting: tasks by the number after the last `-` of the id (ids without a number last, by id); bundles by the number
   after the last `-B` of the id (ids without a number last, by id); sessions by `created`,
-  then id; runs by `startedAt`, then id. Runs trim: while more than 20 runs are kept, the oldest run whose state is
-  not `running` is dropped, as the Main does ([services/runs.md](../services/runs.md#7-history)); a `running` run is
-  never dropped, so more than 20 can stay.
+  then id.
 
 ## Events
 
@@ -690,15 +681,13 @@ of `(M, projectID of the event)` when it exists.
 | `session.delta`        | Same as `session.event`                                                                                                   | `sessionCenter.handleSessionDelta`        |
 | `permission.requested` | Same as `session.event`                                                                                                   | `sessionCenter.handlePermissionRequested` |
 | `permission.resolved`  | Same as `session.event`                                                                                                   | `sessionCenter.handlePermissionResolved`  |
-| `run.changed`          | Upsert of `run` in the store, then the runs trim                                                                          |                                           |
-| `run.output`           | When the store is loaded and lacks the run id, the store reloads                                                          | `runOutputCenter.handleRunOutput`         |
 | `skills.changed`       | `skills` of `M` replaced                                                                                                  |                                           |
 | `migration.progress`   | `migrations[migrationID]` replaced; on a state change `topologyRevision` is incremented; on `completed`, selection rule 2 |                                           |
 | `forge.changed`        | Nothing                                                                                                                   | `forge.apply(_:from:)` with `M`           |
 | `files.changed`        | Nothing                                                                                                                   |                                           |
 
 - The forwarded calls take `mainDeviceID: M` and the payload's fields, with the signatures of
-  [ui/sessions.md](../ui/sessions.md#sessioncenter), [ui/runs.md](../ui/runs.md#runoutputcenter) and
+  [ui/sessions.md](../ui/sessions.md#sessioncenter) and
   [ui/forge.md](../ui/forge.md#forgemodel). Forwarding does not depend on stores.
 - An upsert replaces the element with the same id or inserts it at its sorted position. Applying the same event twice
   gives the same state.
@@ -740,7 +729,7 @@ public final class TopicSubscription {
 }
 ```
 
-- Topics are `Topic.session(id)` and `Topic.run(id)` ([protocol/envelope.md](../protocol/envelope.md#subscriptions)).
+- Topics are `Topic.session(id)` ([protocol/envelope.md](../protocol/envelope.md#subscriptions)).
 - The Workspace counts holders per `(mainDeviceID, topic)`. The first holder makes the topic held; the last `cancel()`
   releases it.
 - The `subscribe` and `unsubscribe` requests of a Main go through one serial queue per Main: each request is sent once
@@ -757,18 +746,17 @@ public final class TopicSubscription {
   actor).
 - On every handshake the held topics of that Main are subscribed again (reconnect sequence step 3), before the
   `mainDidConnect` calls and the `connected` event: after a reconnect, models only fetch again.
-- `SessionModel` holds the subscription of its session and `RunOutputModel` the one of its run while they are visible,
-  taken where their docs send `subscribe` and cancelled where they send `unsubscribe`
-  ([ui/sessions.md](../ui/sessions.md), [ui/runs.md](../ui/runs.md)). A model subscribes first, then fetches, then
-  applies events.
+- `SessionModel` holds the subscription of its session while it is visible, taken where its doc sends `subscribe` and
+  cancelled where it sends `unsubscribe` ([ui/sessions.md](../ui/sessions.md)). A model subscribes first, then fetches,
+  then applies events.
 
 ## Selection
 
 ```swift
 public enum SidebarSection: String, Codable, CaseIterable, Sendable {
-    case overview, tasks, code, docs, web, claude, runs   // project sections, ⌘1–⌘7 in this order
-    case devices, skills, forge                           // workspace sections
-    public var isProjectSection: Bool { get }             // true for the first seven
+    case overview, tasks, code, docs, web, claude   // project sections, ⌘1–⌘6 in this order
+    case devices, skills, forge                     // workspace sections
+    public var isProjectSection: Bool { get }       // true for the first six
 }
 
 @MainActor @Observable
@@ -798,7 +786,6 @@ public final class Selection {
 | `docs`     | Path of the shown document, relative to the project root, optionally followed by `#L<line>` ([File items](#file-items)) |
 | `web`      | Web tab id                                                                                                              |
 | `claude`   | Session id                                                                                                              |
-| `runs`     | Name of the selected run configuration ([ui/runs.md](../ui/runs.md#selection))                                          |
 | `devices`  | Device id                                                                                                               |
 | `skills`   | `<skill name>` or `<skill name>/<file path>` ([ui/skills.md](../ui/skills.md))                                          |
 | `forge`    | Task id of the pipeline item                                                                                            |
@@ -864,11 +851,10 @@ preview of every screen and the snapshot tests use it ([testing.md](../testing.m
 | `mesh.snapshot`                                  | The sample mesh                                                                                                                                                                                  |
 | `host.info`                                      | The Main's host info                                                                                                                                                                             |
 | `projects.list`                                  | The Main's projects                                                                                                                                                                              |
-| `projects.snapshot`                              | The project with its tasks, sessions and runs                                                                                                                                                    |
+| `projects.snapshot`                              | The project with its tasks and sessions                                                                                                                                                          |
 | `sessions.history`                               | The session's events, paged as [protocol/methods.md](../protocol/methods.md#sessionshistory) says: with `before` and `limit` nil, `{events: <all of them>, firstIndex: 0, total: <their count>}` |
 | `files.list`, `files.read`                       | The sample files of `HEPH` (`revision` = first 16 hex characters of the SHA-256 of the content); `API` has none: its root lists no entries                                                       |
 | `attachments.read`, `sessions.readAttachment`    | The range asked of a 160 × 100 PNG filled with sRGB (0.95, 0.42, 0.18), `size` the PNG's size, `mimeType` `image/png`                                                                            |
-| `runs.output`                                    | The run's output, `seq` 1                                                                                                                                                                        |
 | `skills.list`, `skills.files`, `skills.readFile` | The sample skill                                                                                                                                                                                 |
 | `search.query`                                   | No results                                                                                                                                                                                       |
 | `forge.status`                                   | Studio: a `ForgeState` of Studio, `enabled`, with its `forge` config and no items. Sam's MacBook Pro: `enabled` false, `hostDeviceID` `#002`, no config, no items                                |
@@ -876,9 +862,9 @@ preview of every screen and the snapshot tests use it ([testing.md](../testing.m
 | Any other method                                 | `ProtocolError(.unavailable, "Not available in previews")`                                                                                                                                       |
 
 A request about something the sample data does not hold gets the error of the service that would answer it: a project
-that is not on that Main (`projects.snapshot`, `sessions.history`, `files.list`, `files.read`, `runs.output`):
-`notFound` "Project <id> is not hosted on this Main."; an unknown session: `notFound` "session <id> not found"; an
-unknown run: `notFound` "Run <id> does not exist."; a missing file or folder: `notFound` "No file at <path>." or "No
+that is not on that Main (`projects.snapshot`, `sessions.history`, `files.list`, `files.read`):
+`notFound` "Project <id> is not hosted on this Main."; an unknown session: `notFound` "session <id> not found"; a
+missing file or folder: `notFound` "No file at <path>." or "No
 folder at <path>."; a folder read as a file or a file listed as a folder: `badRequest` "<path> is a folder." or "<path>
 is a file."; an unknown skill: `notFound` "Skill <name> does not exist."; a skill file other than `SKILL.md`:
 `notFound` "No file at <path>.".
@@ -904,10 +890,10 @@ true, `claudePath` `/Users/user/.local/bin/claude`, `gitAvailable` true; Studio'
 
 Projects (on Studio, `created` 2026-10-01T09:00:00.000Z, `code` `.`, `docs` `docs`):
 
-| Id     | Name           | Description                    | `rootPath`                                      | Sub projects           | Runs                                                               |
-|--------|----------------|--------------------------------|-------------------------------------------------|------------------------|--------------------------------------------------------------------|
-| `HEPH` | Hephaestus     | Multi-device project workbench | `/Users/user/Developer/Hephaestus`              | `services/api` (`API`) | Build macOS: `./scripts/build.sh macos`; Test: `./scripts/test.sh` |
-| `API`  | Hephaestus API | Sync service                   | `/Users/user/Developer/Hephaestus/services/api` |                        | Run: `go run .`                                                    |
+| Id     | Name           | Description                    | `rootPath`                                      | Sub projects           |
+|--------|----------------|--------------------------------|-------------------------------------------------|------------------------|
+| `HEPH` | Hephaestus     | Multi-device project workbench | `/Users/user/Developer/Hephaestus`              | `services/api` (`API`) |
+| `API`  | Hephaestus API | Sync service                   | `/Users/user/Developer/Hephaestus/services/api` |                        |
 
 `HEPH`: `taskCounter` 4, `feedbackCounter` 0, `claude` model `opus` and permission mode `acceptEdits`, web tabs
 `#201` "GitHub" `https://github.com/Azavech/Hephaestus` locked and `#202` "Swift Forums" `https://forums.swift.org` not
@@ -950,13 +936,6 @@ Events of `#302`, ids `#411`–`#415`, one second apart from 20:30:01: `user` "W
 "The file has been updated.", not an error; `permission` request `perm-1`, tool `Bash`, input
 `{"command":"./scripts/build.sh ios"}`, suggestions `[]`, not answered.
 
-Runs of `HEPH`:
-
-| Id     | Name        | Command                    | Started  | Ended    | Exit code | State       | Output                                                                |
-|--------|-------------|----------------------------|----------|----------|-----------|-------------|-----------------------------------------------------------------------|
-| `#501` | Test        | `./scripts/test.sh`        | 20:00:00 | 20:01:10 | 0         | `succeeded` | "Test Suite 'All tests' passed.\nExecuted 42 tests, with 0 failures." |
-| `#502` | Build macOS | `./scripts/build.sh macos` | 20:55:00 |          |           | `running`   | "Building Hephaestus for macOS…"                                      |
-
 Files of `HEPH` (folders `docs` and `Sources`; every entry modified at 20:00:00):
 
 | Path                | Content                                                                                                                         |
@@ -984,7 +963,6 @@ done tasks", one file `SKILL.md` with the content
     public private(set) var migrations: [UUID: MigrationProgressPayload]
     public private(set) var topologyRevision: Int
     @ObservationIgnored public private(set) var sessionCenter: SessionCenter!       // set by init, after the others
-    @ObservationIgnored public private(set) var runOutputCenter: RunOutputCenter!   // set by init, after the others
     @ObservationIgnored public private(set) var forge: ForgeModel!                  // set by init, after the others
     public let isPreview: Bool
     public var mains: [DeviceRecord] { get }

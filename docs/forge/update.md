@@ -139,11 +139,11 @@ Commands run with `ChildProcess.capture` ([../claude/cli.md](../claude/cli.md)),
 ### When
 
 - **Busy**: `isBusy()` returns true. The shell wires it to `await host.hasActiveWork()` while this Mac is a Main (a
-  Claude session of this Main is `starting`, `running` or `waitingPermission`, a run is running, or a project move
-  runs; [../services/host.md](../services/host.md#125-hasactivework)) and to `false` otherwise
+  Claude session of this Main is `starting`, `running` or `waitingPermission`, or a project move runs;
+  [../services/host.md](../services/host.md#125-hasactivework)) and to `false` otherwise
   ([../ui/shell.md](../ui/shell.md)).
 - On entering `ready`, and every 10 s while `ready`: when not busy, install.
-- `restartNow()` (Restart Now) installs at once, busy or not; quitting stops sessions and runs as any quit does.
+- `restartNow()` (Restart Now) installs at once, busy or not; quitting stops sessions as any quit does.
 
 ### Steps
 

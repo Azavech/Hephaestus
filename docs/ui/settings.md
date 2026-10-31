@@ -87,7 +87,7 @@ Settings edit this device: its name ([../devices/roles.md](../devices/roles.md#n
   - Turning it off: when `await appModel.isMigrationActive()`, the toggle stays on and the alert "A project is being
     moved. Try again when the move has finished." shows. Else a confirmation alert titled "Stop using this Mac as a
     Main?", message "Its projects stay on this Mac but other devices cannot open them until you turn this back on.
-    Running Claude sessions and runs are stopped.", buttons "Stop" (destructive) and "Cancel". Stop calls
+    Running Claude sessions are stopped.", buttons "Stop" (destructive) and "Cancel". Stop calls
     `try await appModel.resignMain()` through `perform` of the Settings window's `WindowBanners`, so a failure shows
     as that window's error banner; Cancel leaves the toggle on.
 - Projects folder: the stored value, monospaced, middle truncation. "Choose…" opens an `NSOpenPanel` with

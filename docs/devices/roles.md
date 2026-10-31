@@ -20,7 +20,7 @@ presence: [mesh.md](mesh.md). Moving projects between Mains: [migration.md](migr
 
 - A remote's `Workspace` connects to every Main of the registry ([../client/workspace.md](../client/workspace.md)).
 - A Main also runs `HostService`: it listens on the listener port, advertises itself with Bonjour, connects to every
-  other Main (peer links), serves its projects, runs Claude sessions and runs ([mesh.md](mesh.md),
+  other Main (peer links), serves its projects, runs Claude sessions ([mesh.md](mesh.md),
   [../services/host.md](../services/host.md)). Its own UI reaches its host through the loopback channel, never through
   the network ([../protocol/envelope.md](../protocol/envelope.md)).
 - `isMain` lives in the device settings (`settings.json` key `isMain`, [../data/app-storage.md](../data/app-storage.md)).
@@ -150,11 +150,11 @@ Settings shows `HostService.listenerError` (for example "Port 47100 is already i
    (`await HostService.shared.migration.isActive()`, [migration.md](migration.md#swift-api)): the toggle stays on and
    an alert shows "A project is being moved. Try again when the move has finished."
 2. Confirmation alert, title "Stop using this Mac as a Main?", message "Its projects stay on this Mac but other devices
-   cannot open them until you turn this back on. Running Claude sessions and runs are stopped.", buttons "Stop"
+   cannot open them until you turn this back on. Running Claude sessions are stopped.", buttons "Stop"
    (destructive) and "Cancel".
 3. `await HostService.shared.mesh.resignMain()`: this Mac's record gets `isMain: false`, `addresses: []`, `port: 0` and
    is sent to the connected peer Mains ([mesh.md](mesh.md#resigning)).
-4. `await HostService.shared.stop()`: sessions and runs stop, the listener, Bonjour and peer links close
+4. `await HostService.shared.stop()`: sessions stop, the listener, Bonjour and peer links close
    ([../services/host.md](../services/host.md#32-stop)).
 5. `identity.setIsMain(false)`, `workspace.setLocalHostLink(nil)`, `workspace.updateLocalDevice(identity.deviceInfo)`.
 

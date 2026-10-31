@@ -44,7 +44,7 @@ is no maximum length ([../data/project-yml.md](../data/project-yml.md#validation
 | Sub projects                                                   | `children` of `workspace.summary(of: store.projectID, on: store.mainDeviceID)` |
 | Task counts                                                    | `store.tasks`                                                                  |
 | Skills library                                                 | `listSkills()` of the project's Main ([Skills](#skills))                       |
-| Active sessions and runs (Move to…)                            | `store.sessions`, `store.runs`                                                 |
+| Active sessions (Move to…)                                     | `store.sessions`                                                               |
 
 The shell shows this view once `store.project` is set, and the loading and failed states of the store before
 ([shell.md](shell.md#63-detail)).
@@ -231,11 +231,10 @@ Moves a top-level project and everything inside its folder, sub projects include
   None: the text "No other Main is online." and Move disabled.
 - Text: "The folder <rootPath> is copied to the projects folder of the chosen Main, verified, then moved to the Trash
   on <source Main>. Sub projects move with it. .build, DerivedData and node_modules folders are not copied."
-- Active processes: sessions of `store.sessions` whose status is `starting`, `running`, `waitingPermission` or `idle`,
-  and runs of `store.runs` whose state is `running`. When there are any, a warning lists them ("Claude: <session
-  title>", "Run: <run name>") and the Move button reads "Stop and Move".
+- Active processes: sessions of `store.sessions` whose status is `starting`, `running`, `waitingPermission` or `idle`.
+  When there are any, a warning lists them ("Claude: <session title>") and the Move button reads "Stop and Move".
 - Move:
-  1. When processes are active: `stopSession` for each listed session and `stopRun` for each listed run, in parallel.
+  1. When processes are active: `stopSession` for each listed session, in parallel.
      A failed stop request is logged and the move goes on.
   2. `migrateProject(projectID:to:)`. When processes were stopped in step 1 and the answer is `conflict` (a process is
      still running), the call is repeated every second, at most 15 times; the last error then shows.
@@ -301,7 +300,7 @@ presenter iterates `workspace.events()` for the life of the window, keeps the la
 - Title: "Remove “<name>”?"
 - Message: "The project is removed from Hephaestus. Its folder <rootPath> stays on <Main>, with its tasks and sessions,
   unless you move it to the Trash." When the project has sub projects, "Its sub projects are removed with it." is
-  added. The Main stops the project's sessions and runs
+  added. The Main stops the project's sessions
   ([../protocol/methods.md](../protocol/methods.md#projectsremove)).
 - Buttons: "Remove" → `removeProject(projectID:moveToTrash: false)`; "Remove and Move to Trash" (destructive) →
   `removeProject(projectID:moveToTrash: true)`; "Cancel".
@@ -349,12 +348,12 @@ Inside the module, the presenter puts an action `presentMigrationProgress(_ migr
 - [../client/workspace.md](../client/workspace.md): `Workspace` (`mains`, `presence`, `device`, `connection(_:)`,
   `summary(of:on:)`, `projectPath(of:on:)`, `events()`, `WorkspaceEvent`, selection rule 2), `MainConnection`
   (`isConnected`, `hostInfo`, `refreshHostInfo()`, `projects`, request functions), `ProjectStore` (`mainDeviceID`,
-  `projectID`, `project`, `tasks`, `sessions`, `runs`, `phase`, `connection`, `reload()`), `Selection`.
+  `projectID`, `project`, `tasks`, `sessions`, `phase`, `connection`, `reload()`), `Selection`.
 - [../protocol/types.md](../protocol/types.md): `Project` (`parseError`, `migrating`), `ProjectSummary`, `ProjectPatch`,
-  `ClaudeDefaults`, `DeviceRecord`, `Presence`, `SkillSummary`, `SessionInfo`, `RunInfo`, `TaskItem`, `TaskStatus`,
+  `ClaudeDefaults`, `DeviceRecord`, `Presence`, `SkillSummary`, `SessionInfo`, `TaskItem`, `TaskStatus`,
   `MigrationState`.
 - [../protocol/methods.md](../protocol/methods.md): `projects.*`, `host.listDirectories`, `skills.list`,
-  `sessions.stop`, `runs.stop`. [../protocol/events.md](../protocol/events.md): `migration.progress`,
+  `sessions.stop`. [../protocol/events.md](../protocol/events.md): `migration.progress`,
   `skills.changed`.
 - [../data/project-yml.md](../data/project-yml.md): `ProjectIdentifier`.
 - [tasks.md](tasks.md): `TaskStatusBadge`. [sessions.md](sessions.md): `PermissionModePicker`, `ClaudeModelField`.

@@ -242,7 +242,6 @@ listener after a key change ([../devices/mesh.md](../devices/mesh.md#receiving-a
 | `docs`     | project   | Docs     | `book.closed`                             | ⌘4       |
 | `web`      | project   | Web      | `globe`                                   | ⌘5       |
 | `claude`   | project   | Claude   | `bubble.left.and.bubble.right`            | ⌘6       |
-| `runs`     | project   | Runs     | `play.rectangle`                          | ⌘7       |
 | `devices`  | workspace | Devices  | `laptopcomputer.and.iphone`               |          |
 | `skills`   | workspace | Skills   | `wand.and.stars`                          |          |
 | `forge`    | workspace | Forge    | `hammer`                                  |          |
@@ -260,7 +259,6 @@ The detail of each section is a view of another doc. Project sections get the `P
 | `docs`     | `DocsView(store:)`          | project-relative path of the shown document, optionally followed by `#L<line>` | [docs.md](docs.md)         |
 | `web`      | `WebTabsView(store:)`       | web tab id                                                                     | [web.md](web.md)           |
 | `claude`   | `ClaudeView(store:)`        | session id                                                                     | [sessions.md](sessions.md) |
-| `runs`     | `RunsView(store:)`          | name of the selected run configuration ([runs.md](runs.md#selection))          | [runs.md](runs.md)         |
 | `devices`  | `DevicesView()`             | device id                                                                      | [devices.md](devices.md)   |
 | `skills`   | `SkillsView(mainDeviceID:)` | `<skill name>` or `<skill name>/<file path>`                                   | [skills.md](skills.md)     |
 | `forge`    | `ForgeView()`               | task id of the pipeline item                                                   | [forge.md](forge.md)       |
@@ -336,8 +334,9 @@ The window stores its selection with `@SceneStorage`, under the keys of `WindowS
 ([../data/app-storage.md](../data/app-storage.md#per-window-state)); values are strings, `""` meaning nil.
 
 - Restore, once, when the context is created: `mainDeviceID` = `UUID(uuidString:)` of the stored string; `projectID`
-  and `item` = the stored strings; `section` = `SidebarSection(rawValue:)` of the stored string. A restored Main that
-  is no longer a Main is cleared by rule 1 of the Workspace's selection rules at the next registry change
+  and `item` = the stored strings; `section` = `SidebarSection(rawValue:)` of the stored string, nil for a section
+  this version does not have (`runs` of earlier versions). A restored Main that is no longer a Main is cleared by rule
+  1 of the Workspace's selection rules at the next registry change
   ([../client/workspace.md](../client/workspace.md#selection-rules)); a restored project by the check below.
 - Restored project check, made by `RootView` in a window that restored a `projectID`: the first time the defaults
   run (below) while the selection's Main is connected with `projectsLoaded`, the check runs before them: when
@@ -442,7 +441,7 @@ NavigationSplitView(columnVisibility: $columnVisibility) {   // @State, initiall
 
 `SidebarView` is a `List(selection:)` with `.listStyle(.sidebar)`:
 
-1. A section whose header is the selected project's name ("Project" when none) with the seven project sections, each
+1. A section whose header is the selected project's name ("Project" when none) with the six project sections, each
    `Label(<title>, systemImage: <symbol>)` tagged with its section. The rows are disabled while no project is selected.
 2. A section "Workspace" with Devices, Skills and Forge.
 
@@ -721,7 +720,7 @@ it: it reaches its own host ([../devices/roles.md](../devices/roles.md#what-the-
 |----------|------------------------|--------------|------------------------------------------------------------------|-------------------------------------------------------|
 | ⌘K       | Search…                | Navigate     | the key window shows the shell                                   | `context.openSearch()`                                |
 | ⇧⌘F      | Send Feedback…         | Help         | see [../forge/feedback.md](../forge/feedback.md)                 | `FeedbackCommands`                                    |
-| ⌘1–⌘7    | Overview … Runs        | Navigate     | the key window shows the shell and a project is selected         | `context.select(<section>)` ([§4](#4-sections))       |
+| ⌘1–⌘6    | Overview … Claude      | Navigate     | the key window shows the shell and a project is selected         | `context.select(<section>)` ([§4](#4-sections))       |
 |          | Devices, Skills, Forge | Navigate     | the key window shows the shell                                   | `context.select(<section>)`                           |
 | ⌘N       | New Task               | File         | `newTaskAction` is set (Tasks section shown, its Main connected) | calls it ([tasks.md](tasks.md))                       |
 | ⌥⌘N      | New Window             | File         | macOS only                                                       | `openWindow(id: AppModel.mainWindowID)`               |
@@ -746,15 +745,15 @@ it: it reaches its own host ([../devices/roles.md](../devices/roles.md#what-the-
 `HephaestusCommands(appModel:)` (`Commands`) reads the key window's values with `@FocusedValue` and opens windows with
 `@Environment(\.openWindow)`. Its body, in this order:
 
-| Group                                | Items                                                                  |
-|--------------------------------------|------------------------------------------------------------------------|
-| `CommandGroup(replacing: .appInfo)`  | macOS only: "About Hephaestus" ([About](#about))                       |
-| `CommandGroup(replacing: .newItem)`  | New Window (macOS only), New Task, New Web Tab                         |
-| `CommandGroup(replacing: .saveItem)` | Close Tab / Close, Save                                                |
-| `SidebarCommands()`                  | View ▸ Show Sidebar / Hide Sidebar                                     |
-| `TextEditingCommands()`              | Edit ▸ Find and the other text editing items                           |
-| `CommandMenu("Navigate")`            | Search…, `Divider`, Overview … Runs, `Divider`, Devices, Skills, Forge |
-| `FeedbackCommands()`                 | Help ▸ Send Feedback… ([../forge/feedback.md](../forge/feedback.md))   |
+| Group                                | Items                                                                    |
+|--------------------------------------|--------------------------------------------------------------------------|
+| `CommandGroup(replacing: .appInfo)`  | macOS only: "About Hephaestus" ([About](#about))                         |
+| `CommandGroup(replacing: .newItem)`  | New Window (macOS only), New Task, New Web Tab                           |
+| `CommandGroup(replacing: .saveItem)` | Close Tab / Close, Save                                                  |
+| `SidebarCommands()`                  | View ▸ Show Sidebar / Hide Sidebar                                       |
+| `TextEditingCommands()`              | Edit ▸ Find and the other text editing items                             |
+| `CommandMenu("Navigate")`            | Search…, `Divider`, Overview … Claude, `Divider`, Devices, Skills, Forge |
+| `FeedbackCommands()`                 | Help ▸ Send Feedback… ([../forge/feedback.md](../forge/feedback.md))     |
 
 When the key window is not a main window (Settings), `windowContext` is nil: the Navigate items are disabled and ⌘W
 closes the key window.
@@ -963,7 +962,6 @@ public struct ChipToggle: View { public init(title: String, isOn: Bool, action: 
 | `TasksView`, `newTaskAction`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | [tasks.md](tasks.md)                                                                                                                     |
 | `CodeView`, `saveDocumentAction`, `DocsView`, `WebTabsView`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | [code.md](code.md), [docs.md](docs.md), [web.md](web.md)                                                                                 |
 | `ClaudeView`, `PermissionIndicator`, `.permissionBanner()`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | [sessions.md](sessions.md)                                                                                                               |
-| `RunsView`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | [runs.md](runs.md)                                                                                                                       |
 | `SkillsView`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | [skills.md](skills.md)                                                                                                                   |
 | `OnboardingView`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | [onboarding.md](onboarding.md)                                                                                                           |
 | `SettingsView`, `SettingsSheet`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | [settings.md](settings.md)                                                                                                               |

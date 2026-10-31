@@ -75,7 +75,7 @@ public protocol MCPHost: Sendable {
     /// ProtocolError whose message is the error text.
     func forgePushDocs(sessionID: UUID) async throws -> String
     func forgePushRegen(sessionID: UUID) async throws -> String
-    /// The BundleService function of a bundle tool (6.25–6.28): its result as JSON text, or a thrown ProtocolError
+    /// The BundleService function of a bundle tool (6.21–6.24): its result as JSON text, or a thrown ProtocolError
     /// whose message is the error text.
     func bundleTool(_ name: String, projectID: String, bundleID: String, arguments: Data) async throws -> String
 }
@@ -238,26 +238,26 @@ mcp__hephaestus` lets sessions call them without permission prompts.
 written here (served compact by `tools/list`). Each definition has the session kinds that list it and may call it,
 given by `MCPToolKinds.kinds(for:)` from this table:
 
-| Tools                                                        | Session kinds                                               |
-|--------------------------------------------------------------|-------------------------------------------------------------|
-| 6.1–6.6, 6.8, 6.10, 6.13, 6.16–6.22                          | `project`, `task`, `bundle`                                 |
-| 6.7 `get_task`, 6.9 `update_task`, 6.11 `comment_task`       | `project`, `task`, `bundle`, `feedback` (its own task only) |
-| 6.12 `start_task_session`, 6.14 `start_run`, 6.15 `stop_run` | `project`, `task`                                           |
-| 6.23 `forge_push_docs`                                       | `feedback`, `bundle`                                        |
-| 6.24 `forge_push_regen`                                      | `regeneration`                                              |
-| 6.25–6.28 the bundle tools                                   | `bundle`                                                    |
-| 6.29 `rename_session`                                        | `project`, `task`, `bundle`, `feedback`, `regeneration`     |
+| Tools                                                  | Session kinds                                               |
+|--------------------------------------------------------|-------------------------------------------------------------|
+| 6.1–6.6, 6.8, 6.10, 6.13–6.18                          | `project`, `task`, `bundle`                                 |
+| 6.7 `get_task`, 6.9 `update_task`, 6.11 `comment_task` | `project`, `task`, `bundle`, `feedback` (its own task only) |
+| 6.12 `start_task_session`                              | `project`, `task`                                           |
+| 6.19 `forge_push_docs`                                 | `feedback`, `bundle`                                        |
+| 6.20 `forge_push_regen`                                | `regeneration`                                              |
+| 6.21–6.24 the bundle tools                             | `bundle`                                                    |
+| 6.25 `rename_session`                                  | `project`, `task`, `bundle`, `feedback`, `regeneration`     |
 
 A `feedback` session therefore lists `get_task`, `update_task`, `comment_task`, `forge_push_docs` and
 `rename_session`, and a `regeneration` session lists `forge_push_regen` and `rename_session`. A feedback session
 uses `update_task` and `comment_task` to turn its feedback into a task ([prompts.md](prompts.md#feedback-part)). Forge sessions write to the public repository
-([../public-repository.md](../public-repository.md)): they get no tool that reads the devices, projects, tasks, runs,
+([../public-repository.md](../public-repository.md)): they get no tool that reads the devices, projects, tasks,
 web tabs, sessions or skills of the mesh beyond their own feedback task, none that changes them beyond the name,
 description, status and comments of that task and the title of their own session, and none that runs a command or
 starts a session, so nothing they call
 can push around the Forge push gate ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). `MCPToolKinds.swift`
-holds this table and nothing else: `kinds(for:)` names each tool of the table (the first row: the 16 tools of 6.1–6.6,
-6.8, 6.10, 6.13 and 6.16–6.22) and returns an empty set for any other name, so a tool added to the catalog is listed
+holds this table and nothing else: `kinds(for:)` names each tool of the table (the first row: the 14 tools of 6.1–6.6,
+6.8, 6.10 and 6.13–6.18) and returns an empty set for any other name, so a tool added to the catalog is listed
 and callable in no session until the table names it.
 
 A `bundle` session, the coordinator of a bundle ([../services/bundles.md](../services/bundles.md)), gets the tools
@@ -316,7 +316,6 @@ Argument rules for every tool:
   | an item of an array is not in its `enum` (`scopes`)                  | `<name> must hold values among <values>`                               |
   | `project`, `identifier` or `parent` breaks the `project` rule above  | `<name> is not a project identifier`                                   |
   | `task` breaks the `task` rule above                                  | `task is not a task id`                                                |
-  | `run` is not a UUID                                                  | `run is not a run id`                                                  |
   | the `name` of `get_skill` or `save_skill` breaks `^[a-z0-9-]{1,64}$` | `name is not a skill name`                                             |
 
 - A tool acting on a project first locates its Main (section 7). The calls of a tool go to that Main.
@@ -359,7 +358,7 @@ listed with `"online": false` and `"error": "<code>: <message>"`.
 ```json
 {
   "name": "get_project",
-  "description": "Get a project: its settings from project.yml (name, description, code and docs folders, sub projects, web tabs, run configurations, enabled skills, Claude defaults), the Main hosting it, its root folder, its number of tasks per status and its recent runs.",
+  "description": "Get a project: its settings from project.yml (name, description, code and docs folders, sub projects, web tabs, enabled skills, Claude defaults), the Main hosting it, its root folder and its number of tasks per status.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -374,7 +373,7 @@ listed with `"online": false` and `"error": "<code>: <message>"`.
 Calls `projects.snapshot {projectID}`. Result:
 
 ```json
-{"main":{"id":"<device id>","name":"Studio"},"project":<Project>,"taskCounts":{"todo":3,"in_progress":1,"review":0,"done":8,"broken":0},"runs":[<RunInfo>]}
+{"main":{"id":"<device id>","name":"Studio"},"project":<Project>,"taskCounts":{"todo":3,"in_progress":1,"review":0,"done":8,"broken":0}}
 ```
 
 `project.rootPath` is the root folder; `broken` counts the tasks with a `parseError`, which count in no status.
@@ -427,12 +426,6 @@ Calls `projects.snapshot {projectID}`. Result:
 ```
 
 Calls `projects.update {projectID, patch: {name?, description?}}` with the given fields only. Result: the `Project`.
-
-No tool changes run configurations: `start_run` runs a configuration's shell command without a permission request, on
-the Main that hosts the project, so only the user defines those commands, in the Runs section
-([../ui/runs.md](../ui/runs.md)). The host refuses a `projects.update` that changes `runs` for Claude
-([../services/host.md](../services/host.md#75-projectsupdate)), and every session is denied edits of `.hephaestus/`
-folders ([cli.md](cli.md#35-sessions-in-the-public-repository)).
 
 ### 6.6 list_tasks
 
@@ -615,92 +608,7 @@ Mode `custom` without non-empty `instructions` → tool error `Mode custom needs
 {projectID, kind: "task", taskID, mode, message: instructions}` (`message` omitted when absent). Result: the
 `SessionInfo`.
 
-### 6.13 list_runs
-
-```json
-{
-  "name": "list_runs",
-  "description": "List the run configurations of a project (name, command, working directory) and its recent runs (id, state, start and end dates, exit code).",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "project": {"type": "string", "pattern": "^[A-Za-z]{2,8}$", "description": "Project identifier, for example HEPH."}
-    },
-    "required": ["project"],
-    "additionalProperties": false
-  }
-}
-```
-
-Calls `projects.snapshot {projectID}`. Result: `{"configurations":[{"name":"Build","command":"./scripts/build.sh
-all","cwd":"."}],"runs":[<RunInfo>]}` (`configurations` = the project's `runs`; `cwd` omitted when not set).
-
-### 6.14 start_run
-
-```json
-{
-  "name": "start_run",
-  "description": "Start a run configuration of a project by name. Every device of the user shows its output live; read it with get_run_output.",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "project": {"type": "string", "pattern": "^[A-Za-z]{2,8}$", "description": "Project identifier, for example HEPH."},
-      "name": {"type": "string", "minLength": 1, "description": "Name of the run configuration."}
-    },
-    "required": ["project", "name"],
-    "additionalProperties": false
-  }
-}
-```
-
-Calls `runs.start {projectID, name}`. Result: the `RunInfo`.
-
-### 6.15 stop_run
-
-```json
-{
-  "name": "stop_run",
-  "description": "Stop a run of a project.",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "project": {"type": "string", "pattern": "^[A-Za-z]{2,8}$", "description": "Project identifier, for example HEPH."},
-      "run": {"type": "string", "minLength": 1, "description": "Run id, from list_runs or start_run."}
-    },
-    "required": ["project", "run"],
-    "additionalProperties": false
-  }
-}
-```
-
-`run` must parse as a UUID (else `Invalid arguments: run is not a run id.`). Calls `runs.stop {projectID, runID:
-run}`. Result: `{"stopped":"<run id>"}`.
-
-### 6.16 get_run_output
-
-```json
-{
-  "name": "get_run_output",
-  "description": "Get the output of a run, stdout and stderr together: at most its last 64 KiB.",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "project": {"type": "string", "pattern": "^[A-Za-z]{2,8}$", "description": "Project identifier, for example HEPH."},
-      "run": {"type": "string", "minLength": 1, "description": "Run id, from list_runs or start_run."}
-    },
-    "required": ["project", "run"],
-    "additionalProperties": false
-  }
-}
-```
-
-`run` must parse as a UUID, as for `stop_run`. Calls `runs.output {projectID, runID: run}`. Result: its `text` itself
-(not JSON). When its UTF-8 size exceeds
-64 KiB, only the end is kept: the last 65,536 bytes, without everything up to and including their first `\n` when they
-contain one, decoded leniently (invalid sequences replaced), after the line `[… earlier output omitted]`. Empty output
-→ `(no output)`.
-
-### 6.17 list_web_tabs
+### 6.13 list_web_tabs
 
 ```json
 {
@@ -719,7 +627,7 @@ contain one, decoded leniently (invalid sequences replaced), after the line `[�
 
 Calls `projects.snapshot {projectID}`. Result: `{"tabs":[<WebTab>]}` (the project's `webTabs`, in order).
 
-### 6.18 open_web_tab
+### 6.14 open_web_tab
 
 ```json
 {
@@ -742,7 +650,7 @@ Calls `projects.snapshot {projectID}`. Result: `{"tabs":[<WebTab>]}` (the projec
 `url` must parse as a URL with scheme `http` or `https` and a host (else tool error `Use an absolute http or https
 URL.`). Calls `tabs.open {projectID, url, title?, locked?}`. Result: the `WebTab`.
 
-### 6.19 search
+### 6.15 search
 
 ```json
 {
@@ -768,7 +676,7 @@ Calls `search.query {query, scopes?, limit: 50}` on this Main and, in parallel, 
 `otherMains()`. Result: `{"results":[<SearchResult>]}`: this Main's results in its order, then each other Main's in
 the order of 6.2; a Main whose call fails is skipped.
 
-### 6.20 list_skills
+### 6.16 list_skills
 
 ```json
 {
@@ -780,7 +688,7 @@ the order of 6.2; a Main whose call fails is skipped.
 
 Calls `skills.list {}` on this Main. Result: `{"skills":[<SkillSummary>]}`.
 
-### 6.21 get_skill
+### 6.17 get_skill
 
 ```json
 {
@@ -801,7 +709,7 @@ Calls `skills.files {name}` and `skills.readFile {name, path: "SKILL.md"}` on th
 `{"name":"<name>","content":"<SKILL.md as UTF-8 text>","files":[<SkillFile>]}`, for example
 `"files":[{"modified":"2026-10-29T21:04:00.123Z","path":"SKILL.md","size":512}]`.
 
-### 6.22 save_skill
+### 6.18 save_skill
 
 ```json
 {
@@ -826,7 +734,7 @@ Calls `skills.files {name}` and `skills.readFile {name, path: "SKILL.md"}` on th
 3. `skills.writeFile {name, path: "SKILL.md", data: <content as UTF-8>}`.
 4. Result: the skill's `SkillSummary` from `skills.list`.
 
-### 6.23 forge_push_docs (feedback and bundle sessions)
+### 6.19 forge_push_docs (feedback and bundle sessions)
 
 ```json
 {
@@ -839,7 +747,7 @@ Calls `skills.files {name}` and `skills.readFile {name, path: "SKILL.md"}` on th
 Calls `MCPHost.forgePushDocs(sessionID:)` with the token's session: the Forge push gate of
 [../forge/pipeline.md](../forge/pipeline.md#mcp-tools). Result: the returned text.
 
-### 6.24 forge_push_regen (regeneration sessions only)
+### 6.20 forge_push_regen (regeneration sessions only)
 
 ```json
 {
@@ -849,9 +757,9 @@ Calls `MCPHost.forgePushDocs(sessionID:)` with the token's session: the Forge pu
 }
 ```
 
-Calls `MCPHost.forgePushRegen(sessionID:)` with the token's session, as for 6.23. Result: the returned text.
+Calls `MCPHost.forgePushRegen(sessionID:)` with the token's session, as for 6.19. Result: the returned text.
 
-### 6.25 get_bundle
+### 6.21 get_bundle
 
 ```json
 {
@@ -863,7 +771,7 @@ Calls `MCPHost.forgePushRegen(sessionID:)` with the token's session, as for 6.23
 
 Result: `BundleDetails` ([../services/bundles.md](../services/bundles.md#swift-api)).
 
-### 6.26 start_bundle_task
+### 6.22 start_bundle_task
 
 ```json
 {
@@ -884,7 +792,7 @@ Result: `BundleDetails` ([../services/bundles.md](../services/bundles.md#swift-a
 `BundleService.startTask` ([../services/bundles.md](../services/bundles.md#tools-of-the-coordinator)); `instructions`
 empty after trimming counts as absent. Result: the `SessionInfo`.
 
-### 6.27 update_bundle
+### 6.23 update_bundle
 
 ```json
 {
@@ -903,7 +811,7 @@ empty after trimming counts as absent. Result: the `SessionInfo`.
 
 `BundleService.setStatus`. Result: the `BundleItem`.
 
-### 6.28 finish_bundle
+### 6.24 finish_bundle
 
 ```json
 {
@@ -919,7 +827,7 @@ The bundle tools check their arguments first (section 6); then a session without
 `Only the coordinator of a bundle can use this tool.`, and the others call
 `MCPHost.bundleTool(_:projectID:bundleID:arguments:)` with the token's `projectID` and `bundleID`.
 
-### 6.29 rename_session
+### 6.25 rename_session
 
 ```json
 {
@@ -973,18 +881,17 @@ bundle tools call the local hooks.
 | an argument is missing, of the wrong type, or breaks a rule of section 6 | true      | `Invalid arguments: <what is wrong>.`                                   |
 | a protocol call fails with `ProtocolError`                               | true      | `<code>: <message>`, for example `locked: Project HEPH is being moved.` |
 | a tool-specific check fails                                              | true      | the message given in section 6                                          |
-| a Forge or bundle tool's `MCPHost` call throws (6.23–6.28)               | true      | the error's message alone                                               |
+| a Forge or bundle tool's `MCPHost` call throws (6.19–6.24)               | true      | the error's message alone                                               |
 
 ## Depends on
 
-| Name                                                                                                                                                                                                                                          | Defined in                                         |
-|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------|
-| `SessionKind`, `MeshSnapshot`, `ProjectSummary` (`children`), `Project` (`rootPath`), `TaskItem` (`parseError`), `RunInfo`, `WebTab`, `SearchResult`, `SearchScope`, `SkillSummary`, `SkillFile`, `SessionInfo`, `UploadRef`, `ProtocolError` | [../protocol/types.md](../protocol/types.md)       |
-| `mesh.snapshot`, `projects.*`, `tasks.*` (`tasks.addComment` with `author`), `sessions.start`, `sessions.update`, `runs.*`, `tabs.open`, `search.query`, `skills.*`, `uploads.*`, `maxChunkSize`                                              | [../protocol/methods.md](../protocol/methods.md)   |
-| `HostService` (conformance to `MCPHost`, `perform`), `RequestContext.local(device:author:)`, `MeshService.requestPeer`, starting and stopping the server, the refusal of `runs` changes for Claude                                            | [../services/host.md](../services/host.md)         |
-| `ForgeService.pushDocs`, `ForgeService.pushRegen`, the Forge push gate                                                                                                                                                                        | [../forge/pipeline.md](../forge/pipeline.md)       |
-| the public repository rule that limits the tools of Forge sessions                                                                                                                                                                            | [../public-repository.md](../public-repository.md) |
-| `Log.host`, logging rules                                                                                                                                                                                                                     | [../architecture.md](../architecture.md)           |
-| SKILL.md validation                                                                                                                                                                                                                           | [skills.md](skills.md)                             |
-| token registration by session processes                                                                                                                                                                                                       | [cli.md](cli.md)                                   |
-| the Runs section, where the user edits run configurations                                                                                                                                                                                     | [../ui/runs.md](../ui/runs.md)                     |
+| Name                                                                                                                                                                                                                               | Defined in                                         |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------|
+| `SessionKind`, `MeshSnapshot`, `ProjectSummary` (`children`), `Project` (`rootPath`), `TaskItem` (`parseError`), `WebTab`, `SearchResult`, `SearchScope`, `SkillSummary`, `SkillFile`, `SessionInfo`, `UploadRef`, `ProtocolError` | [../protocol/types.md](../protocol/types.md)       |
+| `mesh.snapshot`, `projects.*`, `tasks.*` (`tasks.addComment` with `author`), `sessions.start`, `sessions.update`, `tabs.open`, `search.query`, `skills.*`, `uploads.*`, `maxChunkSize`                                             | [../protocol/methods.md](../protocol/methods.md)   |
+| `HostService` (conformance to `MCPHost`, `perform`), `RequestContext.local(device:author:)`, `MeshService.requestPeer`, starting and stopping the server                                                                           | [../services/host.md](../services/host.md)         |
+| `ForgeService.pushDocs`, `ForgeService.pushRegen`, the Forge push gate                                                                                                                                                             | [../forge/pipeline.md](../forge/pipeline.md)       |
+| the public repository rule that limits the tools of Forge sessions                                                                                                                                                                 | [../public-repository.md](../public-repository.md) |
+| `Log.host`, logging rules                                                                                                                                                                                                          | [../architecture.md](../architecture.md)           |
+| SKILL.md validation                                                                                                                                                                                                                | [skills.md](skills.md)                             |
+| token registration by session processes                                                                                                                                                                                            | [cli.md](cli.md)                                   |

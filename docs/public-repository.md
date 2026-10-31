@@ -889,7 +889,7 @@ allow rules. As tried with Claude CLI 2.1.309:
   `git notes`, the git options that run a command or write a file (`--upload-pack`, and `--output` of `git diff`,
   `git log`, `git show` and `git stash`); edits of Claude Code's own settings (`.claude/`, `.mcp.json`) and of
   `.hephaestus/` folders. A deny rule wins over every allow rule. Every session of any project is denied edits of
-  `.hephaestus/` folders: the app's project data, run configurations included, changes only through the app.
+  `.hephaestus/` folders: the app's project data changes only through the app.
 - Their environment runs no git hook, rewrites every push URL to a scheme that has no remote helper, so that a plain
   `git push` from a hook, script, test or build fails, and keeps commits on the identity of git's configuration, with
   UTC dates.
@@ -902,19 +902,16 @@ allow rules. As tried with Claude CLI 2.1.309:
   ([ui/sessions.md](ui/sessions.md#permission-cards)). In `bypassPermissions`, or with all tools allowed, a session
   shows no card: the CLI or the Main approves what the denied rules miss
   ([claude/cli.md](claude/cli.md#44-allow-all-tools)).
-- No Hephaestus tool lets a session define a command: run configurations are changed only by the user, in the app
-  ([claude/mcp.md](claude/mcp.md#65-update_project)). Feedback and regeneration sessions get no tool that reads the
-  mesh's devices, projects or runs.
+- Feedback and regeneration sessions get no tool that reads the mesh's devices or projects
+  ([claude/mcp.md](claude/mcp.md#6-tools)).
 
 These rules do not hold code that a session runs. Regeneration sessions run code they write (tests, builds, the scripts
 of `scripts/`), and that code can drop the environment's variables (`GIT_CONFIG_COUNT=0 git push …` pushes), push from
 the `--upload-pack` command of a fetch (git clears the variables for it), or call the GitHub API with the `gh` login,
 which `gh` reads from its keyring. Nor do they hold a session in the mode `bypassPermissions` or with all tools
-allowed, which shows no card, a command the user approves that overrides the environment's git settings
-(`git -C <folder> -c url.<url>.pushInsteadOf=<url> push …` pushes: git uses the longest matching `pushInsteadOf`), or
-a run configuration that a `project` or `task` session starts (`start_run`): its command runs in the login environment
-and can run a file the session changed. The Forge push gate checks only what goes through it; the rest is reported once
-it is on GitHub ([Limits](#limits)).
+allowed, which shows no card, or a command the user approves that overrides the environment's git settings
+(`git -C <folder> -c url.<url>.pushInsteadOf=<url> push …` pushes: git uses the longest matching `pushInsteadOf`).
+The Forge push gate checks only what goes through it; the rest is reported once it is on GitHub ([Limits](#limits)).
 
 Allow rules of the user's own Claude Code settings (`~/.claude/settings.json`) add to these: a broad rule such as
 `Bash(git *)` there lets such commands run without a card, and none may exist on the Forge host. The repository's own
@@ -1168,11 +1165,10 @@ The check finds known forms and the private terms. It does not find:
   which can write the repository's contents. What that token pushes starts no workflow run; on `main` the Forge's
   check of its branch reports it;
 - a push made by code that a session runs, by a session (feedback, regeneration and bundle sessions included) in the
-  mode `bypassPermissions` or with all tools allowed, by a `project` or `task` session of the source project through a
-  run configuration it starts, or by a command the user approves that overrides the sessions' git settings
-  ([Claude permissions](#claude-permissions)): it passes through no gate. Once it is on GitHub, the Forge and CI
-  report its personal data; a weaker check it brings judges the later pushes in CI, and in the Forge push gate once
-  the Forge's check finds no personal data in it;
+  mode `bypassPermissions` or with all tools allowed, or by a command the user approves that overrides the sessions'
+  git settings ([Claude permissions](#claude-permissions)): it passes through no gate. Once it is on GitHub, the Forge
+  and CI report its personal data; a weaker check it brings judges the later pushes in CI, and in the Forge push gate
+  once the Forge's check finds no personal data in it;
 - the work of a session of another project, to which [Claude permissions](#claude-permissions) does not apply even when
   it works in the repository through its path, such as a task session that a session of the repository starts for a
   task of another project (`start_task_session`).

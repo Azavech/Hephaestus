@@ -417,7 +417,7 @@ A new task:
 
 ```yaml
 id: HEPH-13
-name: Add a Runs shortcut
+name: Add a Skills shortcut
 status: todo
 created: 2026-10-30T08:00:00Z
 updated: 2026-10-30T08:00:00Z

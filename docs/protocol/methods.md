@@ -58,8 +58,8 @@ Methods marked W in the method table change a project. They are refused with `lo
   absolute, contains a `.` or `..` component, or resolves (symbolic links included) outside the project root is refused
   with `badRequest` ([services/files.md](../services/files.md)).
 - Skill paths follow the same rules relative to the skill folder.
-- Names (project, sub project, task, run configuration, session title, device) are trimmed of surrounding white space
-  and line breaks. A project name, a task name, a run configuration name and a session title must not be empty and
+- Names (project, sub project, task, session title, device) are trimmed of surrounding white space
+  and line breaks. A project name, a task name and a session title must not be empty and
   must be on one line (no line break, [data/project-yml.md](../data/project-yml.md#validation-and-normalization));
   they have no maximum length. Another name is refused with `badRequest` and the message of
   [data/project-yml.md](../data/project-yml.md), [data/task-yml.md](../data/task-yml.md) or
@@ -72,7 +72,7 @@ Methods marked W in the method table change a project. They are refused with `lo
   come from its file watcher, [services/host.md](../services/host.md)). They reach every device, the caller included.
   The caller may apply the result to its mirror at once; the event then brings the same state.
 - Lists in results are ordered as stated; when nothing is stated, the order carries no meaning.
-- No method waits for long work. Work that continues after the response (a migration, a session turn, a run) reports
+- No method waits for long work. Work that continues after the response (a migration, a session turn) reports
   through events.
 
 ### Limits
@@ -150,9 +150,6 @@ Methods marked W in the method table change a project. They are refused with `lo
 | `sessions.respond`        | `sessionsRespond`        | `SessionsRespondParams`        | `EmptyPayload`              | `anyDevice`   | W |
 | `sessions.update`         | `sessionsUpdate`         | `SessionsUpdateParams`         | `SessionInfo`               | `anyDevice`   | W |
 | `sessions.delete`         | `sessionsDelete`         | `SessionsDeleteParams`         | `EmptyPayload`              | `anyDevice`   | W |
-| `runs.start`              | `runsStart`              | `RunsStartParams`              | `RunInfo`                   | `anyDevice`   | W |
-| `runs.stop`               | `runsStop`               | `RunsStopParams`               | `EmptyPayload`              | `anyDevice`   |   |
-| `runs.output`             | `runsOutput`             | `RunsOutputParams`             | `RunsOutputResult`          | `anyDevice`   |   |
 | `search.query`            | `searchQuery`            | `SearchQueryParams`            | `SearchQueryResult`         | `anyDevice`   |   |
 | `skills.list`             | `skillsList`             | `EmptyPayload`                 | `SkillsListResult`          | `anyDevice`   |   |
 | `skills.create`           | `skillsCreate`           | `SkillsCreateParams`           | `SkillSummary`              | `anyDevice`   |   |
@@ -438,7 +435,6 @@ Everything a client mirrors for one project.
 | `tasks`    | `[TaskItem]`    | Its tasks, broken ones included, ordered by task number                           |
 | `bundles`  | `[BundleItem]`  | Its bundles, ordered by bundle number                                             |
 | `sessions` | `[SessionInfo]` | Its sessions of every kind, ordered by `created`, with their `pendingPermissions` |
-| `runs`     | `[RunInfo]`     | Its runs kept in memory (at most 20), newest `startedAt` first                    |
 
 Sub projects are not included; each has its own snapshot.
 
@@ -510,10 +506,8 @@ Registers an existing folder as a top-level project.
 | `patch`     | `ProjectPatch` | Changes ([types.md](types.md#projectpatch)) |
 
 - Result: `Project` after the change.
-- Errors: `badRequest` (a project or run configuration name that breaks the name rules, two run configurations with
-  the same name, an empty command, a `cwd` that breaks the path rules, a skill name that is not valid
-  ([claude/skills.md](../claude/skills.md)); `runs` sent by an MCP tool: "Run configurations are changed by the user
-  in the app.", [services/host.md](../services/host.md#75-projectsupdate)).
+- Errors: `badRequest` (a project name that breaks the name rules, a skill name that is not valid
+  ([claude/skills.md](../claude/skills.md))).
 - Writes: project.yml.
 - Events: `project.changed`; `projects.changed` when `name` or `description` changed.
 
@@ -530,11 +524,11 @@ Registers an existing folder as a top-level project.
 - Errors: `unavailable` "Could not move <path> to the Trash: <reason>." when the folder cannot be moved to the Trash;
   `conflict` when the parent's project.yml of a sub project is invalid. After a failure the project stays registered
   and its stopped processes stay stopped; nothing else changes ([services/host.md](../services/host.md)).
-- Effects: stops the session processes and runs of the project and of its sub projects; with `moveToTrash`, moves the
+- Effects: stops the session processes of the project and of its sub projects; with `moveToTrash`, moves the
   folder to the Trash of the Main's user; unregisters the project (top-level: removed from `projects.json`; sub
   project: removed from the parent's `subprojects`; without `moveToTrash` its folder stays as a plain folder of the
   parent).
-- Events: `run.changed` and `session.changed` for what was stopped; `projects.changed`; for a sub project also
+- Events: `session.changed` for what was stopped; `projects.changed`; for a sub project also
   `project.changed` (parent).
 
 ### projects.migrate
@@ -552,8 +546,8 @@ Main that hosts the project.
 `ProjectsMigrateResult`: `migrationID` (`UUID`), the id used by the `migration.*` methods and `migration.progress`.
 
 - Errors: `badRequest` (the project is a sub project; the target is this Main or is not a Main); `notFound` (unknown
-  target device); `unavailable` (this Main has no open peer link to the target); `conflict` (a session process or a
-  run of the project or of its sub projects is running: the UI offers to stop them); `locked` (already migrating).
+  target device); `unavailable` (this Main has no open peer link to the target); `conflict` (a session process of the
+  project or of its sub projects is running: the UI offers to stop them); `locked` (already migrating).
 - Effects: marks the project and its sub projects `migrating`, answers, then runs the migration: `migration.begin`,
   `migration.chunk`, `migration.commit` on the target. On success the source moves its folder to its Trash and
   unregisters the project. On failure it calls `migration.abort` on the target and clears `migrating`. The source
@@ -1081,7 +1075,7 @@ Answers a permission request. The first answer wins.
 - Result: `SessionInfo` after the change.
 - Effects: saves the session file. A new title shows at once and reaches the Claude CLI at its next process start
   (`--name`); Claude renames its own session through this method (`rename_session`,
-  [claude/mcp.md](../claude/mcp.md#629-rename_session)). A new `permissionMode` or `model` applies at the next process
+  [claude/mcp.md](../claude/mcp.md#625-rename_session)). A new `permissionMode` or `model` applies at the next process
   start; an idle process is restarted at once ([claude/cli.md](../claude/cli.md)). Every session kind accepts every
   field, Forge
   sessions included. `allowsAllTools` applies at once, without a restart; when it becomes true, every pending
@@ -1100,44 +1094,6 @@ Answers a permission request. The first answer wins.
   CLI's own transcript is kept.
 - Errors: `notFound` (session).
 - Events: `session.removed`.
-
-## Runs
-
-Run execution and output buffering: [services/runs.md](../services/runs.md).
-
-### runs.start
-
-`RunsStartParams`: `projectID` (`String`), `name` (`String`, a run configuration name).
-
-- Result: `RunInfo` of the new run, state `running`.
-- Errors: `notFound` (no run configuration with that name, or its working folder does not exist); `badRequest` (its
-  `cwd` breaks the path rules); `conflict` (a run of that configuration is running); `internal` "Could not start
-  <name>: <error>" (the process could not be started; no run is recorded, [services/runs.md](../services/runs.md)).
-- Events: `run.changed`; `run.output` to subscribers; `run.changed` when it ends.
-
-### runs.stop
-
-`RunsStopParams`: `projectID` (`String`), `runID` (`UUID`).
-
-- Result: `EmptyPayload`, without waiting for the end. Effects: stops the process (SIGTERM to its process group,
-  SIGKILL after 5 s); state `stopped`. Nothing when the run has ended.
-- Errors: `notFound` (not among the runs kept in memory).
-- Events: `run.changed`.
-
-### runs.output
-
-`RunsOutputParams`: `projectID` (`String`), `runID` (`UUID`).
-
-`RunsOutputResult`:
-
-| Field  | Type     | Meaning                                                                        |
-|--------|----------|--------------------------------------------------------------------------------|
-| `text` | `String` | The output kept for the run (its last 5,000 lines)                             |
-| `seq`  | `Int`    | `seq` of the last `run.output` batch included in `text`; `0` before any output |
-
-- Errors: `notFound` (not among the runs kept in memory).
-- A client subscribes to `run:<runID>` before calling it, then ignores the `run.output` events whose `seq` is at most
-  `seq` ([events.md](events.md#runoutput)).
 
 ## Search
 

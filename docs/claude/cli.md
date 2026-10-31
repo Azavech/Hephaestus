@@ -15,7 +15,7 @@ files:
 ---
 
 A Main runs every Claude session as a `claude` CLI process driven in stream-json mode. This doc defines the child
-process layer shared with runs and git, how the CLI is found, the session process and its JSON lines, permissions,
+process layer shared with git, how the CLI is found, the session process and its JSON lines, permissions,
 `SessionService`, which serves the `sessions.*` methods, and `SessionTitler`, the one-shot call that titles a session
 from its first message. The Hephaestus tools are in [mcp.md](mcp.md), the prompt texts
 in [prompts.md](prompts.md), the plugin folder in [skills.md](skills.md), the session files in
@@ -28,9 +28,8 @@ inputs and results, prompts and bearer tokens are never logged.
 
 ## 1. Child processes (`HephHost/Process`)
 
-Claude sessions, runs ([../services/runs.md](../services/runs.md)), git and gh
-([../forge/pipeline.md](../forge/pipeline.md)), the updater ([../forge/update.md](../forge/update.md)) and the shell
-lookups below start processes through `ChildProcess`.
+Claude sessions, git and gh ([../forge/pipeline.md](../forge/pipeline.md)), the updater
+([../forge/update.md](../forge/update.md)) and the shell lookups below start processes through `ChildProcess`.
 
 ### 1.1 Login environment
 
@@ -67,7 +66,7 @@ public struct ChildProcessConfiguration: Sendable {
     public var workingDirectory: String
     public var environment: [String: String]
     public var standardInput: StandardInput    // .pipe: written with write(_:); .null: /dev/null
-    public var mergeStandardError: Bool        // true: fd 2 is the stdout pipe (runs)
+    public var mergeStandardError: Bool        // true: fd 2 is the stdout pipe
     public init(executable: String, arguments: [String], workingDirectory: String,
                 environment: [String: String], standardInput: StandardInput = .null,
                 mergeStandardError: Bool = false)
@@ -142,7 +141,7 @@ Running:
 - Writing: `write(_:)` loops on `write(2)` until every byte is written, retrying `EINTR`. Any other error throws
   `writeFailed(errno)`; after `closeStandardInput()` it throws `standardInputClosed`.
 
-Stop sequence (`terminate()`), used for every stop of sessions and runs:
+Stop sequence (`terminate()`), used for every stop of sessions:
 
 1. Close stdin when it is a pipe. Send `SIGTERM` to the group (`kill(-pid, SIGTERM)`).
 2. Every 100 ms, test the group with `kill(-pid, 0)`. When it fails with `ESRCH` (no process of the group is left) and
@@ -501,9 +500,7 @@ that were tried. In a session, the environment makes a push fail even when the u
 `pushInsteadOf` (verified with git 2.54). With all tools allowed (4.4) the Main approves such a command itself. Code a
 session runs (its scripts, tests and builds) can still push, and so can every session of 3.5
 ([../public-repository.md](../public-repository.md#limits)): in the mode `bypassPermissions`, where the CLI asks for
-no approval, with all tools allowed, and, for a `project` or `task` session, in any mode through a run configuration
-it starts (`start_run`, [mcp.md](mcp.md#614-start_run)), whose command runs in the login environment, without the
-changes below ([../services/runs.md](../services/runs.md#4-process)), and can run a file the session changed.
+no approval, and with all tools allowed.
 
 `ForgeSessionRules.swift` holds the lists and the environment of this section, and nothing else:
 
@@ -584,8 +581,8 @@ Edit(.mcp.json)
 Edit(**/.hephaestus/**)
 ```
 
-Every other session gets the last rule alone (3.1): the app's project data under `.hephaestus/`, run configurations
-included ([mcp.md](mcp.md#65-update_project)), changes only through the app.
+Every other session gets the last rule alone (3.1): the app's project data under `.hephaestus/` changes only through
+the app.
 
 How the CLI applies them, as verified with CLI 2.1.309 in sessions driven like the app's:
 
@@ -1087,7 +1084,7 @@ wait for it and then start a new process.
   accepted for every kind, the sessions of 3.5 included.
   `model` `""` removes the model. The session file is updated. A title change shows at once (`session.changed`) and
   reaches the CLI at the next process start (`--name`); the running process is not restarted for it. Claude renames
-  its own session with the tool `rename_session` ([mcp.md](mcp.md#629-rename_session)), which calls this method.
+  its own session with the tool `rename_session` ([mcp.md](mcp.md#625-rename_session)), which calls this method.
   `allowsAllTools` applies at once and never restarts the process: when it becomes true, the pending requests are
   answered after the file is saved, before the response (4.4). A change of `permissionMode` or `model`
   applies at the next process start: in status `idle` the process is restarted at once (terminated, then started

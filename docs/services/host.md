@@ -19,7 +19,7 @@ to every connection, owns the hosted projects, watches their folders and emits t
 [../protocol/events.md](../protocol/events.md). Every file of `HephHost` is wrapped in `#if os(macOS)`. Everything this
 doc calls "logged" is written with `Log.host` ([../architecture.md](../architecture.md)).
 
-Related docs: files in [files.md](files.md), runs in [runs.md](runs.md), search in [search.md](search.md); listener,
+Related docs: files in [files.md](files.md), search in [search.md](search.md); listener,
 Bonjour, registry, presence and peer links in [../devices/mesh.md](../devices/mesh.md); migration in
 [../devices/migration.md](../devices/migration.md); sessions in [../claude/cli.md](../claude/cli.md); MCP server in
 [../claude/mcp.md](../claude/mcp.md); skills in [../claude/skills.md](../claude/skills.md); Forge in
@@ -31,8 +31,8 @@ Bonjour, registry, presence and peer links in [../devices/mesh.md](../devices/me
 ## 1. Objects
 
 `HostService.init` creates every host object once; they live as long as the app. `start()` activates them and
-`stop()` deactivates them. The services of this doc and of [files.md](files.md), [runs.md](runs.md) and
-[search.md](search.md) are actors initialized with `host: HostService` (a strong reference, kept for the app's life)
+`stop()` deactivates them. The services of this doc and of [files.md](files.md) and [search.md](search.md)
+are actors initialized with `host: HostService` (a strong reference, kept for the app's life)
 and reach each other through the host's properties. The services of other docs are initialized as their docs say:
 `SessionService`, `SkillsService` and `MCPServer` with the host as their host protocol (§12); `MeshService`,
 `MigrationService` and `ForgeService` with the `HostService` itself (`MeshService` also receives `appSupport`,
@@ -57,7 +57,6 @@ its type is public (`EventHub`, `UploadService`, `MeshService`, `MigrationServic
 | `hostInfo`  | `HostInfoService`  | this doc §10                            | `host.info`, `host.listDirectories`              |
 | `files`     | `FileService`      | [files.md](files.md)                    | `files.*`                                        |
 | `uploads`   | `UploadService`    | [files.md](files.md) §7                 | `uploads.*`, upload store                        |
-| `runs`      | `RunService`       | [runs.md](runs.md)                      | `runs.*`                                         |
 | `search`    | `SearchService`    | [search.md](search.md)                  | `search.query`                                   |
 | `mesh`      | `MeshService`      | [mesh.md](../devices/mesh.md)           | listener, Bonjour, pairing, registry, peer links |
 | `migration` | `MigrationService` | [migration.md](../devices/migration.md) | `projects.migrate`, `migration.*`                |
@@ -102,7 +101,7 @@ public actor HostService {
     /// LoopbackChannel.makePair(): serves the server end, returns the client end for this Mac's Workspace.
     public func makeLoopbackChannel() async -> any MessageChannel
 
-    /// A session of this Main is starting, running or waitingPermission, a run is running, or a migration runs
+    /// A session of this Main is starting, running or waitingPermission, or a migration runs
     /// (§12.5).
     public func hasActiveWork() async -> Bool
 
@@ -127,7 +126,6 @@ public actor HostService {
     nonisolated var hostInfo: HostInfoService { get }
     nonisolated var files: FileService { get }
     public nonisolated var uploads: UploadService { get }
-    nonisolated var runs: RunService { get }
     nonisolated var search: SearchService { get }
     public nonisolated var mesh: MeshService { get }
     public nonisolated var migration: MigrationService { get }
@@ -236,7 +234,7 @@ Then, in this order:
 | 1    | `mesh.stopPeerLinks()`, `mesh.stopAdvertising()`, `mesh.stopListener()`; the observers of §3.1 step 11 are cancelled |
 | 2    | `events.closeAll()`: closes every served connection, network and loopback                                            |
 | 3    | `forge.shutdown()`, `skills.stop()`, `migration.stop()`                                                              |
-| 4    | `sessions.stopAll()` and `runs.stopAll(projectID: nil)` concurrently; waits for both                                 |
+| 4    | `sessions.stopAll()`; waits for it                                                                                   |
 | 5    | `mcp.stop()`, `watcher.stopAll()`, `uploads.stop()`, `search.clearCache()`, `registry.unload()`                      |
 
 Then the activity ends (`ProcessInfo.processInfo.endActivity(_:)` with `activity`, then `activity = nil`),
@@ -339,7 +337,6 @@ For each request of an authenticated connection, and for `perform`:
 | `files.*`                                         | `files`                                           |
 | `tabs.*`                                          | `tabs`                                            |
 | `sessions.*` (`sessions.readAttachment` included) | `sessions`                                        |
-| `runs.*`                                          | `runs`                                            |
 | `search.query`                                    | `search`                                          |
 | `skills.*`                                        | `skills`                                          |
 | `forge.*`                                         | `HostService`, which calls `ForgeService` (below) |
@@ -392,8 +389,8 @@ public actor EventHub {
   notifies the Forge of the events it follows ([../forge/pipeline.md](../forge/pipeline.md)): `sessionChanged` →
   `forge.sessionChanged(projectID:session:)`, `sessionRemoved` → `forge.sessionRemoved(projectID:sessionID:)` (the
   id's `uuidString`), `taskChanged` → `forge.taskChanged(projectID:task:)`, `taskRemoved` →
-  `forge.taskRemoved(projectID:taskID:)`. The services of this doc, of [files.md](files.md), [bundles.md](bundles.md),
-  [runs.md](runs.md) and [search.md](search.md), the host protocol requirements (§12) and the Forge emit through
+  `forge.taskRemoved(projectID:taskID:)`. The services of this doc, of [files.md](files.md), [bundles.md](bundles.md)
+  and [search.md](search.md), the host protocol requirements (§12) and the Forge emit through
   `emit`; other services may call `events.broadcast` directly for events the Forge does not follow (`mesh.changed`,
   `migration.progress`).
 - Events given in sequence by one caller reach each connection in that order (each channel sends its frames in order).
@@ -628,8 +625,7 @@ its sub projects in `children`.
 
 `project`: `registry.project(projectID)`; `tasks`: `tasks.list(projectID:)` (by task number); `bundles`:
 `bundles.list(projectID:)` (by bundle number); `sessions`:
-`sessions.sessions(projectID:)` reordered by `created` ascending; `runs`: `runs.list(projectID:)` in reverse order
-(newest `startedAt` first). Served while the project is migrating.
+`sessions.sessions(projectID:)` reordered by `created` ascending. Served while the project is migrating.
 
 ### 7.3 projects.create
 
@@ -688,28 +684,21 @@ The Forge registers its source project with the same logic, calling `projects.im
 Inside `registry.write(projectID)`: `ProjectFile.update(projectRoot:)` applying each non-nil field of the
 `ProjectPatch`, then `registry.reloaded` with the file as written; returns `registry.project(projectID)`.
 
-A patch with `runs` in a request whose `context.author` is `Claude` (an MCP tool) fails first with `badRequest` "Run
-configurations are changed by the user in the app.": `runs.start` runs their commands without a permission request, so
-no Claude session defines one ([../claude/mcp.md](../claude/mcp.md#65-update_project)). `update(projectID:patch:)` has
-no context: `handle(method:params:context:)` makes this check once the params are decoded, before it calls `update`, so
-nothing is read or written and an unknown or migrating project gets this error too.
+| Patch field   | Change                                                  |
+|---------------|---------------------------------------------------------|
+| `name`        | `file.name`                                             |
+| `description` | `file.description` (normalization removes an empty one) |
+| `skills`      | `file.skills`                                           |
+| `claude`      | `file.claude` = the whole block                         |
 
-| Patch field   | Change                                                              |
-|---------------|---------------------------------------------------------------------|
-| `name`        | `file.name`                                                         |
-| `description` | `file.description` (normalization removes an empty one)             |
-| `runs`        | `file.runs` = the `RunConfig` values as `RunEntry` values, in order |
-| `skills`      | `file.skills`                                                       |
-| `claude`      | `file.claude` = the whole block                                     |
-
-The rules (names, unique run names, commands, `cwd`, skill names) are those of `ProjectFile.validate`: a broken rule
+The rules (names, skill names) are those of `ProjectFile.validate`: a broken rule
 is `badRequest` with its message; an invalid file on disk is `conflict`.
 
 ### 7.6 projects.remove
 
 1. `registry.checkWritable(projectID)`.
-2. For the project and each descendant, concurrently: `sessions.stopAll(projectID:)` and `runs.stopAll(projectID:)`;
-   waits for all.
+2. For the project and each descendant, concurrently: `sessions.stopAll(projectID:)`; waits for
+   all.
 3. Top-level project: with `moveToTrash`, `watcher.unwatch(root)` (so the watcher does not unregister the project
    first, §11.2 step 6), then `appSupport.trashItem(realRoot)`; a failure → `watcher.watch(root)` again and
    `unavailable` "Could not move <path> to the Trash: <reason>.", the project stays registered. Then
@@ -1053,10 +1042,10 @@ Updates ([../ui/shell.md](../ui/shell.md)).
 
 ### 12.5 hasActiveWork()
 
-`await sessions.isRunningTurn() || await runs.activeRunCount(projectID: nil) > 0 || await migration.isActive()`
+`await sessions.isRunningTurn() || await migration.isActive()`
 ([../devices/migration.md](../devices/migration.md#locked-state)); `false` while `state` is not `.running`. Used by the
-self-update ([../forge/update.md](../forge/update.md)), so a self-update never quits the app during a turn, a run or a
-project move.
+self-update ([../forge/update.md](../forge/update.md)), so a self-update never quits the app during a turn or a project
+move.
 
 ## 13. MeshService and MigrationService
 
@@ -1069,8 +1058,8 @@ init arguments (§2). The host uses these members of `MeshService`
 §12); `peerLinkEvents()` (§12.2). `MeshService` and `MigrationService` conform to `HostMethodHandler` for the methods
 routed to them (§4.4). The host calls `migration.recover()` (§3.1), `migration.stop()` (§3.2),
 `migration.peerLinkOpened(_:)` (§12.2) and `migration.isActive()` (§12.5). `MigrationService` uses `registry.hosted`,
-`all()`, `descendants(of:)`, `setMigrating`, `register`, `unregister` and `forgetRoot` (§6), `sessions.hasProcess`,
-`runs.activeRunCount` and `stopAll`, and `appSupport` for the Trash and `migrations.json`
+`all()`, `descendants(of:)`, `setMigrating`, `register`, `unregister` and `forgetRoot` (§6), `sessions.hasProcess`, and
+`appSupport` for the Trash and `migrations.json`
 ([../devices/migration.md](../devices/migration.md)).
 
 ## 14. Events of this doc

@@ -381,7 +381,7 @@ A project chat that allows all tools and whose last process failed:
 ```yaml
 id: 9C1D2E3F-4A5B-4C6D-8E7F-0A1B2C3D4E5F
 kind: project
-title: Plan the Runs screen
+title: Plan the Skills screen
 created: 2026-10-29T22:20:00Z
 updated: 2026-10-29T22:31:07Z
 permissionMode: plan

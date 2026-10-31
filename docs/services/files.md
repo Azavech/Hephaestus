@@ -86,8 +86,8 @@ form.
    `standardizedFileURL` are not used: they turn `/private/var/…` into `/var/…`, which `root` never matches.
 3. The result must be `root` or start with `root` + `/` → else `badRequest` "<path> is outside the project.".
 
-The same containment check, applied to sub project roots, the folder of `projects.create` and run working folders, is
-required by [host.md](host.md) §6.3 and §7.3 and [runs.md](runs.md) §3.
+The same containment check, applied to sub project roots and the folder of `projects.create`, is required by
+[host.md](host.md) §6.3 and §7.3.
 
 ## 3. Revision
 

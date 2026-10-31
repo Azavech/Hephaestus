@@ -210,7 +210,7 @@ CLI ([../claude/cli.md](../claude/cli.md#55-statuses)).
 
 ### Tools of the coordinator
 
-The MCP tools of [../claude/mcp.md](../claude/mcp.md#625-get_bundle) call these functions with the calling session's
+The MCP tools of [../claude/mcp.md](../claude/mcp.md#621-get_bundle) call these functions with the calling session's
 `bundleID`; a session without one gets the tool error `Only the coordinator of a bundle can use this tool.`, once the
 tool's arguments are checked.
 

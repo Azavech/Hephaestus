@@ -8,8 +8,8 @@ files:
 ---
 
 Every project, top-level or sub project, has the file `<project root>/.hephaestus/project.yml`. It holds the identity
-of the project and the state every device shares: sub projects, web tabs, run configurations, enabled skills and
-Claude defaults.
+of the project and the state every device shares: sub projects, web tabs, enabled skills and Claude
+defaults.
 
 The first section defines the YAML coding used by every YAML file of Hephaestus: this file, the task files
 ([task-yml.md](task-yml.md)) and the session metadata files ([sessions.md](sessions.md)).
@@ -110,7 +110,8 @@ Hand edits and other tools may add keys. The app keeps them when it rewrites a f
 
 1. The new value is encoded with the encoder of this section, and the text is composed into a Yams `Node`
    (`Yams.compose(yaml:)`).
-2. The text the file had just before the write is composed into a `Node`.
+2. The text the file had just before the write is composed into a `Node`; its retired top-level keys (below) are
+   removed from it.
 3. The two nodes are merged with the file's `YAMLShape`; the merged node is serialized.
 
 `YAMLShape` lists the known keys of a file. `merge(new, old, shape)`:
@@ -135,6 +136,10 @@ Consequences:
 - When the old text has no unknown key, the merged text is exactly the encoder's output.
 - Unknown keys are never sent over the protocol and cannot be edited in the app.
 
+A retired key is a key that earlier versions of the app wrote and this version no longer knows. Decoding ignores it,
+whatever its value, like any unknown key; step 2 removes it, so the next write of the file drops it. project.yml has
+one retired key, `runs` (the run configurations of earlier versions). The task and session files have none.
+
 ### Read-modify-write
 
 The app never writes a YAML file from a copy held in memory. Every change made by the app:
@@ -158,21 +163,20 @@ The functions of this doc do no locking. The host serializes the writes of one p
 
 Top level, in this order:
 
-| Key               | YAML type            | Required | Default | Written              | Meaning                                                                    |
-|-------------------|----------------------|----------|---------|----------------------|----------------------------------------------------------------------------|
-| `id`              | string               | yes      |         | always               | Project identifier: the `projectID` of the protocol. Never changes.        |
-| `name`            | string               | yes      |         | always               | Display name.                                                              |
-| `description`     | string               | no       | empty   | when not empty       | Description; may span several lines.                                       |
-| `created`         | timestamp            | yes      |         | always               | Creation time.                                                             |
-| `code`            | string               | no       | `.`     | always               | Code folder, relative to the project root.                                 |
-| `docs`            | string               | no       | `docs`  | always               | Docs folder, relative to the code folder.                                  |
-| `taskCounter`     | integer              | no       | `0`     | always               | Last task number used ([task-yml.md](task-yml.md#id-allocation)).          |
-| `feedbackCounter` | integer              | no       | `0`     | always               | Last feedback task number used ([task-yml.md](task-yml.md#id-allocation)). |
-| `subprojects`     | sequence of strings  | no       | `[]`    | always               | Roots of the sub projects, relative to this project's root.                |
-| `webTabs`         | sequence of web tabs | no       | `[]`    | always               | Web tabs, in tab strip order.                                              |
-| `runs`            | sequence of runs     | no       | `[]`    | always               | Run configurations, in display order.                                      |
-| `skills`          | sequence of strings  | no       | `[]`    | always               | Names of the enabled library skills. Empty: every skill of the library.    |
-| `claude`          | mapping              | no       | absent  | when one key is set  | Defaults of new Claude sessions.                                           |
+| Key               | YAML type            | Required | Default | Written             | Meaning                                                                    |
+|-------------------|----------------------|----------|---------|---------------------|----------------------------------------------------------------------------|
+| `id`              | string               | yes      |         | always              | Project identifier: the `projectID` of the protocol. Never changes.        |
+| `name`            | string               | yes      |         | always              | Display name.                                                              |
+| `description`     | string               | no       | empty   | when not empty      | Description; may span several lines.                                       |
+| `created`         | timestamp            | yes      |         | always              | Creation time.                                                             |
+| `code`            | string               | no       | `.`     | always              | Code folder, relative to the project root.                                 |
+| `docs`            | string               | no       | `docs`  | always              | Docs folder, relative to the code folder.                                  |
+| `taskCounter`     | integer              | no       | `0`     | always              | Last task number used ([task-yml.md](task-yml.md#id-allocation)).          |
+| `feedbackCounter` | integer              | no       | `0`     | always              | Last feedback task number used ([task-yml.md](task-yml.md#id-allocation)). |
+| `subprojects`     | sequence of strings  | no       | `[]`    | always              | Roots of the sub projects, relative to this project's root.                |
+| `webTabs`         | sequence of web tabs | no       | `[]`    | always              | Web tabs, in tab strip order.                                              |
+| `skills`          | sequence of strings  | no       | `[]`    | always              | Names of the enabled library skills. Empty: every skill of the library.    |
+| `claude`          | mapping              | no       | absent  | when one key is set | Defaults of new Claude sessions.                                           |
 
 Web tab (item of `webTabs`):
 
@@ -182,14 +186,6 @@ Web tab (item of `webTabs`):
 | `title`  | string    | no       | empty   | always  | Title shown in the tab strip.                              |
 | `url`    | string    | yes      |         | always  | URL of the tab ([ui/web.md](../ui/web.md) updates it).     |
 | `locked` | boolean   | no       | `false` | always  | A locked tab cannot be closed.                             |
-
-Run (item of `runs`):
-
-| Key       | YAML type | Required | Default      | Written              | Meaning                                                                     |
-|-----------|-----------|----------|--------------|----------------------|-----------------------------------------------------------------------------|
-| `name`    | string    | yes      |              | always               | Name of the run configuration, unique in the project.                       |
-| `command` | string    | yes      |              | always               | Shell command ([services/runs.md](../services/runs.md)); may span lines.    |
-| `cwd`     | string    | no       | project root | when set and not `.` | Working directory, relative to the project root.                            |
 
 `claude`:
 
@@ -211,25 +207,22 @@ invalid (when reading) or fails the change with `.invalid` (when writing). The m
 `<i>` the index of the item. The rules are checked in the order of the table, each over every item before the next,
 so the message is that of the first broken rule.
 
-| Key                     | Normalization                                                       | Rule                                                | Message                                                       |
-|-------------------------|---------------------------------------------------------------------|-----------------------------------------------------|---------------------------------------------------------------|
-| `id`                    | `ProjectIdentifier.normalize`                                       | `^[A-Z]{2,8}$`                                      | `the identifier must be 2 to 8 letters A to Z`                |
-| `name`                  | leading and trailing whitespace and line breaks removed             | not empty, no line break                            | `the name must not be empty and must be on one line`          |
-| `description`           | empty string becomes absent                                         | none                                                |                                                               |
-| `code`                  | relative path normalization                                         | valid relative path                                 | `code must be a relative path inside the project`             |
-| `docs`                  | relative path normalization                                         | valid relative path                                 | `docs must be a relative path inside the code folder`         |
-| `taskCounter`           | none                                                                | 0 or more                                           | `taskCounter must not be negative`                            |
-| `feedbackCounter`       | none                                                                | 0 or more                                           | `feedbackCounter must not be negative`                        |
-| `subprojects[i]`        | relative path normalization; repeated paths removed, the first kept | valid relative path, not `.`                        | `subprojects[<i>] must be a relative path inside the project` |
-| `webTabs[i].id`         | none                                                                | unique in the file                                  | `webTabs[<i>].id must be unique`                              |
-| `webTabs[i].url`        | leading and trailing whitespace removed                             | not empty                                           | `webTabs[<i>].url must not be empty`                          |
-| `runs[i].name`          | leading and trailing whitespace and line breaks removed             | not empty, no line break, unique (exact)            | `runs[<i>].name must be unique, not empty and on one line`    |
-| `runs[i].command`       | none                                                                | not empty after removing whitespace and line breaks | `runs[<i>].command must not be empty`                         |
-| `runs[i].cwd`           | relative path normalization; `.` becomes absent                     | valid relative path                                 | `runs[<i>].cwd must be a relative path inside the project`    |
-| `skills[i]`             | leading and trailing whitespace removed; repeated names removed     | `^[a-z0-9-]{1,64}$`                                 | `skills[<i>] is not a valid skill name`                       |
-| `claude.model`          | whitespace trimmed; empty becomes absent                            | no line break                                       | `claude.model must be on one line`                            |
-| `claude.permissionMode` | none                                                                | a `PermissionMode` value (checked by decoding)      | `claude.permissionMode: invalid value`                        |
-| `claude`                | absent when both of its keys are absent                             | none                                                |                                                               |
+| Key                     | Normalization                                                       | Rule                                           | Message                                                       |
+|-------------------------|---------------------------------------------------------------------|------------------------------------------------|---------------------------------------------------------------|
+| `id`                    | `ProjectIdentifier.normalize`                                       | `^[A-Z]{2,8}$`                                 | `the identifier must be 2 to 8 letters A to Z`                |
+| `name`                  | leading and trailing whitespace and line breaks removed             | not empty, no line break                       | `the name must not be empty and must be on one line`          |
+| `description`           | empty string becomes absent                                         | none                                           |                                                               |
+| `code`                  | relative path normalization                                         | valid relative path                            | `code must be a relative path inside the project`             |
+| `docs`                  | relative path normalization                                         | valid relative path                            | `docs must be a relative path inside the code folder`         |
+| `taskCounter`           | none                                                                | 0 or more                                      | `taskCounter must not be negative`                            |
+| `feedbackCounter`       | none                                                                | 0 or more                                      | `feedbackCounter must not be negative`                        |
+| `subprojects[i]`        | relative path normalization; repeated paths removed, the first kept | valid relative path, not `.`                   | `subprojects[<i>] must be a relative path inside the project` |
+| `webTabs[i].id`         | none                                                                | unique in the file                             | `webTabs[<i>].id must be unique`                              |
+| `webTabs[i].url`        | leading and trailing whitespace removed                             | not empty                                      | `webTabs[<i>].url must not be empty`                          |
+| `skills[i]`             | leading and trailing whitespace removed; repeated names removed     | `^[a-z0-9-]{1,64}$`                            | `skills[<i>] is not a valid skill name`                       |
+| `claude.model`          | whitespace trimmed; empty becomes absent                            | no line break                                  | `claude.model must be on one line`                            |
+| `claude.permissionMode` | none                                                                | a `PermissionMode` value (checked by decoding) | `claude.permissionMode: invalid value`                        |
+| `claude`                | absent when both of its keys are absent                             | none                                           |                                                               |
 
 Names have no maximum length. A line break is a `Character` whose `isNewline` is true (LF, CR, CR LF, vertical tab,
 form feed, U+0085, U+2028, U+2029). Every trim of the data docs removes `.whitespacesAndNewlines`, line breaks
@@ -253,7 +246,7 @@ Names in `skills` that are not in the Main's library are kept and ignored when s
 
 ### Relative paths
 
-`code`, `docs`, `subprojects[i]` and `runs[i].cwd` are relative paths with `/` separators. Normalization
+`code`, `docs` and `subprojects[i]` are relative paths with `/` separators. Normalization
 (`ProjectFile.normalizedRelativePath`):
 
 1. Remove leading and trailing whitespace.
@@ -291,21 +284,20 @@ A `project.yml` is invalid when it is unreadable or breaks a rule of this doc. T
 `ProjectFile.create` writes a new `project.yml` for `projects.create` and for `projects.import` of a folder without
 one. The new file has:
 
-| Key               | Value                                         |
-|-------------------|-----------------------------------------------|
-| `id`              | the normalized identifier                     |
-| `name`            | the normalized name                           |
-| `description`     | the description when not empty, else absent   |
-| `created`         | `YAMLCoding.now()`                            |
-| `code`            | `.`                                           |
-| `docs`            | `docs`                                        |
-| `taskCounter`     | `0`                                           |
-| `feedbackCounter` | `0`                                           |
-| `subprojects`     | `[]`                                          |
-| `webTabs`         | `[]`                                          |
-| `runs`            | `[]`                                          |
-| `skills`          | `[]`                                          |
-| `claude`          | absent                                        |
+| Key               | Value                                       |
+|-------------------|---------------------------------------------|
+| `id`              | the normalized identifier                   |
+| `name`            | the normalized name                         |
+| `description`     | the description when not empty, else absent |
+| `created`         | `YAMLCoding.now()`                          |
+| `code`            | `.`                                         |
+| `docs`            | `docs`                                      |
+| `taskCounter`     | `0`                                         |
+| `feedbackCounter` | `0`                                         |
+| `subprojects`     | `[]`                                        |
+| `webTabs`         | `[]`                                        |
+| `skills`          | `[]`                                        |
+| `claude`          | absent                                      |
 
 `create` also creates `.hephaestus/tasks/` and the docs folder `<code>/<docs>` when they are missing. It fails with
 `.invalid("<project root> already has a .hephaestus/project.yml")` when the file exists. Adding a sub project to its
@@ -316,7 +308,7 @@ parent's `subprojects` is a separate `ProjectFile.update` of the parent made by 
 The host builds the types of [protocol/types.md](../protocol/types.md) from `ProjectFile`:
 
 - `Project` carries every key of the schema under the same name and nesting: `webTabs` items become `WebTab` values
-  (`id`, `title`, `url`, `locked`), `runs` items `RunConfig` values (`name`, `command`, `cwd`), and `claude` the
+  (`id`, `title`, `url`, `locked`), and `claude` the
   `ClaudeDefaults` value (both fields `nil` when the file has no `claude`).
 - `Project.taskCounter` is the number the host uses: the larger of the file's `taskCounter` and the highest task file
   number ([task-yml.md](task-yml.md#id-allocation)); `Project.feedbackCounter` the same for `feedbackCounter` and the
@@ -351,8 +343,10 @@ public indirect enum YAMLShape: Sendable {
 public enum YAMLCoding {
     /// indent 2, width -1, allowUnicode true, newLineScalarStyle .literal.
     public static func makeEncoder() -> YAMLEncoder
-    /// Encodes `value`; when `previousText` is a YAML mapping, merges its unknown keys with `shape`.
-    public static func encode<T: Encodable>(_ value: T, shape: YAMLShape, preserving previousText: String?) throws -> String
+    /// Encodes `value`; when `previousText` is a YAML mapping, removes its top-level `retiredKeys`, then merges its
+    /// unknown keys with `shape`.
+    public static func encode<T: Encodable>(_ value: T, shape: YAMLShape, preserving previousText: String?,
+                                            retiredKeys: Set<String> = []) throws -> String
     /// Decodes `text`; errors are DataError with messages prefixed by `fileName`.
     public static func decode<T: Decodable>(_ type: T.Type, from text: String, fileName: String) throws -> T
     public static func merge(new: Node, old: Node, shape: YAMLShape) -> Node
@@ -379,12 +373,6 @@ public struct ProjectFile: Codable, Sendable, Equatable {
         public var locked: Bool
         public init(id: UUID, title: String, url: String, locked: Bool)
     }
-    public struct RunEntry: Codable, Sendable, Equatable {
-        public var name: String
-        public var command: String
-        public var cwd: String?
-        public init(name: String, command: String, cwd: String?)
-    }
 
     public var id: String
     public var name: String
@@ -396,13 +384,14 @@ public struct ProjectFile: Codable, Sendable, Equatable {
     public var feedbackCounter: Int
     public var subprojects: [String]
     public var webTabs: [WebTabEntry]
-    public var runs: [RunEntry]
     public var skills: [String]
     public var claude: ClaudeDefaults?
 
     /// ".hephaestus/project.yml"
     public static let relativePath: String
     public static let shape: YAMLShape
+    /// ["runs"]: dropped by `encode(preserving:)`.
+    public static let retiredKeys: Set<String>
     /// A new file with the values of "New file"; `created` = YAMLCoding.now().
     public init(id: String, name: String, description: String?)
     /// <projectRoot>/.hephaestus/project.yml
@@ -419,9 +408,8 @@ public struct ProjectFile: Codable, Sendable, Equatable {
     /// Read-modify-write; returns the file as written.
     @discardableResult
     public static func update(projectRoot: URL, _ change: (inout ProjectFile) throws -> Void) throws -> ProjectFile
-    /// WebTab, RunConfig and ClaudeDefaults values for Project.
+    /// WebTab and ClaudeDefaults values for Project.
     public var webTabValues: [WebTab] { get }
-    public var runConfigs: [RunConfig] { get }
     public var claudeDefaults: ClaudeDefaults { get }
     /// The relative path normalization; nil when invalid.
     public static func normalizedRelativePath(_ raw: String) -> String?
@@ -438,15 +426,14 @@ public struct ProjectFile: Codable, Sendable, Equatable {
     "id": .value, "name": .value, "description": .value, "created": .value, "code": .value, "docs": .value,
     "taskCounter": .value, "feedbackCounter": .value, "subprojects": .value, "skills": .value,
     "webTabs": .list(identity: "id", item: .mapping(["id": .value, "title": .value, "url": .value, "locked": .value])),
-    "runs": .list(identity: "name", item: .mapping(["name": .value, "command": .value, "cwd": .value])),
     "claude": .mapping(["model": .value, "permissionMode": .value]),
 ])
 ```
 
-`WebTabEntry` and `RunEntry` decode `title`, `locked` and `cwd` with their defaults when absent; `ClaudeDefaults`
+`WebTabEntry` decodes `title` and `locked` with their defaults when absent; `ClaudeDefaults`
 (the protocol type) has two optional fields. `DataError` and `AtomicFile` are defined in
-[app-storage.md](app-storage.md). `PermissionMode`, `ClaudeDefaults`, `Project`, `ProjectSummary`, `WebTab` and
-`RunConfig` are defined in [protocol/types.md](../protocol/types.md).
+[app-storage.md](app-storage.md). `PermissionMode`, `ClaudeDefaults`, `Project`, `ProjectSummary` and `WebTab` are
+defined in [protocol/types.md](../protocol/types.md).
 
 ## Example
 
@@ -472,14 +459,6 @@ webTabs:
   title: Actions
   url: https://github.com/Azavech/Hephaestus/actions
   locked: false
-runs:
-- name: Build
-  command: ./scripts/build.sh all
-- name: Tests
-  command: ./scripts/test.sh
-- name: API server
-  command: go run ./cmd/api
-  cwd: services/api
 skills: []
 claude:
   model: opus
@@ -498,6 +477,5 @@ taskCounter: 0
 feedbackCounter: 0
 subprojects: []
 webTabs: []
-runs: []
 skills: []
 ```

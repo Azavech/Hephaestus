@@ -77,16 +77,16 @@ hold. Which doc governs each file is given by the `files:` lists of the docs ([R
 
 ## Modules
 
-| Module                  | Platforms           | Depends on                                                                    | Responsibility                                                                                                                                                                                          |
-|-------------------------|---------------------|-------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `HephCore`              | all                 | Yams                                                                          | Models and YAML files, identifiers and validation, skill names and SKILL.md front matter, wire protocol types (envelope, methods, events, errors), hashing, search matcher, `Log`                       |
-| `HephNet`               | all                 | `HephCore`                                                                    | Mesh crypto, TLS-PSK WebSocket channel and listener, Bonjour advertising and browsing, pairing, `RPCPeer`, `MessageChannel`, `LoopbackChannel`                                                          |
-| `HephHost`              | macOS; empty on iOS | `HephCore`, `HephNet`                                                         | The Main side: `HostService` (listener, routing, projects, tasks, files, tabs, file watching, peer links), Claude CLI sessions, MCP server, runs, search, skills library, migration, Forge, self-update |
-| `HephClient`            | all                 | `HephCore`, `HephNet`                                                         | Client state mirrored from the Mains: `Workspace`, `MainConnection`, `ProjectStore`, `Selection`, device identity, session, run output, Forge, file and search models                                   |
-| `HephEditor`            | all                 | `HephCore`                                                                    | Code editor view (TextKit 1) and syntax highlighting                                                                                                                                                    |
-| `HephMarkdown`          | all                 | `HephCore`, `HephEditor`, swift-markdown (`Markdown`)                         | Markdown rendering view; fenced code uses the highlighter of `HephEditor`                                                                                                                               |
-| `HephUI`                | all                 | `HephCore`, `HephNet`, `HephHost`, `HephClient`, `HephEditor`, `HephMarkdown` | All SwiftUI screens and the app wiring (`AppModel`, `RootView`, [ui/shell.md](ui/shell.md))                                                                                                             |
-| App target `Hephaestus` | macOS, iPadOS, iOS  | `HephUI`, `HephHost`                                                          | The `@main` entry point `App/HephaestusApp.swift` ([ui/shell.md](ui/shell.md))                                                                                                                          |
+| Module                  | Platforms           | Depends on                                                                    | Responsibility                                                                                                                                                                                    |
+|-------------------------|---------------------|-------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `HephCore`              | all                 | Yams                                                                          | Models and YAML files, identifiers and validation, skill names and SKILL.md front matter, wire protocol types (envelope, methods, events, errors), hashing, search matcher, `Log`                 |
+| `HephNet`               | all                 | `HephCore`                                                                    | Mesh crypto, TLS-PSK WebSocket channel and listener, Bonjour advertising and browsing, pairing, `RPCPeer`, `MessageChannel`, `LoopbackChannel`                                                    |
+| `HephHost`              | macOS; empty on iOS | `HephCore`, `HephNet`                                                         | The Main side: `HostService` (listener, routing, projects, tasks, files, tabs, file watching, peer links), Claude CLI sessions, MCP server, search, skills library, migration, Forge, self-update |
+| `HephClient`            | all                 | `HephCore`, `HephNet`                                                         | Client state mirrored from the Mains: `Workspace`, `MainConnection`, `ProjectStore`, `Selection`, device identity, session, Forge, file and search models                                         |
+| `HephEditor`            | all                 | `HephCore`                                                                    | Code editor view (TextKit 1) and syntax highlighting                                                                                                                                              |
+| `HephMarkdown`          | all                 | `HephCore`, `HephEditor`, swift-markdown (`Markdown`)                         | Markdown rendering view; fenced code uses the highlighter of `HephEditor`                                                                                                                         |
+| `HephUI`                | all                 | `HephCore`, `HephNet`, `HephHost`, `HephClient`, `HephEditor`, `HephMarkdown` | All SwiftUI screens and the app wiring (`AppModel`, `RootView`, [ui/shell.md](ui/shell.md))                                                                                                       |
+| App target `Hephaestus` | macOS, iPadOS, iOS  | `HephUI`, `HephHost`                                                          | The `@main` entry point `App/HephaestusApp.swift` ([ui/shell.md](ui/shell.md))                                                                                                                    |
 
 Rules:
 
@@ -873,7 +873,7 @@ Mac that is a Main (one process)
 |                                                          v    |      = LoopbackChannel ====+  |
 |  HephHost HostService (actors) <=== accepts the loopback end like a network connection <===+  |
 |        |  WebSocketListener :47100 <=== TLS-PSK WebSocket === remotes and peer Mains          |
-|        +-- child processes: claude, runs (/bin/zsh -lc), git, gh, ditto, codesign, security    |
+|        +-- child processes: claude, git, gh, ditto, codesign, security                        |
 |                                                               +-- MainConnection (other Main) |
 |                                                                      = WebSocketChannel ======+==> other Main
 +-----------------------------------------------------------------------------------------------+
@@ -897,17 +897,17 @@ iPad, iPhone, or a Mac that is not a Main (one process)
   Peer links belong to the `HostService`; they are separate from the `Workspace`'s connections.
 - A Main's network endpoints: TCP 47100 (mesh listener, setting), TCP 47101 while a pairing window is open, and
   `127.0.0.1:<random port>` for the MCP server used by its Claude sessions ([claude/mcp.md](claude/mcp.md)).
-- Child processes of a Main (Claude CLI sessions, runs, git, gh, update tools) are spawned by `HephHost`
+- Child processes of a Main (Claude CLI sessions, git, gh, update tools) are spawned by `HephHost`
   ([claude/cli.md](claude/cli.md)). This is why the macOS app has no App Sandbox.
 
 ## Concurrency model
 
-| Kind                                 | Used for                                                                                                                                                           | Rules                                                                                               |
-|--------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
-| `@MainActor @Observable final class` | Client and UI state: `Workspace`, `MainConnection`, `ProjectStore`, `SessionModel`, `FileTreeModel`, `EditorDocument`, `SearchModel`, `RunOutputModel`, `AppModel` | Mutated only on the main actor. Work that waits awaits an actor; nothing blocks the main actor.     |
-| `actor`                              | Services: `HostService` and the services it owns, `RPCPeer`, process supervisors, the MCP server, the Forge, the updater                                           | Each actor owns its mutable state. No mutable state is shared outside actors and the main actor.    |
-| Private serial `DispatchQueue`       | Network.framework objects (`NWListener`, `NWConnection`, `NWBrowser`), FSEvents streams                                                                            | One queue per object, label `ca.azavech.hephaestus.<component>`. Callbacks hop to the owning actor. |
-| `ChildProcess` with pipes            | Child process output ([claude/cli.md](claude/cli.md#12-childprocess))                                                                                              | The pipe's `readabilityHandler` yields data into an `AsyncStream` consumed by the owning actor.     |
+| Kind                                 | Used for                                                                                                                                         | Rules                                                                                               |
+|--------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| `@MainActor @Observable final class` | Client and UI state: `Workspace`, `MainConnection`, `ProjectStore`, `SessionModel`, `FileTreeModel`, `EditorDocument`, `SearchModel`, `AppModel` | Mutated only on the main actor. Work that waits awaits an actor; nothing blocks the main actor.     |
+| `actor`                              | Services: `HostService` and the services it owns, `RPCPeer`, process supervisors, the MCP server, the Forge, the updater                         | Each actor owns its mutable state. No mutable state is shared outside actors and the main actor.    |
+| Private serial `DispatchQueue`       | Network.framework objects (`NWListener`, `NWConnection`, `NWBrowser`), FSEvents streams                                                          | One queue per object, label `ca.azavech.hephaestus.<component>`. Callbacks hop to the owning actor. |
+| `ChildProcess` with pipes            | Child process output ([claude/cli.md](claude/cli.md#12-childprocess))                                                                            | The pipe's `readabilityHandler` yields data into an `AsyncStream` consumed by the owning actor.     |
 
 - **Order.** Data whose order matters (inbound frames of a connection, FSEvents batches, process output, events of a
   `MainConnection`) goes through an `AsyncStream` filled by the callback and consumed by a single task. Callbacks never
@@ -987,7 +987,7 @@ public enum Log {
 - Levels: `debug` for per-request and per-frame detail, `info` for lifecycle (listener started, connection
   established, session started), `notice` for state changes the user would care about (Main online or offline,
   migration finished), `error` for failures, `fault` for broken invariants.
-- Privacy: identifiers (device, project, task, session, run ids), method and event names, states, error codes, counts,
+- Privacy: identifiers (device, project, task, session ids), method and event names, states, error codes, counts,
   durations and paths relative to a project root are logged with `privacy: .public`. Everything else keeps the
   default (private). Mesh keys, PSKs, pairing codes, bearer tokens, credentials, file contents, message texts and
   comment bodies are never logged.
@@ -1004,7 +1004,7 @@ Exact content:
 
 Hephaestus coordinates the work on all your projects from any of your devices. Projects live on Macs set as Mains;
 every Mac, iPad and iPhone connects to every Main and sees and controls everything on it in real time: tasks, code,
-docs, web tabs, Claude sessions and runs.
+docs, web tabs and Claude sessions.
 
 The app is generated from its specification in [docs/](docs/README.md). The docs are the source of truth: the code
 follows them.

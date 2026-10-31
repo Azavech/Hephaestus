@@ -20,7 +20,7 @@ the other files refine it.
    [protocol/methods.md](protocol/methods.md), [protocol/events.md](protocol/events.md).
 6. [data/project-yml.md](data/project-yml.md), [data/task-yml.md](data/task-yml.md), [data/sessions.md](data/sessions.md),
    [data/app-storage.md](data/app-storage.md).
-7. [services/host.md](services/host.md), then [services/files.md](services/files.md), [services/runs.md](services/runs.md),
+7. [services/host.md](services/host.md), then [services/files.md](services/files.md),
    [services/search.md](services/search.md), [services/bundles.md](services/bundles.md).
 8. [claude/cli.md](claude/cli.md), [claude/mcp.md](claude/mcp.md), [claude/prompts.md](claude/prompts.md),
    [claude/skills.md](claude/skills.md).
@@ -59,7 +59,6 @@ the other files refine it.
 | [claude/skills.md](claude/skills.md)         | The skills library, session plugin folders, skills sync between Mains                                                  |
 | [services/host.md](services/host.md)         | HostService: startup and shutdown, request routing, project registry, file watching, peer links                        |
 | [services/files.md](services/files.md)       | File operations, path safety, revisions, ignore rules, atomic writes, attachments, uploads                             |
-| [services/runs.md](services/runs.md)         | Run configurations and their execution on the Main                                                                     |
 | [services/search.md](services/search.md)     | Search matcher, Main search service, client fan-out                                                                    |
 | [services/bundles.md](services/bundles.md)   | Task bundles: bundle files, worktrees, the coordinator and its parallel task sessions                                  |
 | [ui/shell.md](ui/shell.md)                   | Scenes, windows, toolbar, path bar, sidebar, layouts per device, shortcuts, banners, app wiring                        |
@@ -70,7 +69,6 @@ the other files refine it.
 | [ui/overview.md](ui/overview.md)             | Project Overview, sub projects, Move to…                                                                               |
 | [ui/tasks.md](ui/tasks.md)                   | Task list and task detail, comments, attachments, bundles                                                              |
 | [ui/sessions.md](ui/sessions.md)             | Session chat UI, permission cards, the task Claude section                                                             |
-| [ui/runs.md](ui/runs.md)                     | Runs screen and run output                                                                                             |
 | [ui/skills.md](ui/skills.md)                 | Skills screen                                                                                                          |
 | [ui/code.md](ui/code.md)                     | Code screen: file browser and editor tabs                                                                              |
 | [ui/editor.md](ui/editor.md)                 | HephEditor: text views, gutter, syntax highlighting grammars                                                           |

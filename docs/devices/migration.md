@@ -61,23 +61,23 @@ path`, and a folder for which `FileManager` returns no enumerator `the folder ca
 
 `projects.migrate {projectID, targetDeviceID}` on S. Checks, in order:
 
-| Check                                                                               | Error                                                           |
-|-------------------------------------------------------------------------------------|-----------------------------------------------------------------|
-| `projectID` is hosted here (`host.registry.hosted`)                                 | `notFound` "Project <id> is not hosted on this Main."           |
-| it is a top-level project                                                           | `badRequest` "Sub projects move with their parent project."     |
-| it is not migrating                                                                 | `locked` "<name> is already being moved."                       |
-| `targetDeviceID` is not this Main                                                   | `badRequest` "<name> is already on this Main."                  |
-| the target is a non-revoked record of the registry                                  | `notFound` "No device <targetDeviceID>."                        |
-| the target record has `isMain`                                                      | `badRequest` "<target name> is not a Main."                     |
-| S has an established outgoing peer link to the target (`mesh.connectedPeerMains()`) | `unavailable` "<target name> is not connected."                 |
-| no project of the tree has live work                                                | `conflict` "Stop the Claude sessions and runs of <name> first." |
-| no project of the tree has a bundle in `running` or `review`                        | `conflict` "Stop the bundles of <name> first."                  |
+| Check                                                                               | Error                                                       |
+|-------------------------------------------------------------------------------------|-------------------------------------------------------------|
+| `projectID` is hosted here (`host.registry.hosted`)                                 | `notFound` "Project <id> is not hosted on this Main."       |
+| it is a top-level project                                                           | `badRequest` "Sub projects move with their parent project." |
+| it is not migrating                                                                 | `locked` "<name> is already being moved."                   |
+| `targetDeviceID` is not this Main                                                   | `badRequest` "<name> is already on this Main."              |
+| the target is a non-revoked record of the registry                                  | `notFound` "No device <targetDeviceID>."                    |
+| the target record has `isMain`                                                      | `badRequest` "<target name> is not a Main."                 |
+| S has an established outgoing peer link to the target (`mesh.connectedPeerMains()`) | `unavailable` "<target name> is not connected."             |
+| no project of the tree has live work                                                | `conflict` "Stop the Claude sessions of <name> first."      |
+| no project of the tree has a bundle in `running` or `review`                        | `conflict` "Stop the bundles of <name> first."              |
 
 - The tree is the project and every sub project at any depth (`host.registry.descendants(of:)`).
 - Bundles: `host.bundles.hasActiveBundle(projectID:)` ([../services/bundles.md](../services/bundles.md)).
-- Live work: a session with a CLI process (`host.sessions.hasProcess(projectID:)`, [../claude/cli.md](../claude/cli.md))
-  or a running run (`host.runs.activeRunCount(projectID:)` > 0, [../services/runs.md](../services/runs.md)). The Move
-  sheet stops them before it sends the request ([../ui/overview.md](../ui/overview.md#move-sheet)).
+- Live work: a session with a CLI process (`host.sessions.hasProcess(projectID:)`,
+  [../claude/cli.md](../claude/cli.md)). The Move sheet stops them before it sends the request
+  ([../ui/overview.md](../ui/overview.md#move-sheet)).
 
 Then:
 
@@ -95,7 +95,7 @@ While a project is migrating:
 - Every write method on it or on its sub projects is refused with `locked` "<name> is being moved to another Main."
   (`ProjectRegistry.checkWritable`, [../services/host.md](../services/host.md#68-write-serialization)); no session
   starts ([../claude/cli.md](../claude/cli.md)). Reads (`projects.snapshot`, `files.read`, `files.list`,
-  `sessions.history`, `sessions.readAttachment`, `attachments.read`, `runs.output`, `search.query`) keep working, and
+  `sessions.history`, `sessions.readAttachment`, `attachments.read`, `search.query`) keep working, and
   so does `uploads.begin` (the request that uses the upload is refused).
 - `ProjectSummary.migrating` and `Project.migrating` are true for the project and its sub projects
   ([../protocol/types.md](../protocol/types.md)).
@@ -340,8 +340,8 @@ S, after `{}` (or an outcome check that answered `committed`), the journal entry
 1. `host.registry.unregister(projectID, forget: true)`: the project and its sub projects leave the registry and
    `projects.json`, the folder is no longer watched, `projects.changed` is broadcast
    ([../services/host.md](../services/host.md#65-unregister_forget)).
-2. `host.sessions.stopAll(projectID:)` and `host.runs.stopAll(projectID:)` for every project id of the tree (no
-   process runs; the cached sessions and the runs are forgotten).
+2. `host.sessions.stopAll(projectID:)` for every project id of the tree (no process runs; the cached sessions are
+   forgotten).
 3. `host.appSupport.trashItem` ([../data/app-storage.md](../data/app-storage.md#trash)) on the project folder, then on
    each transcript folder that was included in `claudeFiles`. A failure is logged and the next item is processed.
 4. The journal entry is removed when the project folder is in the Trash or no longer exists; when its Trash failed, the
@@ -550,7 +550,7 @@ public enum ClaudePathEncoding {
 
 - `MigrationService` is created by `HostService.init` with the other services
   ([../services/host.md](../services/host.md#1-objects)) and reaches them through `host`: `registry`, `sessions`,
-  `runs`, `mesh`, `events`, and `appSupport` for the Trash and the journal (`MigrationJournal`,
+  `mesh`, `events`, and `appSupport` for the Trash and the journal (`MigrationJournal`,
   [../data/app-storage.md](../data/app-storage.md#migrationsjson)).
 - `ClaudePathEncoding` is also the encoding of the transcript path of [../claude/cli.md](../claude/cli.md)
   (`ClaudeLocator`).
