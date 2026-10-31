@@ -257,7 +257,9 @@ Rendering per item:
   (`deviceID` resolved in `workspace.mains` and the mesh records, omitted when unknown; shortened time).
 - `.assistant`: a leading bubble, styled like the user's bubble (at most 85 % of the width, corner radius 12, 12 pt
   horizontal and 8 pt vertical padding) but filled with the neutral `Color.secondary.opacity(0.15)`, holding the
-  HephMarkdown view ([markdown.md](markdown.md)) with the link rules of [tasks.md](tasks.md#description). No caption
+  HephMarkdown view ([markdown.md](markdown.md)) with the link rules of [tasks.md](tasks.md#description) and
+  `selection: .acrossBlocks`, so the user can select and copy any range of the reply up to a table
+  ([markdown.md](markdown.md#selection-across-blocks)). No caption
   under it. Only `.assistant` and `.streaming` items of kind `text` have this bubble; thinking rows, tool rows,
   permission cards, turn end captions, system and error rows stay outside any bubble.
 - `.thinking`: a collapsed row, `brain`, "Thinking" (secondary) and a disclosure chevron; expanded, the text in

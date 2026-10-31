@@ -10,6 +10,8 @@ files:
 - HephaestusKit/Sources/HephMarkdown/MarkdownTableView.swift
 - HephaestusKit/Sources/HephMarkdown/MarkdownCodeBlockView.swift
 - HephaestusKit/Sources/HephMarkdown/MarkdownImageView.swift
+- HephaestusKit/Sources/HephMarkdown/MarkdownFlowText.swift
+- HephaestusKit/Sources/HephMarkdown/MarkdownTextView.swift
 - HephaestusKit/Sources/HephMarkdown/MarkdownSlug.swift
 - HephaestusKit/Sources/HephMarkdown/FrontMatter.swift
 - HephaestusKit/Sources/HephMarkdown/Autolinker.swift
@@ -35,8 +37,15 @@ public struct MarkdownView: View {
         _ source: String,
         basePath: String? = nil,
         imageLoader: MarkdownImageLoader? = nil,
-        linkHandler: MarkdownLinkHandler? = nil
+        linkHandler: MarkdownLinkHandler? = nil,
+        selection: MarkdownSelection = .perBlock
     )
+}
+
+/// How far a text selection reaches.
+public enum MarkdownSelection: Hashable, Sendable {
+    case perBlock      // each block is its own view; a selection stays inside one block
+    case acrossBlocks  // the text blocks between two tables are one text view; a selection crosses them
 }
 
 public typealias MarkdownImageLoader = @MainActor (MarkdownLinkTarget) async throws -> Data
@@ -57,8 +66,8 @@ public struct MarkdownAnchor: Hashable, Sendable {
 
 ```
 
-`MarkdownView` is main-actor; `MarkdownLinkTarget` and `MarkdownAnchor` are `Sendable` values and `resolve` is a pure
-function.
+`MarkdownView` is main-actor; `MarkdownSelection`, `MarkdownLinkTarget` and `MarkdownAnchor` are `Sendable` values
+and `resolve` is a pure function.
 
 ### Parameters
 
@@ -68,6 +77,7 @@ function.
 | `basePath`    | The project-relative folder of the document (`""` is the project root). With a `basePath`, every resolvable link and image is active. Without one (a task description, a comment, a message, a skill file), only `.external` targets are active: other links render as plain text and other images as their alt text, not loaded |
 | `imageLoader` | Loads the data of an active image. When nil, `.external` targets with scheme `http` or `https` are loaded with `URLSession.shared.data(from:)` (a status outside 200–299 fails) and any other target fails                                                                                                                       |
 | `linkHandler` | Called when an active link is clicked or tapped. When nil, `.external` targets are opened with the environment's `openURL` and other targets do nothing                                                                                                                                                                          |
+| `selection`   | `.perBlock`: the block views of [Blocks](#blocks). `.acrossBlocks`: [Selection across blocks](#selection-across-blocks). Session replies use `.acrossBlocks` ([sessions.md](sessions.md#transcript)); every other caller keeps `.perBlock`                                                                                       |
 
 ## Parsing
 
@@ -228,6 +238,63 @@ when the URL before it has no unmatched `(` (no more `(` than `)`), until the UR
 - Spans: `colspan > 1` → `.gridCellColumns(colspan)`; a cell with `colspan == 0` (covered) is omitted; `rowspan` is
   ignored and covered cells (`rowspan == 0`) render empty.
 
+## Selection across blocks
+
+With `selection: .acrossBlocks`, the blocks of the document are grouped in order into runs: each table, image block
+(including the image parts of a split paragraph, [Images](#images)) and thematic break is a run of its own, rendered by
+its block view of [Blocks](#blocks); every maximal sequence of other blocks is a text run. Runs are stacked and spaced
+like blocks ([Spacing](#spacing)). A text run is one `MarkdownTextView` showing one `NSAttributedString` built by
+`MarkdownFlowText`, so a selection crosses its paragraphs, headings, list items, quotes and code blocks and stops at a
+table, an image or a thematic break.
+
+### MarkdownFlowText
+
+`MarkdownFlowText` (internal, main-actor) converts the blocks of a text run into one `NSAttributedString`.
+
+- Every block is one or more paragraphs joined by `\n`, and blocks are joined by `\n`. The space before a block is the
+  `paragraphSpacingBefore` of its first paragraph, from [Spacing](#spacing) (none for the first block of the run); the
+  other paragraphs of a block have none.
+- Fonts are the platform fonts of the text styles of [Blocks](#blocks) (`NSFont.preferredFont(forTextStyle:)`,
+  `UIFont.preferredFont(forTextStyle:)`), with the bold trait where the table says bold. Colors are `labelColor`
+  (macOS) and `label` (iOS), `secondaryLabelColor` and `secondaryLabel` for secondary text. The string is built again
+  when the environment's `dynamicTypeSize` or `colorScheme` changes.
+- Inline runs: `.emphasized` adds the italic trait, `.stronglyEmphasized` the bold trait, `.code` gives the monospaced
+  system font at the size of the surrounding font, `.strikethrough` gives `strikethroughStyle` single, the
+  `backgroundColor` of inline code becomes the secondary label color at 15 % opacity, and a link keeps its
+  `heph-md-link` URL as the `.link` attribute.
+
+| Block                          | Text                                                                                                                                                                                                                                                                                                   |
+|--------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Heading`                      | its inlines, in the font of its level; no divider and no `.id`                                                                                                                                                                                                                                         |
+| `Paragraph`                    | its inlines, body font; each `LineBreak` starts a new paragraph of the block                                                                                                                                                                                                                           |
+| `BlockQuote`                   | its blocks, secondary color, every paragraph indented by 12 pt (`firstLineHeadIndent`, `headIndent`); no bar                                                                                                                                                                                           |
+| List item                      | `\t<marker>\t` then its first block; the item's indent is 26 pt per enclosing list (the 20 pt marker column and 6 pt), a right tab stop at indent − 6 for the marker and a left tab stop at the indent, `headIndent` = the indent; its other blocks, nested lists included, are indented by it         |
+| `CodeBlock`, `HTMLBlock`       | one paragraph per line, monospaced system font at the `.callout` size, colored with `SyntaxHighlighter.tokens(in:language:)` and `EditorTheme.color(for:)` (none for `HTMLBlock`), background color the secondary label color at 8 % opacity, 12 pt `firstLineHeadIndent` and `headIndent`; lines wrap |
+
+List markers are those of [Lists](#lists): the bullet or number in the secondary color (`.monospacedDigit` becomes
+the monospaced-digit system font), `☑` in the accent color for a checked task item and `☐` in the secondary color for
+an unchecked one.
+
+### MarkdownTextView
+
+`MarkdownTextView` (internal) shows one attributed string, selectable and not editable. It never scrolls: it takes the
+proposed width and the height of its laid-out text.
+
+| Platform        | Representable         | Text view                                                                                                                                                                                                                                                                 |
+|-----------------|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| macOS           | `NSViewRepresentable` | `NSTextView(usingTextLayoutManager: false)`, no scroll view: `isEditable = false`, `isSelectable = true`, `drawsBackground = false`, `textContainerInset = .zero`, `lineFragmentPadding = 0`, `widthTracksTextView = true`                                                |
+| iOS and iPadOS  | `UIViewRepresentable` | `UITextView(usingTextLayoutManager: false)`: `isEditable = false`, `isSelectable = true`, `isScrollEnabled = false`, `backgroundColor = .clear`, `textContainerInset = .zero`, `lineFragmentPadding = 0`                                                                  |
+
+- Size: `sizeThatFits(_:)` lays the text out at the proposed width (the text view's current width when the proposal has
+  none) and returns that width and the height of the used rect (macOS, `layoutManager.usedRect(for:)`) or of
+  `sizeThatFits(CGSize(width:, height: .greatestFiniteMagnitude))` (iOS).
+- Text: the text storage is replaced only when the attributed string differs from the last one set; the selection is
+  kept, clamped to the new length, so a reply that grows while streaming keeps its selection.
+- Links: `linkTextAttributes` give link runs the accent color (`controlAccentColor`, `tintColor`). A click or tap on a
+  link passes its URL to the environment's `openURL`, which the `MarkdownView` handles ([Links](#links)):
+  `textView(_:clickedOnLink:at:)` on macOS, `textView(_:primaryActionFor:in:defaultAction:)` on iOS.
+- Copy: the text views' own Copy (menu, context menu, ⌘C) copies the selected range.
+
 ## Heading slugs
 
 The plain text of inline nodes, used for slugs and alt texts: the string of each `Text` node, the code of each code span
@@ -251,7 +318,8 @@ Within one document a repeated slug gets `-1`, then `-2`, … (the first one not
 
 ## Selection and style
 
-- `.textSelection(.enabled)` on the whole view.
+- `.textSelection(.enabled)` on the whole view. With `.acrossBlocks`, the text runs select through their text views
+  ([Selection across blocks](#selection-across-blocks)).
 - Fonts are text styles, so they follow Dynamic Type on iOS and iPadOS; the text color is the environment's
   foreground style.
 
