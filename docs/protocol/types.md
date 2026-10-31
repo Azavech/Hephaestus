@@ -31,7 +31,8 @@ in [methods.md](methods.md), the event payloads in [events.md](events.md), the J
 - JSON field names are the field names. A type ending in `?` is optional: the member is omitted when `nil`.
 - No custom `CodingKeys` and no custom coding, except where a section says so.
 - Identifiers: `projectID` is the project identifier (2–8 letters A–Z, [data/project-yml.md](../data/project-yml.md));
-  `taskID` is `<projectID>-<n>` ([data/task-yml.md](../data/task-yml.md)); `bundleID` is `<projectID>-B<n>`
+  `taskID` is `<projectID>-<n>`, or `<projectID>-F<n>` for a feedback task
+  ([data/task-yml.md](../data/task-yml.md#task-id)); `bundleID` is `<projectID>-B<n>`
   ([services/bundles.md](../services/bundles.md#bundle-id)); device, mesh, session, comment, web tab, run,
   migration, upload and Forge cycle ids are `UUID`s; session event ids are strings (`SessionEvent`).
 - Names (project, sub project, task, run configuration, session title) are trimmed of surrounding white space and line
@@ -124,24 +125,25 @@ A project in a Main's project tree. Identifiable.
 The content of `.hephaestus/project.yml` ([data/project-yml.md](../data/project-yml.md)) plus where it lives.
 Identifiable.
 
-| Field         | Type             | Meaning                                                      |
-|---------------|------------------|--------------------------------------------------------------|
-| `id`          | `String`         | Project identifier                                           |
-| `name`        | `String`         | Project name                                                 |
-| `description` | `String?`        | Project description                                          |
-| `created`     | `Date`           | Creation date                                                |
-| `code`        | `String`         | Code folder, relative to the project root (`.` is the root)  |
-| `docs`        | `String`         | Docs folder, relative to the code folder                     |
-| `taskCounter` | `Int`            | Last task number used                                        |
-| `subprojects` | `[String]`       | Relative paths of the sub project roots                      |
-| `webTabs`     | `[WebTab]`       | Web tabs, in tab strip order                                 |
-| `runs`        | `[RunConfig]`    | Run configurations                                           |
-| `skills`      | `[String]`       | Names of the enabled library skills; empty means all skills  |
-| `claude`      | `ClaudeDefaults` | Defaults for new sessions                                    |
-| `deviceID`    | `UUID`           | The Main hosting the project                                 |
-| `rootPath`    | `String`         | Absolute path of the project root on that Main               |
-| `migrating`   | `Bool`           | The project is being moved to another Main                   |
-| `parseError`  | `String?`        | Set when project.yml cannot be parsed (see `ProjectSummary`) |
+| Field             | Type             | Meaning                                                      |
+|-------------------|------------------|--------------------------------------------------------------|
+| `id`              | `String`         | Project identifier                                           |
+| `name`            | `String`         | Project name                                                 |
+| `description`     | `String?`        | Project description                                          |
+| `created`         | `Date`           | Creation date                                                |
+| `code`            | `String`         | Code folder, relative to the project root (`.` is the root)  |
+| `docs`            | `String`         | Docs folder, relative to the code folder                     |
+| `taskCounter`     | `Int`            | Last task number used                                        |
+| `feedbackCounter` | `Int`            | Last feedback task number used                               |
+| `subprojects`     | `[String]`       | Relative paths of the sub project roots                      |
+| `webTabs`         | `[WebTab]`       | Web tabs, in tab strip order                                 |
+| `runs`            | `[RunConfig]`    | Run configurations                                           |
+| `skills`          | `[String]`       | Names of the enabled library skills; empty means all skills  |
+| `claude`          | `ClaudeDefaults` | Defaults for new sessions                                    |
+| `deviceID`        | `UUID`           | The Main hosting the project                                 |
+| `rootPath`        | `String`         | Absolute path of the project root on that Main               |
+| `migrating`       | `Bool`           | The project is being moved to another Main                   |
+| `parseError`      | `String?`        | Set when project.yml cannot be parsed (see `ProjectSummary`) |
 
 ### ClaudeDefaults
 
@@ -205,16 +207,16 @@ order of the task list sections).
 
 A task ([data/task-yml.md](../data/task-yml.md)). Identifiable.
 
-| Field         | Type            | Meaning                                                 |
-|---------------|-----------------|---------------------------------------------------------|
-| `id`          | `String`        | Task id, `<projectID>-<n>`                              |
-| `name`        | `String`        | Name                                                    |
-| `description` | `String`        | Markdown; empty when there is none                      |
-| `status`      | `TaskStatus`    | Status                                                  |
-| `created`     | `Date`          | Creation date                                           |
-| `updated`     | `Date`          | Last change of the task (a field or a comment)          |
-| `comments`    | `[TaskComment]` | Comments, oldest first                                  |
-| `parseError`  | `String?`       | Set when the task file cannot be parsed (a broken task) |
+| Field         | Type            | Meaning                                                          |
+|---------------|-----------------|------------------------------------------------------------------|
+| `id`          | `String`        | Task id, `<projectID>-<n>` or `<projectID>-F<n>` (feedback task) |
+| `name`        | `String`        | Name                                                             |
+| `description` | `String`        | Markdown; empty when there is none                               |
+| `status`      | `TaskStatus`    | Status                                                           |
+| `created`     | `Date`          | Creation date                                                    |
+| `updated`     | `Date`          | Last change of the task (a field or a comment)                   |
+| `comments`    | `[TaskComment]` | Comments, oldest first                                           |
+| `parseError`  | `String?`       | Set when the task file cannot be parsed (a broken task)          |
 
 A broken task has `id` from its file name, `name` and `description` empty, `status` `todo`, `created` and `updated`
 equal to the file's modification date, no comments, and `parseError` set to the parser's message. The Main never

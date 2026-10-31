@@ -184,7 +184,10 @@ is in <bundle id>.`, the first such task and bundle in order.
 3. When `coordinator` names a session of the project: `sessions.send` to it with the text `Resume work on <bundle id>:
    check the state of its tasks with get_bundle.` and this Main's id as `deviceID`. Otherwise
    `sessions.start(SessionStart(projectID:, kind: .bundle, bundleID: <id>, deviceID: <this Main>))`
-   ([../claude/cli.md](../claude/cli.md#52-starting-a-session-sessionsstart)), and `coordinator` = its id.
+   ([../claude/cli.md](../claude/cli.md#52-starting-a-session-sessionsstart)), and `coordinator` = its id. The
+   coordinator is titled `Bundle <bundle id>` until the title generated from its first message replaces it with
+   `<bundle id> · <generated title>` (`HEPH-B1 · <generated title>`,
+   [../claude/cli.md](../claude/cli.md#510-generated-titles-sessiontitler)).
 4. The file is written: `base`, `coordinator`, `status` `running`. Result: the `BundleItem`.
 
 When step 3 fails, nothing is written, the cached `base` set by step 2 is removed, and the error is returned.

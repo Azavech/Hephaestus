@@ -12,14 +12,20 @@ Each task is one YAML file, `<project root>/.hephaestus/tasks/<TASK-ID>.yml`. Th
 
 ## Task id
 
-- A task id is `<projectID>-<n>`: the project identifier, `-`, and the task number `n` (1 to `Int.max`,
-  9,223,372,036,854,775,807; decimal, no leading zero). Pattern: `^[A-Z]{2,8}-[1-9][0-9]*$`. Example: `HEPH-12`. A
-  text that matches the pattern with a larger number is not a task id.
-- The file of a task is named `<task id>.yml`: `HEPH-12.yml`.
+- A task id is `<projectID>-<n>`, or `<projectID>-F<n>` for a feedback task, which the Forge creates from feedback
+  ([forge/pipeline.md](../forge/pipeline.md#feedback-intake)): the project identifier, `-`, `F` for a feedback task,
+  and the task number `n` (1 to `Int.max`, 9,223,372,036,854,775,807; decimal, no leading zero). Pattern:
+  `^[A-Z]{2,8}-F?[1-9][0-9]*$`. Examples: `HEPH-12`, `HEPH-F3`. A text that matches the pattern with a larger number is
+  not a task id. A bundle id (`HEPH-B3`, [services/bundles.md](../services/bundles.md#bundle-id)) never matches it.
+- Tasks and feedback tasks are two series, numbered separately (Id allocation): `HEPH-3` and `HEPH-F3` are two tasks.
+  Both are ordinary task files with the same schema, requests and tools. Feedback tasks created before the feedback
+  series existed keep their `<projectID>-<n>` id: nothing renames a task.
+- The file of a task is named `<task id>.yml`: `HEPH-12.yml`, `HEPH-F3.yml`.
 - `TaskID(_:)` parses an id received in a request or a tool call: it removes leading and trailing whitespace and maps
-  ASCII `a`–`z` to `A`–`Z` before matching the pattern, so `heph-12` is `HEPH-12`. `TaskID(fileName:)` matches a file
-  name exactly, without mapping.
-- Ids are compared as `(projectID, number)`: `HEPH-9` comes before `HEPH-10`.
+  ASCII `a`–`z` to `A`–`Z` before matching the pattern, so `heph-12` is `HEPH-12` and `heph-f3` is `HEPH-F3`.
+  `TaskID(fileName:)` matches a file name exactly, without mapping.
+- Ids are compared as `(projectID, feedback, number)`, tasks before feedback tasks: `HEPH-9` comes before `HEPH-10`,
+  which comes before `HEPH-F1`. "By task number" in the other docs means this order.
 
 ## Schema
 
@@ -94,25 +100,30 @@ is not a UUID is `comments[<i>].id: invalid value`; Yams writes it in canonical 
 
 ## Id allocation
 
-`TaskFile.allocateID(projectRoot:)` reserves the number of a new task with one `ProjectFile.update` of the project's
-`project.yml` ([project-yml.md](project-yml.md)):
+`TaskFile.allocateID(projectRoot:feedback:)` reserves the number of a new task with one `ProjectFile.update` of the
+project's `project.yml` ([project-yml.md](project-yml.md)). Each series has its counter: `taskCounter` for tasks
+(`feedback` false), `feedbackCounter` for feedback tasks (`feedback` true). `<prefix>` below is `<projectID>-` for
+tasks and `<projectID>-F` for feedback tasks.
 
-1. `highest` = `TaskFile.highestNumber(projectRoot:projectID:)`: the largest `n` among the entries of
-   `.hephaestus/tasks/` whose name is `<projectID>-<n>.yml` (valid and broken files alike); `0` when there is none.
-2. `n` = `max(taskCounter, highest) + 1`.
-3. While `.hephaestus/tasks/<projectID>-<n>.yml` exists, `n` = `n + 1`.
-4. `taskCounter` = `n`; `project.yml` is written.
-5. The function returns `TaskID(projectID, n)`. The caller then writes the task file with `TaskFile.create`.
+1. `highest` = `TaskFile.highestNumber(projectRoot:projectID:feedback:)`: the largest `n` among the entries of
+   `.hephaestus/tasks/` whose name is `<prefix><n>.yml` (valid and broken files alike); `0` when there is none.
+2. `n` = `max(<counter>, highest) + 1`.
+3. While `.hephaestus/tasks/<prefix><n>.yml` exists, `n` = `n + 1`.
+4. `<counter>` = `n`; `project.yml` is written.
+5. The function returns `TaskID(projectID:number: n, feedback:)`. The caller then writes the task file with
+   `TaskFile.create`.
 
-- When step 2 or 3 would give a number above `Int.max` (a `taskCounter` or a task file name edited by hand), the
-  allocation stops without writing `project.yml` and throws `.invalid("no task number is left in <projectID>")`: both
-  additions are checked for overflow.
-- A number is never reused: deleting a task does not lower `taskCounter`, and a failure after step 4 leaves the number
+- When step 2 or 3 would give a number above `Int.max` (a counter or a task file name edited by hand), the allocation
+  stops without writing `project.yml` and throws `.invalid("no task number is left in <projectID>")`, or
+  `.invalid("no feedback number is left in <projectID>")` for a feedback task: both additions are checked for
+  overflow.
+- A number is never reused: deleting a task does not lower its counter, and a failure after step 4 leaves the number
   unused.
-- When a project is loaded, the host takes `max(taskCounter, highest)` as the project's counter (it is what `Project`
-  reports); `project.yml` is not rewritten for that.
+- When a project is loaded, the host takes `max(<counter>, highest)` of each series as the project's counters (they
+  are what `Project` reports); `project.yml` is not rewritten for that.
 - While `project.yml` is invalid, allocation fails with `.refused` and no task can be created.
-- Every creation path allocates this way: `tasks.create`, the MCP tool `create_task`, Forge feedback tasks.
+- Every creation path allocates this way: `tasks.create` and the MCP tool `create_task` allocate a task id; the
+  Forge's feedback intake allocates a feedback task id.
 
 ## Loading the tasks of a project
 
@@ -258,17 +269,19 @@ All functions are synchronous, do blocking file I/O and are not isolated to an a
 public struct TaskID: Hashable, Comparable, Sendable, Codable, CustomStringConvertible {
     public let projectID: String
     public let number: Int
+    /// true for a feedback task id, <projectID>-F<n>.
+    public let feedback: Bool
     /// projectID must be a valid identifier and number ≥ 1 (precondition).
-    public init(projectID: String, number: Int)
-    /// Trims, maps ASCII a–z to A–Z, then matches ^[A-Z]{2,8}-[1-9][0-9]*$.
+    public init(projectID: String, number: Int, feedback: Bool = false)
+    /// Trims, maps ASCII a–z to A–Z, then matches ^[A-Z]{2,8}-F?[1-9][0-9]*$.
     public init?(_ text: String)
     /// Matches "<id>.yml" exactly.
     public init?(fileName: String)
-    /// "HEPH-12"
+    /// "HEPH-12", "HEPH-F3"
     public var description: String
-    /// "HEPH-12.yml"
+    /// "HEPH-12.yml", "HEPH-F3.yml"
     public var fileName: String
-    /// Coded as one string, "HEPH-12".
+    /// Ordered as (projectID, feedback, number), false before true. Coded as one string, "HEPH-12".
 }
 
 public struct TaskFile: Codable, Sendable, Equatable {
@@ -312,8 +325,9 @@ public struct TaskFile: Codable, Sendable, Equatable {
     public static func loadAll(projectRoot: URL, projectID: String) -> [TaskLoadResult]
     /// nil when the file does not exist.
     public static func loadOne(projectRoot: URL, id: TaskID) -> TaskLoadResult?
-    public static func highestNumber(projectRoot: URL, projectID: String) -> Int
-    public static func allocateID(projectRoot: URL) throws -> TaskID
+    /// The largest number of the series among the task file names (Id allocation step 1).
+    public static func highestNumber(projectRoot: URL, projectID: String, feedback: Bool) -> Int
+    public static func allocateID(projectRoot: URL, feedback: Bool = false) throws -> TaskID
     /// Fails with .invalid("<id> is not a task id") when `file.id` is not a task id, and with
     /// .invalid("<id>.yml already exists") when the file exists.
     public static func create(_ file: TaskFile, projectRoot: URL) throws

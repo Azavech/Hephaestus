@@ -138,7 +138,10 @@ is pushed).
 - Send: `startSession(projectID:kind: .project, taskID: nil, mode: nil, title: nil, message: <trimmed text, nil when
   empty>, attachments: draft.uploads, permissionMode:model:)`; the Main titles the session ("Chat <n>"), stores the
   attachments and starts Claude with the message and its files
-  ([../protocol/methods.md](../protocol/methods.md#sessionsstart)).
+  ([../protocol/methods.md](../protocol/methods.md#sessionsstart)). Once the first message with text is sent, the
+  Main replaces "Chat <n>" with a short title generated from it; the list and the header show it when its
+  `session.changed` arrives, while Claude answers or later. Claude also renames the session when the user asks it to
+  (`rename_session`).
 - Success: the draft is cleared, `isNewChatPresented` becomes false, then `selection.item` becomes the new session's
   id (the Workspace has inserted the returned `SessionInfo` into the store). A failure leaves nothing created and keeps
   the draft, with its uploads, for the next Send.

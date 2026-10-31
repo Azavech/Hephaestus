@@ -31,20 +31,20 @@ events and keeps the live statuses. This doc defines what is stored and how `Ses
 `<id>.yml` follows the YAML coding, unknown-key and read-modify-write rules of
 [project-yml.md](project-yml.md#yaml-coding-all-yaml-files). Keys, in this order:
 
-| Key              | YAML type | Required                  | Written   | Meaning                                                         |
-|------------------|-----------|---------------------------|-----------|-----------------------------------------------------------------|
-| `id`             | string    | yes                       | always    | Session id (a UUID); the id of the file name.                   |
-| `kind`           | string    | yes                       | always    | `project`, `task`, `feedback`, `regeneration` or `bundle`.      |
-| `taskID`         | string    | for `task` and `feedback` | when set  | Id of the task the session belongs to.                          |
-| `mode`           | string    | for `task`                | when set  | `implement`, `debug`, `review`, `plan` or `custom`.             |
-| `bundleID`       | string    | for `bundle`              | when set  | Id of the bundle the session coordinates or works for.          |
-| `title`          | string    | yes                       | always    | Title shown in the UI and passed to the CLI with `--name`.      |
-| `created`        | timestamp | yes                       | always    | Creation time.                                                  |
-| `updated`        | timestamp | yes                       | always    | Time of the last write (When it is written).                    |
-| `permissionMode` | string    | yes                       | always    | Permission mode of the next process start.                      |
-| `allowsAllTools` | boolean   | no                        | when true | The Main allows every permission request itself. Absent: false. |
-| `model`          | string    | no                        | when set  | Model passed with `--model`. Absent: no `--model`.              |
-| `status`         | string    | yes                       | always    | `stopped`, or `failed` when the last process failed (Status).   |
+| Key              | YAML type | Required                  | Written   | Meaning                                                                                                                 |
+|------------------|-----------|---------------------------|-----------|-------------------------------------------------------------------------------------------------------------------------|
+| `id`             | string    | yes                       | always    | Session id (a UUID); the id of the file name.                                                                           |
+| `kind`           | string    | yes                       | always    | `project`, `task`, `feedback`, `regeneration` or `bundle`.                                                              |
+| `taskID`         | string    | for `task` and `feedback` | when set  | Id of the task the session belongs to.                                                                                  |
+| `mode`           | string    | for `task`                | when set  | `implement`, `debug`, `review`, `plan` or `custom`.                                                                     |
+| `bundleID`       | string    | for `bundle`              | when set  | Id of the bundle the session coordinates or works for.                                                                  |
+| `title`          | string    | yes                       | always    | Title shown in the UI and passed to the CLI with `--name`; set at creation, by a generated title, by `sessions.update`. |
+| `created`        | timestamp | yes                       | always    | Creation time.                                                                                                          |
+| `updated`        | timestamp | yes                       | always    | Time of the last write (When it is written).                                                                            |
+| `permissionMode` | string    | yes                       | always    | Permission mode of the next process start.                                                                              |
+| `allowsAllTools` | boolean   | no                        | when true | The Main allows every permission request itself. Absent: false.                                                         |
+| `model`          | string    | no                        | when set  | Model passed with `--model`. Absent: no `--model`.                                                                      |
+| `status`         | string    | yes                       | always    | `stopped`, or `failed` when the last process failed (Status).                                                           |
 
 The values are those of `SessionKind`, `SessionMode`, `PermissionMode` and `SessionStatus`
 ([protocol/types.md](../protocol/types.md)). How a new session gets its title, permission mode and model is defined in
@@ -83,7 +83,8 @@ read, `SessionFile.decode` reads any value other than `failed` as `stopped`.
 
 - when the session is created;
 - when a `user` or a `result` event is appended;
-- on each `sessions.update` (title, permission mode, model, Allow All Tools);
+- on each `sessions.update` (title, permission mode, model, Allow All Tools), Claude's `rename_session` included;
+- when the title generated from the first message arrives ([claude/cli.md](../claude/cli.md) 5.10);
 - when a process ends (status `stopped` or `failed`), and when a process cannot be started (status `failed`,
   [claude/cli.md](../claude/cli.md) 5.3).
 

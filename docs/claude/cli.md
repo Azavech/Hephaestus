@@ -8,14 +8,16 @@ files:
 - HephaestusKit/Sources/HephHost/Claude/ClaudeProcess.swift
 - HephaestusKit/Sources/HephHost/Claude/StreamJSONParser.swift
 - HephaestusKit/Sources/HephHost/Claude/SessionService.swift
+- HephaestusKit/Sources/HephHost/Claude/SessionTitler.swift
 - HephaestusKit/Sources/HephHost/Claude/PermissionBroker.swift
 - HephaestusKit/Sources/HephHost/Claude/ForgeSessionRules.swift
 
 ---
 
 A Main runs every Claude session as a `claude` CLI process driven in stream-json mode. This doc defines the child
-process layer shared with runs and git, how the CLI is found, the session process and its JSON lines, permissions, and
-`SessionService`, which serves the `sessions.*` methods. The Hephaestus tools are in [mcp.md](mcp.md), the prompt texts
+process layer shared with runs and git, how the CLI is found, the session process and its JSON lines, permissions,
+`SessionService`, which serves the `sessions.*` methods, and `SessionTitler`, the one-shot call that titles a session
+from its first message. The Hephaestus tools are in [mcp.md](mcp.md), the prompt texts
 in [prompts.md](prompts.md), the plugin folder in [skills.md](skills.md), the session files in
 [../data/sessions.md](../data/sessions.md).
 
@@ -877,7 +879,8 @@ types of [../protocol/types.md](../protocol/types.md); `SessionsHistoryResult` i
 [../data/sessions.md](../data/sessions.md#reading-events)).
 
 Storage: `SessionService` reads and writes session files only through the project's `SessionArchive`: `create` at
-creation, `update` at every `user` and `result` event, at `sessions.update`, when a process ends (status `stopped` or
+creation, `update` at every `user` and `result` event, at `sessions.update`, when a generated title arrives (5.10),
+when a process ends (status `stopped` or
 `failed`) and when it cannot start (status `failed`, 5.3), `append` for every event (5.8), `saveAttachment`,
 `history`, `delete`. Live statuses exist only in memory; a session without a process has the file's status.
 
@@ -931,7 +934,8 @@ Creation:
 - `id` = a new `UUID`.
 - `title`: the given title, trimmed; otherwise by kind: `project` → `Chat <n>`, n = 1 + the number of `project`
   sessions of the project; `task` → `<mode displayName> <task id>` (`Implement HEPH-12`); `feedback` → `Feedback <task
-  id>`; `regeneration` → `Regeneration`; `bundle` → `Bundle <bundle id>`.
+  id>`; `regeneration` → `Regeneration`; `bundle` → `Bundle <bundle id>`. The first message of a `project`,
+  `feedback` or `bundle` session then gets a generated title (5.10), given or default title alike.
 - `permissionMode`: `feedback` and `regeneration`, and `bundle` sessions and the `task` sessions of a bundle that are
   sessions of 3.5 → `acceptEdits`; otherwise the given value, else the project's
   `claude.permissionMode`, else the setting `defaultPermissionMode`. Every session can change it later (5.6).
@@ -1009,7 +1013,8 @@ fails the request and leaves the session unchanged.
    one `- <absolute path>` line per file (`SessionArchive.attachmentURL`), so Claude reads them (images included) with
    its tools.
 4. The `user` event `{text, attachments, deviceID}` is appended (`text` as typed, `attachments` = the saved
-   `TaskAttachment` values, omitted when empty).
+   `TaskAttachment` values, omitted when empty). When it is the session's first `user` event, the title call of 5.10
+   starts.
 5. Delivery: with a process, the user message is written; `idle` becomes `running`. Without a process, the process
    starts (5.3) and receives the message. When the write fails, the process is terminated and a new one is started
    with the message.
@@ -1080,9 +1085,11 @@ wait for it and then start a new process.
 - `sessions.update {patch}`, checks in this order: the session exists (`notFound`); the project is writable
   (`locked`); `title` trimmed, not empty and on one line (`badRequest`). `permissionMode` and `allowsAllTools` are
   accepted for every kind, the sessions of 3.5 included.
-  `model` `""` removes the model. The session file is updated. A title change applies at the next process start
-  (`--name`). `allowsAllTools` applies at once and never restarts the process: when it becomes true, the pending
-  requests are answered after the file is saved, before the response (4.4). A change of `permissionMode` or `model`
+  `model` `""` removes the model. The session file is updated. A title change shows at once (`session.changed`) and
+  reaches the CLI at the next process start (`--name`); the running process is not restarted for it. Claude renames
+  its own session with the tool `rename_session` ([mcp.md](mcp.md#629-rename_session)), which calls this method.
+  `allowsAllTools` applies at once and never restarts the process: when it becomes true, the pending requests are
+  answered after the file is saved, before the response (4.4). A change of `permissionMode` or `model`
   applies at the next process start: in status `idle` the process is restarted at once (terminated, then started
   without a message: `starting` → `idle`); in `starting`, `running` or `waitingPermission` a restart is marked pending
   and runs when the status next becomes `idle`. The restart is an operation of its own, after the response:
@@ -1156,6 +1163,55 @@ Only broadcast, never logged:
 - Startup: sessions are loaded per project on first use (`SessionArchive.list`). No process exists, so every session
   has its file's status (`stopped` or `failed`).
 - `stopAll()`: terminates every process in parallel (each writes `stopped`) and returns when all have exited.
+  `stopAll()` and `stopAll(projectID:)` also cancel the title calls (5.10) of the sessions they cover.
+
+### 5.10 Generated titles (`SessionTitler`)
+
+A `project`, `feedback` or `bundle` session is titled from its first message by one short call to the Claude CLI with
+the model `haiku`. The call is not a session: it has no session file, no events and no CLI transcript, and no list
+shows it. `task` and `regeneration` sessions keep their titles.
+
+1. Trigger: `SessionService` appends the first `user` event of a session of one of these kinds (5.4 step 4, for the
+   first message of `sessions.start` and for the first `sessions.send` of a project session started without one).
+   First: `SessionArchive.history(_:before: nil, limit: 1)` gave `total` 0 just before the append. A first message
+   whose `text` is empty after trimming (attachments only) gives no call, and the session keeps its title.
+2. The call runs in a `Task` of its own, kept per session id. `sessions.start` and `sessions.send` neither wait for it
+   nor fail with it: the session's process starts and answers as usual, and the title changes whenever the call ends,
+   during a turn too.
+3. Command: `ChildProcess.capture` (1.4) of the path of `ClaudeLocator.shared.current(configured:
+   settings.claudeURL)` (nil: no call), arguments `SessionTitler.arguments`, `input` = `Prompts.titleRequest(text)`
+   ([prompts.md](prompts.md#title-call)) as UTF-8, working directory `FileManager.default.temporaryDirectory`,
+   environment = the login environment (1.1), timeout 60 s. Arguments, one each, in this order: `-p`, `--model`,
+   `haiku`, `--output-format`, `text`, `--no-session-persistence`, `--tools`, an empty argument (no tool),
+   `--strict-mcp-config`, `--disable-slash-commands`, `--system-prompt`, `Prompts.titleSystemPrompt`. Verified with
+   CLI 2.1.309: the title alone on stdout, exit code 0, in about 4 s, and no transcript written.
+4. Output: with exit code 0 and no timeout, stdout decoded as UTF-8 (lossy) goes through `SessionTitler.cleanTitle`:
+   its first line that is not empty after trimming, trimmed; one pair of surrounding quotes removed (`"…"`, `'…'`,
+   `“…”`, `‘…’`, `` `…` ``), then a final `.`, then whitespace again; cut to its first 80 `Character`s and trimmed. An
+   empty result, a spawn error, another exit code and a timeout give no title: the session keeps its title, and the
+   failure is logged at `error` with the exit code or the error, never the message or the output.
+5. Title: `SessionTitler.sessionTitle`: `project` → the cleaned title; `feedback` → `<task id> · <title>`; `bundle` →
+   `<bundle id> · <title>` (a space, U+00B7, a space), for example `HEPH-F1 · Sidebar breaks on rotation`.
+6. Applied on the actor: when the session still exists and its project is writable, the title is written with
+   `SessionArchive.update`, whatever the title is then (one the user or `rename_session` set meanwhile is replaced),
+   and `session.changed` is emitted. Otherwise it is dropped and nothing is written. The process is not restarted:
+   the CLI gets the title at its next start (`--name`, 3.1).
+
+```swift
+/// The title call of 5.10.
+public enum SessionTitler {
+    /// argv[1...] of step 3.
+    public static let arguments: [String]
+    /// Runs the call of step 3 with the cleanup of step 4; nil when it fails or leaves nothing. Throws only
+    /// CancellationError.
+    public static func generate(executable: String, text: String, environment: [String: String]) async throws
+        -> String?
+    /// Step 4; nil when nothing is left.
+    public static func cleanTitle(_ output: String) -> String?
+    /// Step 5; `id` is the task id of a feedback session, the bundle id of a bundle session, ignored for the others.
+    public static func sessionTitle(_ title: String, kind: SessionKind, id: String?) -> String
+}
+```
 
 ## Depends on
 
@@ -1173,5 +1229,5 @@ Only broadcast, never logged:
 | the public repository rule, the commit identity, the limits of these rules                                                                                                                                                                                                                                                                                                                                    | [../public-repository.md](../public-repository.md)                                               |
 | `Log.host`, logging rules                                                                                                                                                                                                                                                                                                                                                                                     | [../architecture.md](../architecture.md)                                                         |
 | `MCPServer`                                                                                                                                                                                                                                                                                                                                                                                                   | [mcp.md](mcp.md)                                                                                 |
-| `Prompts`, `ClaudeProjectContext`, `ClaudeTaskContext`, `RegenerationContext`                                                                                                                                                                                                                                                                                                                                 | [prompts.md](prompts.md)                                                                         |
+| `Prompts` (`titleRequest`, `titleSystemPrompt`), `ClaudeProjectContext`, `ClaudeTaskContext`, `RegenerationContext`                                                                                                                                                                                                                                                                                           | [prompts.md](prompts.md)                                                                         |
 | `SkillsService`                                                                                                                                                                                                                                                                                                                                                                                               | [skills.md](skills.md)                                                                           |

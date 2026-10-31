@@ -469,7 +469,8 @@ Creates a project, or a sub project when `parentID` is set.
   holds a `.hephaestus/project.yml` ("<path> is already a project."), when something that is not a folder exists at
   its path ("<path> already exists."), or when the parent's project.yml is invalid; `locked` (parent migrating).
 - Writes: the folder and its missing intermediate folders; `.hephaestus/project.yml` with `id`, `name`,
-  `description`, `created` (now), `code` `.`, `docs` `docs`, `taskCounter` 0; `.hephaestus/tasks/`; the docs folder
+  `description`, `created` (now), `code` `.`, `docs` `docs`, `taskCounter` 0, `feedbackCounter` 0;
+  `.hephaestus/tasks/`; the docs folder
   `docs/` when missing. Top-level: the root path is added to `projects.json`
   ([data/app-storage.md](../data/app-storage.md)). Sub project: the folder path is appended to the parent's
   `subprojects`. Steps and their order: [services/host.md](../services/host.md).
@@ -656,7 +657,8 @@ Task storage: [data/task-yml.md](../data/task-yml.md). Attachment files: [servic
 | `description` | `String?`     | Markdown; default empty |
 | `status`      | `TaskStatus?` | Default `todo`          |
 
-- Result: `TaskItem`, the new task (`created` and `updated` now, no comments).
+- Result: `TaskItem`, the new task (`created` and `updated` now, no comments), with a task id `<projectID>-<n>`:
+  only the Forge creates feedback task ids ([forge.feedback](#forgefeedback)).
 - Errors: `conflict` (project.yml is invalid, so `taskCounter` cannot be saved); `badRequest` "no task number is left
   in <projectID>" ([data/task-yml.md](../data/task-yml.md#id-allocation)).
 - Writes: `taskCounter` in project.yml, then `.hephaestus/tasks/<task id>.yml` with the next task number
@@ -919,22 +921,27 @@ Session process: [claude/cli.md](../claude/cli.md). Prompts and generated messag
 
 `SessionsStartParams`:
 
-| Field            | Type              | Meaning                                                                                                                            |
-|------------------|-------------------|------------------------------------------------------------------------------------------------------------------------------------|
-| `projectID`      | `String`          | Project                                                                                                                            |
-| `kind`           | `SessionKind`     | `project` or `task`                                                                                                                |
-| `taskID`         | `String?`         | Task sessions: the task (required); absent for project sessions                                                                    |
-| `mode`           | `SessionMode?`    | Task sessions: the mode (required); absent for project sessions                                                                    |
-| `title`          | `String?`         | Default: by kind, as in [claude/cli.md](../claude/cli.md) (task sessions `<Mode> <task id>`, for example `Implement HEPH-12`)      |
-| `message`        | `String?`         | Project sessions: the first message. Task sessions: the custom instructions (required for mode `custom`)                           |
-| `attachments`    | `[UploadRef]?`    | Project sessions: files attached to the first message, complete uploads of the project ([Uploads](#uploads)); `nil` or empty: none |
-| `permissionMode` | `PermissionMode?` | Default: the project's `claude.permissionMode`, else the Main's default permission mode setting                                    |
-| `model`          | `String?`         | Default: the project's `claude.model`, else the Main's default model setting, else none                                            |
+| Field            | Type              | Meaning                                                                                                                                                                                           |
+|------------------|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `projectID`      | `String`          | Project                                                                                                                                                                                           |
+| `kind`           | `SessionKind`     | `project` or `task`                                                                                                                                                                               |
+| `taskID`         | `String?`         | Task sessions: the task (required); absent for project sessions                                                                                                                                   |
+| `mode`           | `SessionMode?`    | Task sessions: the mode (required); absent for project sessions                                                                                                                                   |
+| `title`          | `String?`         | Default: by kind, as in [claude/cli.md](../claude/cli.md) (task sessions `<Mode> <task id>`, for example `Implement HEPH-12`; project sessions `Chat <n>`, until the generated title replaces it) |
+| `message`        | `String?`         | Project sessions: the first message. Task sessions: the custom instructions (required for mode `custom`)                                                                                          |
+| `attachments`    | `[UploadRef]?`    | Project sessions: files attached to the first message, complete uploads of the project ([Uploads](#uploads)); `nil` or empty: none                                                                |
+| `permissionMode` | `PermissionMode?` | Default: the project's `claude.permissionMode`, else the Main's default permission mode setting                                                                                                   |
+| `model`          | `String?`         | Default: the project's `claude.model`, else the Main's default model setting, else none                                                                                                           |
 
 - Result: `SessionInfo` of the new session (new `id`), status `starting` when its process starts now, else `stopped`.
 - Process: a task session starts at once with its generated first message ([claude/prompts.md](../claude/prompts.md)).
   A project session starts at once when `message` or `attachments` is given, with `message` (empty when `nil`) and the
   attachments as the first user message, as `sessions.send` sends one; otherwise on the first `sessions.send`.
+- Generated title: after the first user message of a project, feedback or bundle session, the Main asks a quick model
+  for a short title in the background and replaces the default title with it (project sessions: the title alone;
+  feedback and bundle sessions: `<task or bundle id> · <title>`), whatever the title is then; `session.changed`
+  announces it. The request does not wait for it, and the default title stays when it fails
+  ([claude/cli.md](../claude/cli.md#510-generated-titles-sessiontitler)).
 - Errors: `badRequest` (`kind` is `feedback` or `regeneration`: only the Forge starts those; `kind` is `bundle`:
   `bundles.start` starts those; a project session with
   `taskID` or `mode`; a task session without `taskID` or `mode`, or with `attachments`; mode `custom` without a
@@ -1072,8 +1079,11 @@ Answers a permission request. The first answer wins.
 `SessionsUpdateParams`: `projectID` (`String`), `sessionID` (`UUID`), `patch` (`SessionPatch`).
 
 - Result: `SessionInfo` after the change.
-- Effects: saves the session file. A new `permissionMode` or `model` applies at the next process start; an idle
-  process is restarted at once ([claude/cli.md](../claude/cli.md)). Every session kind accepts every field, Forge
+- Effects: saves the session file. A new title shows at once and reaches the Claude CLI at its next process start
+  (`--name`); Claude renames its own session through this method (`rename_session`,
+  [claude/mcp.md](../claude/mcp.md#629-rename_session)). A new `permissionMode` or `model` applies at the next process
+  start; an idle process is restarted at once ([claude/cli.md](../claude/cli.md)). Every session kind accepts every
+  field, Forge
   sessions included. `allowsAllTools` applies at once, without a restart; when it becomes true, every pending
   permission request of the session is answered with `allow` and recorded as `allowAll` with the Main's own device id
   ([claude/cli.md](../claude/cli.md#44-allow-all-tools)).
@@ -1323,10 +1333,12 @@ on another Main, and with `unavailable` and the check's message when a configura
 | `sessionID` | `UUID`   | The feedback session |
 
 - Errors: `unavailable` (not the Forge, or a configuration check failed); `locked` (the source project is migrating);
-  `badRequest` (the comment is empty after trimming; the screenshot upload is of another project or incomplete; no
-  task number is left, as for [tasks.create](#taskscreate)); `notFound` (an unknown screenshot upload); `conflict`
+  `badRequest` (the comment is empty after trimming; the screenshot upload is of another project or incomplete; "no
+  feedback number is left in <projectID>", [data/task-yml.md](../data/task-yml.md#id-allocation)); `notFound` (an
+  unknown screenshot upload); `conflict`
   (the screenshot upload is in use by another request) ([Using uploads](#using-uploads)).
-- Effects: creates the feedback task with the screenshot attached to a comment, adds a Forge item in state
+- Effects: creates the feedback task, whose id is `<projectID>-F<n>` (`feedbackCounter` in project.yml), with the
+  screenshot attached to a comment, adds a Forge item in state
   `discussing`, starts the task's `feedback` session ([forge/pipeline.md](../forge/pipeline.md)). The sending device
   opens the session at once ([forge/feedback.md](../forge/feedback.md)).
 - Events: `project.changed`, `task.changed`, `session.changed`, `forge.changed`.

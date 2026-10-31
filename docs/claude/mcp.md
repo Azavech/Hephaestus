@@ -246,13 +246,15 @@ given by `MCPToolKinds.kinds(for:)` from this table:
 | 6.23 `forge_push_docs`                                       | `feedback`, `bundle`                                        |
 | 6.24 `forge_push_regen`                                      | `regeneration`                                              |
 | 6.25–6.28 the bundle tools                                   | `bundle`                                                    |
+| 6.29 `rename_session`                                        | `project`, `task`, `bundle`, `feedback`, `regeneration`     |
 
-A `feedback` session therefore lists `get_task`, `update_task`, `comment_task` and `forge_push_docs`, and a
-`regeneration` session lists `forge_push_regen` alone. A feedback session uses `update_task` and `comment_task` to turn
-its feedback into a task ([prompts.md](prompts.md#feedback-part)). Forge sessions write to the public repository
+A `feedback` session therefore lists `get_task`, `update_task`, `comment_task`, `forge_push_docs` and
+`rename_session`, and a `regeneration` session lists `forge_push_regen` and `rename_session`. A feedback session
+uses `update_task` and `comment_task` to turn its feedback into a task ([prompts.md](prompts.md#feedback-part)). Forge sessions write to the public repository
 ([../public-repository.md](../public-repository.md)): they get no tool that reads the devices, projects, tasks, runs,
 web tabs, sessions or skills of the mesh beyond their own feedback task, none that changes them beyond the name,
-description, status and comments of that task, and none that runs a command or starts a session, so nothing they call
+description, status and comments of that task and the title of their own session, and none that runs a command or
+starts a session, so nothing they call
 can push around the Forge push gate ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). `MCPToolKinds.swift`
 holds this table and nothing else: `kinds(for:)` names each tool of the table (the first row: the 16 tools of 6.1–6.6,
 6.8, 6.10, 6.13 and 6.16–6.22) and returns an empty set for any other name, so a tool added to the catalog is listed
@@ -297,7 +299,8 @@ struct MCPToolHandler: Sendable {
 Argument rules for every tool:
 
 - `project`: uppercased, then it must match `^[A-Z]{2,8}$`.
-- `task`: uppercased, then it must match `^[A-Z]{2,8}-[0-9]+$`; its project is the part before the `-`.
+- `task`: uppercased, then it must match `^[A-Z]{2,8}-F?[0-9]+$` (a task id or a feedback task id,
+  [../data/task-yml.md](../data/task-yml.md#task-id)); its project is the part before the `-`.
 - The arguments are checked in the order of the schema's `properties`, before the tool's own checks and calls; the
   first problem ends the call with `Invalid arguments: <what is wrong>.` (section 8). An argument set to `null` counts
   as absent. Arguments the schema does not list are ignored.
@@ -466,7 +469,7 @@ A task with a `parseError` is listed with `id` and `parseError` only, and left o
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[0-9]+$", "description": "Task id, for example HEPH-12."}
+      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id, for example HEPH-12, or HEPH-F3 for a feedback task."}
     },
     "required": ["task"],
     "additionalProperties": false
@@ -512,7 +515,7 @@ Calls `tasks.create {projectID, name, description?, status?}`. Result: the `Task
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[0-9]+$", "description": "Task id, for example HEPH-12."},
+      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id, for example HEPH-12, or HEPH-F3 for a feedback task."},
       "name": {"type": "string", "minLength": 1, "description": "New task name, one line."},
       "description": {"type": "string", "description": "New description in Markdown."},
       "status": {"type": "string", "enum": ["todo", "in_progress", "review", "done"], "description": "New status."}
@@ -536,7 +539,7 @@ the given fields only. Result: the `TaskItem`.
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[0-9]+$", "description": "Task id, for example HEPH-12."}
+      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id, for example HEPH-12, or HEPH-F3 for a feedback task."}
     },
     "required": ["task"],
     "additionalProperties": false
@@ -555,7 +558,7 @@ Calls `tasks.delete {projectID, taskID}`. Result: `{"deleted":"HEPH-12"}`.
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[0-9]+$", "description": "Task id, for example HEPH-12."},
+      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id, for example HEPH-12, or HEPH-F3 for a feedback task."},
       "body": {"type": "string", "minLength": 1, "description": "Comment text in Markdown."},
       "files": {"type": "array", "items": {"type": "string"}, "description": "Absolute paths of files on this Mac to attach."}
     },
@@ -598,7 +601,7 @@ Calls `tasks.delete {projectID, taskID}`. Result: `{"deleted":"HEPH-12"}`.
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[0-9]+$", "description": "Task id, for example HEPH-12."},
+      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id, for example HEPH-12, or HEPH-F3 for a feedback task."},
       "mode": {"type": "string", "enum": ["implement", "debug", "review", "plan", "custom"], "description": "What the session does."},
       "instructions": {"type": "string", "description": "Instructions for the session. Required with mode custom; with another mode they are added to the session's first message."}
     },
@@ -869,7 +872,7 @@ Result: `BundleDetails` ([../services/bundles.md](../services/bundles.md#swift-a
   "inputSchema": {
     "type": "object",
     "properties": {
-      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[0-9]+$", "description": "Task id of your bundle, for example HEPH-12."},
+      "task": {"type": "string", "pattern": "^[A-Za-z]{2,8}-[Ff]?[0-9]+$", "description": "Task id of your bundle, for example HEPH-12."},
       "instructions": {"type": "string", "description": "Added to the first message of a new session; sent to the existing session of the task, where they are required."}
     },
     "required": ["task"],
@@ -916,6 +919,30 @@ The bundle tools check their arguments first (section 6); then a session without
 `Only the coordinator of a bundle can use this tool.`, and the others call
 `MCPHost.bundleTool(_:projectID:bundleID:arguments:)` with the token's `projectID` and `bundleID`.
 
+### 6.29 rename_session
+
+```json
+{
+  "name": "rename_session",
+  "description": "Rename this Claude session: the title the user sees for it in Hephaestus. Use it only when the user asks you to rename this session or chat. The title is one line.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "title": {"type": "string", "minLength": 1, "description": "New title of this session, one line."}
+    },
+    "required": ["title"],
+    "additionalProperties": false
+  }
+}
+```
+
+It renames the session of the token, and no other. `title` is trimmed of whitespace and line breaks; empty or holding
+a line break → tool error `The title must not be empty and must be on one line.` Calls `sessions.update {projectID,
+sessionID, patch: {title}}` with the token's `projectID` and `sessionID` on this Main
+(`MCPHost.perform(_:params:on:)` with the id of `localMain()`), which hosts every project whose sessions it runs. The
+same rules as Rename… in the app apply, and the running process is not restarted: the title shows at once and reaches
+the CLI at its next start ([cli.md](cli.md#56-interrupt-stop-idle-stop-option-changes)). Result: the `SessionInfo`.
+
 ## 7. Locating a project and forwarding
 
 A tool acting on a project (every tool with `project`, `task` or `parent`) finds the Main hosting it:
@@ -929,7 +956,8 @@ A tool acting on a project (every tool with `project`, `task` or `parent`) finds
 The tool's protocol calls then go to that Main with `MCPHost.perform(_:params:on:)`: on this Main they run in process,
 on another Main they are requests over the peer link ([../services/host.md](../services/host.md)), exactly like the
 requests of a remote device. Nothing else is forwarded: `list_devices` and the skills tools use this Main (the registry
-and the skills library are synced between Mains), and the Forge and bundle tools call the local hooks.
+and the skills library are synced between Mains), `rename_session` renames a session of this Main, and the Forge and
+bundle tools call the local hooks.
 
 ## 8. Results and errors
 
@@ -952,7 +980,7 @@ and the skills library are synced between Mains), and the Forge and bundle tools
 | Name                                                                                                                                                                                                                                          | Defined in                                         |
 |-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------|
 | `SessionKind`, `MeshSnapshot`, `ProjectSummary` (`children`), `Project` (`rootPath`), `TaskItem` (`parseError`), `RunInfo`, `WebTab`, `SearchResult`, `SearchScope`, `SkillSummary`, `SkillFile`, `SessionInfo`, `UploadRef`, `ProtocolError` | [../protocol/types.md](../protocol/types.md)       |
-| `mesh.snapshot`, `projects.*`, `tasks.*` (`tasks.addComment` with `author`), `sessions.start`, `runs.*`, `tabs.open`, `search.query`, `skills.*`, `uploads.*`, `maxChunkSize`                                                                 | [../protocol/methods.md](../protocol/methods.md)   |
+| `mesh.snapshot`, `projects.*`, `tasks.*` (`tasks.addComment` with `author`), `sessions.start`, `sessions.update`, `runs.*`, `tabs.open`, `search.query`, `skills.*`, `uploads.*`, `maxChunkSize`                                              | [../protocol/methods.md](../protocol/methods.md)   |
 | `HostService` (conformance to `MCPHost`, `perform`), `RequestContext.local(device:author:)`, `MeshService.requestPeer`, starting and stopping the server, the refusal of `runs` changes for Claude                                            | [../services/host.md](../services/host.md)         |
 | `ForgeService.pushDocs`, `ForgeService.pushRegen`, the Forge push gate                                                                                                                                                                        | [../forge/pipeline.md](../forge/pipeline.md)       |
 | the public repository rule that limits the tools of Forge sessions                                                                                                                                                                            | [../public-repository.md](../public-repository.md) |

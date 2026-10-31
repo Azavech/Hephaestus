@@ -346,7 +346,7 @@ types above is written):
 {
   "version": 1,
   "cycle": {"id": "5D0E…", "trigger": "tool", "state": "building", "started": "2026-10-29T21:20:00.000Z", "…": "…"},
-  "items": [{"taskID": "HEPH-14", "projectID": "HEPH", "title": "Feedback: Sidebar breaks on iPad", "state": "building", "…": "…"}],
+  "items": [{"taskID": "HEPH-F14", "projectID": "HEPH", "title": "Feedback: Sidebar breaks on iPad", "state": "building", "…": "…"}],
   "latestRelease": {"tag": "build-41", "build": 41, "url": "https://github.com/Azavech/Hephaestus/releases/tag/build-41", "publishedAt": "2026-10-28T10:02:11.000Z"},
   "trustedHead": "9c1e…"
 }
@@ -372,8 +372,12 @@ sessionID}`), sent by the feedback sheet ([feedback.md](feedback.md#sending)):
    `host.uploads.check([screenshot], projectID: <source project>)` passes (the upload errors of
    [../protocol/methods.md](../protocol/methods.md#using-uploads): the screenshot is a complete upload of the source
    project, [../services/files.md](../services/files.md#7-uploads)). The screenshot has no size limit.
-2. The task is created in the source project with `host.tasks.create(projectID:name:description:status:)`, status
-   `todo` ([../services/host.md](../services/host.md), [../data/task-yml.md](../data/task-yml.md)):
+2. The feedback task is created in the source project with
+   `host.tasks.create(projectID:name:description:status:feedback:)`, status `todo`, `feedback` true: its id is the
+   next of the project's feedback series, `<projectID>-F<n>` (`HEPH-F1`, `HEPH-F2`, …), counted by `feedbackCounter`
+   in `project.yml` ([../services/host.md](../services/host.md), [../data/task-yml.md](../data/task-yml.md#task-id)).
+   Feedback tasks created before this series existed keep their `<projectID>-<n>` id, and their items go on as
+   before:
    - `name`: `Feedback: ` + the first line of the trimmed comment, cut to its first 60 characters.
    - `description`: the trimmed comment, a blank line, a `---` line, a blank line, then the context block:
 
@@ -398,7 +402,9 @@ sessionID}`), sent by the feedback sheet ([feedback.md](feedback.md#sending)):
 4. The feedback session is started with `host.sessions.start(SessionStart(…))` ([../claude/cli.md](../claude/cli.md)):
    `projectID` = the source project, `kind` `.feedback`, `taskID` = the new task, `permissionMode` `.acceptEdits`,
    `deviceID` = this Main's id, no title, mode, message, attachments or model. The session is titled `Feedback <task
-   id>`, starts in `acceptEdits`, which the user can change like its Allow All Tools, its permission rules and
+   id>` until the title generated from its first message replaces it with `<task id> · <generated title>`
+   (`HEPH-F1 · <generated title>`, [../claude/cli.md](../claude/cli.md#510-generated-titles-sessiontitler)), starts in
+   `acceptEdits`, which the user can change like its Allow All Tools, its permission rules and
    environment are those of feedback sessions
    ([../claude/cli.md](../claude/cli.md#35-sessions-in-the-public-repository)), its model is the project's default,
    and it starts with the generated feedback message of [../claude/prompts.md](../claude/prompts.md) (the task's
@@ -470,7 +476,7 @@ from `building`.
    changes. Commit or discard them, then retry.`; and `git rev-list refs/remotes/origin/<branch>..HEAD` must print
    nothing, else `failed` with `Unpushed commits on <branch>: push or remove them, then retry.`, since
    `forge_push_regen` pushes only the regeneration's own commits. The project data the app writes under `.hephaestus/`
-   (the `taskCounter` of `project.yml` raised by each feedback task, the web tabs) never counts: git ignores that
+   (the `feedbackCounter` of `project.yml` raised by each feedback task, the web tabs) never counts: git ignores that
    folder.
 5. The join rule runs. Then `host.sessions.start(SessionStart(…))` with `projectID` = the source project, `kind`
    `.regeneration`, no `taskID`, `title` `Regeneration <yyyy-MM-dd HH:mm>` (local time; ` (attempt <n>)` appended when

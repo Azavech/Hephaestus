@@ -909,9 +909,10 @@ Projects (on Studio, `created` 2026-10-01T09:00:00.000Z, `code` `.`, `docs` `doc
 | `HEPH` | Hephaestus     | Multi-device project workbench | `/Users/user/Developer/Hephaestus`              | `services/api` (`API`) | Build macOS: `./scripts/build.sh macos`; Test: `./scripts/test.sh` |
 | `API`  | Hephaestus API | Sync service                   | `/Users/user/Developer/Hephaestus/services/api` |                        | Run: `go run .`                                                    |
 
-`HEPH`: `taskCounter` 4, `claude` model `opus` and permission mode `acceptEdits`, web tabs `#201` "GitHub"
-`https://github.com/Azavech/Hephaestus` locked and `#202` "Swift Forums" `https://forums.swift.org` not locked,
-`pendingPermissionCount` 1 in its `ProjectSummary`. `API`: `taskCounter` 1, `pendingPermissionCount` 0.
+`HEPH`: `taskCounter` 4, `feedbackCounter` 0, `claude` model `opus` and permission mode `acceptEdits`, web tabs
+`#201` "GitHub" `https://github.com/Azavech/Hephaestus` locked and `#202` "Swift Forums" `https://forums.swift.org` not
+locked, `pendingPermissionCount` 1 in its `ProjectSummary`. `API`: `taskCounter` 1, `feedbackCounter` 0,
+`pendingPermissionCount` 0.
 
 Tasks:
 

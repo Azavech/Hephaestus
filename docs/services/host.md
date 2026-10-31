@@ -468,7 +468,8 @@ Built as [../data/project-yml.md](../data/project-yml.md) ("Mapping to the proto
 | `parseError`             | `parseError`                                                                                              |
 | `children`               | `ProjectSummary` only: `children(of:)` as summaries, recursively                                          |
 | `pendingPermissionCount` | `ProjectSummary` only: the sum of `pendingPermissions` (the project's own sessions, not its sub projects) |
-| `taskCounter`            | `Project` only: `max(file.taskCounter, tasks.highestNumber(projectID:))`                                  |
+| `taskCounter`            | `Project` only: `max(file.taskCounter, tasks.highestNumber(projectID:feedback: false))`                   |
+| `feedbackCounter`        | `Project` only: `max(file.feedbackCounter, tasks.highestNumber(projectID:feedback: true))`                |
 
 `setPendingPermissions(_:sessionID:count:)` stores the count of one session (`0` removes the entry); when the
 project's sum changed it emits `projectsChanged`. It does nothing for a project that is not registered. The counts come
@@ -737,9 +738,11 @@ actor TaskService: HostMethodHandler {
     func unload(projectID: String)
     func list(projectID: String) throws -> [TaskItem]     // by task number
     func task(projectID: String, taskID: String) throws -> TaskItem
-    func highestNumber(projectID: String) -> Int          // largest cached task number, 0 when none
+    func highestNumber(projectID: String, feedback: Bool) -> Int  // largest cached number of the series, 0 when none
     // methods (context.author and the peer-link `author` param decide comment authors)
-    func create(projectID: String, name: String, description: String?, status: TaskStatus?) async throws -> TaskItem
+    /// feedback: true for the Forge's feedback tasks (<projectID>-F<n>); tasks.create passes false.
+    func create(projectID: String, name: String, description: String?, status: TaskStatus?,
+                feedback: Bool = false) async throws -> TaskItem
     func update(projectID: String, taskID: String, patch: TaskPatch) async throws -> TaskItem
     func delete(projectID: String, taskID: String) async throws
     func addComment(projectID: String, taskID: String, body: String, attachments: [UploadRef],
@@ -769,8 +772,8 @@ actor TaskService: HostMethodHandler {
 
 Methods (`TaskFile` calls and rules):
 
-- `tasks.create`: name validated (`badRequest`); `allocateID`, then `create`; `registry.reloaded` with the new
-  project.yml.
+- `tasks.create`: name validated (`badRequest`); `allocateID(projectRoot:feedback:)` with the given `feedback`
+  (false for the request), then `create`; `registry.reloaded` with the new project.yml.
 - `tasks.update`: `update` with the non-nil `TaskPatch` fields; `name` trimmed, not empty and on one line, with no
   maximum length (`badRequest`).
 - `tasks.delete`: `delete` (also for a broken task).

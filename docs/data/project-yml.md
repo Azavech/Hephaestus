@@ -158,20 +158,21 @@ The functions of this doc do no locking. The host serializes the writes of one p
 
 Top level, in this order:
 
-| Key           | YAML type            | Required | Default | Written              | Meaning                                                                    |
-|---------------|----------------------|----------|---------|----------------------|----------------------------------------------------------------------------|
-| `id`          | string               | yes      |         | always               | Project identifier: the `projectID` of the protocol. Never changes.        |
-| `name`        | string               | yes      |         | always               | Display name.                                                              |
-| `description` | string               | no       | empty   | when not empty       | Description; may span several lines.                                       |
-| `created`     | timestamp            | yes      |         | always               | Creation time.                                                             |
-| `code`        | string               | no       | `.`     | always               | Code folder, relative to the project root.                                 |
-| `docs`        | string               | no       | `docs`  | always               | Docs folder, relative to the code folder.                                  |
-| `taskCounter` | integer              | no       | `0`     | always               | Last task number used ([task-yml.md](task-yml.md#id-allocation)).          |
-| `subprojects` | sequence of strings  | no       | `[]`    | always               | Roots of the sub projects, relative to this project's root.                |
-| `webTabs`     | sequence of web tabs | no       | `[]`    | always               | Web tabs, in tab strip order.                                              |
-| `runs`        | sequence of runs     | no       | `[]`    | always               | Run configurations, in display order.                                      |
-| `skills`      | sequence of strings  | no       | `[]`    | always               | Names of the enabled library skills. Empty: every skill of the library.    |
-| `claude`      | mapping              | no       | absent  | when one key is set  | Defaults of new Claude sessions.                                           |
+| Key               | YAML type            | Required | Default | Written              | Meaning                                                                    |
+|-------------------|----------------------|----------|---------|----------------------|----------------------------------------------------------------------------|
+| `id`              | string               | yes      |         | always               | Project identifier: the `projectID` of the protocol. Never changes.        |
+| `name`            | string               | yes      |         | always               | Display name.                                                              |
+| `description`     | string               | no       | empty   | when not empty       | Description; may span several lines.                                       |
+| `created`         | timestamp            | yes      |         | always               | Creation time.                                                             |
+| `code`            | string               | no       | `.`     | always               | Code folder, relative to the project root.                                 |
+| `docs`            | string               | no       | `docs`  | always               | Docs folder, relative to the code folder.                                  |
+| `taskCounter`     | integer              | no       | `0`     | always               | Last task number used ([task-yml.md](task-yml.md#id-allocation)).          |
+| `feedbackCounter` | integer              | no       | `0`     | always               | Last feedback task number used ([task-yml.md](task-yml.md#id-allocation)). |
+| `subprojects`     | sequence of strings  | no       | `[]`    | always               | Roots of the sub projects, relative to this project's root.                |
+| `webTabs`         | sequence of web tabs | no       | `[]`    | always               | Web tabs, in tab strip order.                                              |
+| `runs`            | sequence of runs     | no       | `[]`    | always               | Run configurations, in display order.                                      |
+| `skills`          | sequence of strings  | no       | `[]`    | always               | Names of the enabled library skills. Empty: every skill of the library.    |
+| `claude`          | mapping              | no       | absent  | when one key is set  | Defaults of new Claude sessions.                                           |
 
 Web tab (item of `webTabs`):
 
@@ -218,6 +219,7 @@ so the message is that of the first broken rule.
 | `code`                  | relative path normalization                                         | valid relative path                                 | `code must be a relative path inside the project`             |
 | `docs`                  | relative path normalization                                         | valid relative path                                 | `docs must be a relative path inside the code folder`         |
 | `taskCounter`           | none                                                                | 0 or more                                           | `taskCounter must not be negative`                            |
+| `feedbackCounter`       | none                                                                | 0 or more                                           | `feedbackCounter must not be negative`                        |
 | `subprojects[i]`        | relative path normalization; repeated paths removed, the first kept | valid relative path, not `.`                        | `subprojects[<i>] must be a relative path inside the project` |
 | `webTabs[i].id`         | none                                                                | unique in the file                                  | `webTabs[<i>].id must be unique`                              |
 | `webTabs[i].url`        | leading and trailing whitespace removed                             | not empty                                           | `webTabs[<i>].url must not be empty`                          |
@@ -289,20 +291,21 @@ A `project.yml` is invalid when it is unreadable or breaks a rule of this doc. T
 `ProjectFile.create` writes a new `project.yml` for `projects.create` and for `projects.import` of a folder without
 one. The new file has:
 
-| Key           | Value                                         |
-|---------------|-----------------------------------------------|
-| `id`          | the normalized identifier                     |
-| `name`        | the normalized name                           |
-| `description` | the description when not empty, else absent   |
-| `created`     | `YAMLCoding.now()`                            |
-| `code`        | `.`                                           |
-| `docs`        | `docs`                                        |
-| `taskCounter` | `0`                                           |
-| `subprojects` | `[]`                                          |
-| `webTabs`     | `[]`                                          |
-| `runs`        | `[]`                                          |
-| `skills`      | `[]`                                          |
-| `claude`      | absent                                        |
+| Key               | Value                                         |
+|-------------------|-----------------------------------------------|
+| `id`              | the normalized identifier                     |
+| `name`            | the normalized name                           |
+| `description`     | the description when not empty, else absent   |
+| `created`         | `YAMLCoding.now()`                            |
+| `code`            | `.`                                           |
+| `docs`            | `docs`                                        |
+| `taskCounter`     | `0`                                           |
+| `feedbackCounter` | `0`                                           |
+| `subprojects`     | `[]`                                          |
+| `webTabs`         | `[]`                                          |
+| `runs`            | `[]`                                          |
+| `skills`          | `[]`                                          |
+| `claude`          | absent                                        |
 
 `create` also creates `.hephaestus/tasks/` and the docs folder `<code>/<docs>` when they are missing. It fails with
 `.invalid("<project root> already has a .hephaestus/project.yml")` when the file exists. Adding a sub project to its
@@ -316,7 +319,8 @@ The host builds the types of [protocol/types.md](../protocol/types.md) from `Pro
   (`id`, `title`, `url`, `locked`), `runs` items `RunConfig` values (`name`, `command`, `cwd`), and `claude` the
   `ClaudeDefaults` value (both fields `nil` when the file has no `claude`).
 - `Project.taskCounter` is the number the host uses: the larger of the file's `taskCounter` and the highest task file
-  number ([task-yml.md](task-yml.md#id-allocation)).
+  number ([task-yml.md](task-yml.md#id-allocation)); `Project.feedbackCounter` the same for `feedbackCounter` and the
+  highest feedback task file number.
 - `ProjectSummary` takes `id`, `name` and `description` from the file; its `children` follow the order of
   `subprojects`.
 - `deviceID`, `rootPath`, `migrating` and `parseError` of `Project` and `ProjectSummary`, and the `children` of
@@ -389,6 +393,7 @@ public struct ProjectFile: Codable, Sendable, Equatable {
     public var code: String
     public var docs: String
     public var taskCounter: Int
+    public var feedbackCounter: Int
     public var subprojects: [String]
     public var webTabs: [WebTabEntry]
     public var runs: [RunEntry]
@@ -431,7 +436,7 @@ public struct ProjectFile: Codable, Sendable, Equatable {
 ```swift
 .mapping([
     "id": .value, "name": .value, "description": .value, "created": .value, "code": .value, "docs": .value,
-    "taskCounter": .value, "subprojects": .value, "skills": .value,
+    "taskCounter": .value, "feedbackCounter": .value, "subprojects": .value, "skills": .value,
     "webTabs": .list(identity: "id", item: .mapping(["id": .value, "title": .value, "url": .value, "locked": .value])),
     "runs": .list(identity: "name", item: .mapping(["name": .value, "command": .value, "cwd": .value])),
     "claude": .mapping(["model": .value, "permissionMode": .value]),
@@ -455,6 +460,7 @@ created: 2026-10-29T21:00:00Z
 code: .
 docs: docs
 taskCounter: 12
+feedbackCounter: 3
 subprojects:
 - services/api
 webTabs:
@@ -489,6 +495,7 @@ created: 2026-10-30T09:12:45Z
 code: .
 docs: docs
 taskCounter: 0
+feedbackCounter: 0
 subprojects: []
 webTabs: []
 runs: []
