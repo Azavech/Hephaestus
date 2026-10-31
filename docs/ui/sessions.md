@@ -246,16 +246,20 @@ The transcript opens on the latest page of events and loads the earlier pages as
 
 Rendering per item:
 
-- `.user`: a trailing bubble, at most 85 % of the width, accent color at 15 % opacity, corner radius 12, holding the
-  text (plain, selectable) and, under it in a wrapping flow, the attachments. Each attachment (`TaskAttachment`) is an
+- `.user`: a trailing bubble, at most 85 % of the width, accent color at 15 % opacity, corner radius 12, 12 pt
+  horizontal and 8 pt vertical padding, holding the text (plain, selectable) and, under it in a wrapping flow, the
+  attachments. Each attachment (`TaskAttachment`) is an
   `AttachmentView` of [media.md](media.md) with `fileName: file`, `mimeType: type`, `size: size`, the `cacheKey`
   "<projectID>/sessions/<session id>/<file>" and a `download` that calls
   `downloadSessionAttachment(projectID:sessionID:fileName:size:progress:)` on `store.connection`
   ([../client/workspace.md](../client/workspace.md#transfers)), which shows the download progress and a Retry after a
   failure ([media.md](media.md#loading-and-caching)). Under the bubble, the caption "<device name> · <time>"
   (`deviceID` resolved in `workspace.mains` and the mesh records, omitted when unknown; shortened time).
-- `.assistant`: leading, full width, the HephMarkdown view ([markdown.md](markdown.md)) with the link rules of
-  [tasks.md](tasks.md#description).
+- `.assistant`: a leading bubble, styled like the user's bubble (at most 85 % of the width, corner radius 12, 12 pt
+  horizontal and 8 pt vertical padding) but filled with the neutral `Color.secondary.opacity(0.15)`, holding the
+  HephMarkdown view ([markdown.md](markdown.md)) with the link rules of [tasks.md](tasks.md#description). No caption
+  under it. Only `.assistant` and `.streaming` items of kind `text` have this bubble; thinking rows, tool rows,
+  permission cards, turn end captions, system and error rows stay outside any bubble.
 - `.thinking`: a collapsed row, `brain`, "Thinking" (secondary) and a disclosure chevron; expanded, the text in
   secondary color.
 - `.tool`: `ToolUseRow` ([Tool rows](#tool-rows)).
