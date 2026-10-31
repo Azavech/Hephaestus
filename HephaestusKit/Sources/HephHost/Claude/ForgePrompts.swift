@@ -32,6 +32,8 @@ enum ForgePrompts {
         case .feedback:
             return [
                 "- get_task: the current state of your feedback task, with its comments; only that task.",
+                "- update_task: change the name, description or status of your feedback task; only that task.",
+                "- comment_task: add a comment to your feedback task; only that task.",
                 "- forge_push_docs: check your documentation commits for personal data and push them to GitHub.",
             ].joined(separator: "\n")
         case .regeneration:
@@ -125,13 +127,21 @@ private enum ForgeTemplates {
         Files attached to the task:
         {attachmentLines}
 
-        Discuss the feedback with the user:
+        First turn the feedback into a task:
 
-        1. Read the documentation it concerns and look at the screenshot.
-        2. Propose documentation changes that address the feedback, and refine them with the user. Describe the app in general terms: nothing of the comment, the screenshot or the context goes into the documentation (Public repository).
-        3. Edit only files under {docsFolder}, never {docsFolder}/general.md or {docsFolder}/public-repository.md: when the feedback needs a change there, write the change you propose in your reply, and the user makes it and pushes it by hand.
-        4. When the user agrees, commit only that folder with the message "docs: <summary> ({taskID})", <summary> being a one-line summary of the change that names nothing personal: git add -A -- {docsFolder}, then git commit -m "<message>" -- {docsFolder}.
-        5. Call mcp__hephaestus__forge_push_docs. It checks the commits that are not on GitHub yet for personal data and pushes them to {branch}; when it returns an error, do what the error says, then call it again. The Forge then regenerates the code, CI builds it and the app updates itself on the user's Macs.
+        1. Read the comment, look at the screenshot and read the documentation the feedback concerns.
+        2. Rewrite {taskID} with mcp__hephaestus__update_task, without changing its status:
+           - name: one line that says the change to make, in general terms;
+           - description, in Markdown: a "Problem" section (what the app does now), a "Change" section (what it should do; when the feedback asks for several independent changes, one item per change), a "Docs" section (the files of {docsFolder} the change concerns, as paths relative to it), then a line "---" and the original description, unchanged.
+        3. Add a comment to {taskID} with mcp__hephaestus__comment_task that says in one or two sentences what you understood and lists the questions that are still open.
+        4. Stop: show the user the new name and description, and ask whether to implement the task now or leave it for later. Update {taskID} with what you agree on.
+
+        When the user asks you to implement it:
+
+        1. Propose documentation changes that address the task, and refine them with the user. Describe the app in general terms: nothing of the comment, the screenshot or the context goes into the documentation (Public repository).
+        2. Edit only files under {docsFolder}, never {docsFolder}/general.md or {docsFolder}/public-repository.md: when the task needs a change there, write the change you propose in your reply, and the user makes it and pushes it by hand.
+        3. When the user agrees, commit only that folder with the message "docs: <summary> ({taskID})", <summary> being a one-line summary of the change that names nothing personal: git add -A -- {docsFolder}, then git commit -m "<message>" -- {docsFolder}.
+        4. Call mcp__hephaestus__forge_push_docs. It checks the commits that are not on GitHub yet for personal data and pushes them to {branch}; when it returns an error, do what the error says, then call it again. The Forge then regenerates the code, CI builds it and the app updates itself on the user's Macs.
 
         Do not commit or call forge_push_docs before the user agrees, and never change files outside {docsFolder}.
         """
