@@ -694,7 +694,7 @@ The pipeline state of one feedback task. Identifiable by `taskID` (`var id: Stri
 |---------------------|--------------|-------------------------------------------------------------------|
 | `taskID`            | `String`     | The feedback task                                                 |
 | `projectID`         | `String`     | The source project when the item was created                      |
-| `title`             | `String`     | The task name at creation                                         |
+| `title`             | `String`     | The task name, kept current                                       |
 | `state`             | `ForgeStage` | State                                                             |
 | `feedbackSessionID` | `UUID`       | The feedback session                                              |
 | `docsCommit`        | `String?`    | Full SHA of the last commit `forge_push_docs` pushed for the item |

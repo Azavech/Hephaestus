@@ -217,7 +217,8 @@ errors (section 8), so Claude can correct them.
   projectID, kind, taskID})` returns a new token, 32 random bytes (`SecRandomCopyBytes`) as 64 lowercase hex
   characters. It unregisters the token when the process ends ([cli.md](cli.md#57-errors-and-the-end-of-a-process)).
 - A request's token selects its `MCPSessionContext`: the tools listed and callable depend on its `kind` (section 6),
-  `get_task` in a `feedback` session is limited to its `taskID`, and the Forge tools pass its `sessionID`.
+  `get_task`, `update_task` and `comment_task` in a `feedback` session are limited to its `taskID`, and the Forge
+  tools pass its `sessionID`.
 - `configJSON(token:)` returns, compact, with the current port:
 
 ```json
@@ -233,21 +234,23 @@ mcp__hephaestus` lets sessions call them without permission prompts.
 written here (served compact by `tools/list`). Each definition has the session kinds that list it and may call it,
 given by `MCPToolKinds.kinds(for:)` from this table:
 
-| Tools                   | Session kinds                                     |
-|-------------------------|---------------------------------------------------|
-| 6.1–6.6, 6.8–6.22       | `project`, `task`                                 |
-| 6.7 `get_task`          | `project`, `task`, `feedback` (its own task only) |
-| 6.23 `forge_push_docs`  | `feedback`                                        |
-| 6.24 `forge_push_regen` | `regeneration`                                    |
+| Tools                                                  | Session kinds                                     |
+|--------------------------------------------------------|---------------------------------------------------|
+| 6.1–6.6, 6.8, 6.10, 6.12–6.22                          | `project`, `task`                                 |
+| 6.7 `get_task`, 6.9 `update_task`, 6.11 `comment_task` | `project`, `task`, `feedback` (its own task only) |
+| 6.23 `forge_push_docs`                                 | `feedback`                                        |
+| 6.24 `forge_push_regen`                                | `regeneration`                                    |
 
-A `feedback` session therefore lists `get_task` and `forge_push_docs`, and a `regeneration` session lists
-`forge_push_regen` alone. Forge sessions write to the public repository
+A `feedback` session therefore lists `get_task`, `update_task`, `comment_task` and `forge_push_docs`, and a
+`regeneration` session lists `forge_push_regen` alone. A feedback session uses `update_task` and `comment_task` to turn
+its feedback into a task ([prompts.md](prompts.md#feedback-part)). Forge sessions write to the public repository
 ([../public-repository.md](../public-repository.md)): they get no tool that reads the devices, projects, tasks, runs,
-web tabs, sessions or skills of the mesh beyond their own feedback task, none that changes them, and none that runs a
-command or starts a session, so nothing they call can push around the Forge push gate
-([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). `MCPToolKinds.swift` holds this table and nothing else:
-`kinds(for:)` names each tool of the table (the first row: the 21 tools of 6.1–6.6 and 6.8–6.22) and returns an empty
-set for any other name, so a tool added to the catalog is listed and callable in no session until the table names it.
+web tabs, sessions or skills of the mesh beyond their own feedback task, none that changes them beyond the name,
+description, status and comments of that task, and none that runs a command or starts a session, so nothing they call
+can push around the Forge push gate ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)). `MCPToolKinds.swift`
+holds this table and nothing else: `kinds(for:)` names each tool of the table (the first row: the 19 tools of 6.1–6.6,
+6.8, 6.10 and 6.12–6.22) and returns an empty set for any other name, so a tool added to the catalog is listed and
+callable in no session until the table names it.
 It is a protected path ([../public-repository.md](../public-repository.md#protected-paths)), so a regeneration never
 widens the tools of these sessions.
 
@@ -511,8 +514,9 @@ Calls `tasks.create {projectID, name, description?, status?}`. Result: the `Task
 }
 ```
 
-Calls `tasks.update {projectID, taskID, patch: {name?, description?, status?}}` with the given fields only. Result: the
-`TaskItem`.
+In a `feedback` session, `task` uppercased must be the session's `taskID`, else tool error `Forge sessions can only
+change their own feedback task.` Calls `tasks.update {projectID, taskID, patch: {name?, description?, status?}}` with
+the given fields only. Result: the `TaskItem`.
 
 ### 6.10 delete_task
 
@@ -552,6 +556,8 @@ Calls `tasks.delete {projectID, taskID}`. Result: `{"deleted":"HEPH-12"}`.
 }
 ```
 
+- In a `feedback` session, `task` uppercased must be the session's `taskID`, else tool error `Forge sessions can only
+  change their own feedback task.`, checked before the files.
 - Each path must be absolute and name a readable regular file on this Main; otherwise a tool error
   `Cannot attach <path>: <reason>.` and nothing is sent. Files have no size limit. Every path is checked before any
   upload, in this order: not absolute, `the path is not absolute`; nothing there, the system's text for the error

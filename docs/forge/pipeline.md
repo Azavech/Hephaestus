@@ -14,12 +14,13 @@ files:
 
 ---
 
-The Forge turns feedback into a new build of Hephaestus. A feedback session updates `docs/` and commits; a
-regeneration session brings the code in line with the docs and commits; the Forge checks their commits for personal
-data and pushes them; GitHub Actions builds and publishes the release `build-<N>`; every Mac updates itself. One Main
-runs the pipeline: the **Forge host**, the Main that hosts the Hephaestus source project. Capture and sheet:
-[feedback.md](feedback.md). Regeneration procedure and docs hash: [generation.md](generation.md). Workflow:
-[ci.md](ci.md). Self-update: [update.md](update.md). Screen: [../ui/forge.md](../ui/forge.md).
+The Forge turns feedback into a new build of Hephaestus. A feedback session first rewrites its feedback as a task,
+then, when the user asks it to implement the task, updates `docs/` and commits; a regeneration session brings the code
+in line with the docs and commits; the Forge checks their commits for personal data and pushes them; GitHub Actions
+builds and publishes the release `build-<N>`; every Mac updates itself. One Main runs the pipeline: the **Forge
+host**, the Main that hosts the Hephaestus source project. Capture and sheet: [feedback.md](feedback.md). Regeneration
+procedure and docs hash: [generation.md](generation.md). Workflow: [ci.md](ci.md). Self-update:
+[update.md](update.md). Screen: [../ui/forge.md](../ui/forge.md).
 
 The repository is public and holds no personal data ([../public-repository.md](../public-repository.md)). Claude never
 pushes: the two Forge push tools ([MCP tools](#mcp-tools)) are the only way the commits of a Forge session are meant to
@@ -324,7 +325,7 @@ One per feedback task; `var id: String { taskID }`.
 |---------------------|--------------|-------------------------------------------------------------------|
 | `taskID`            | `String`     | the feedback task                                                 |
 | `projectID`         | `String`     | the source project when the item was created                      |
-| `title`             | `String`     | the task name at creation                                         |
+| `title`             | `String`     | the task name, kept current (Items)                               |
 | `state`             | `ForgeStage` | see Items                                                         |
 | `feedbackSessionID` | `UUID`       | the feedback session                                              |
 | `docsCommit`        | `String?`    | full SHA of the last commit `forge_push_docs` pushed for the item |
@@ -431,7 +432,12 @@ When step 4 fails, no item is created, the task stays, and the error is returned
 | `docsPushed`, `failed`                       | the join rule matches                                    | the cycle's state | `cycleID` = the cycle; task id added to `itemTaskIDs`                         |
 | in a cycle                                   | the cycle changes state                                  | the cycle's state | `error` = the cycle's error when `failed`, else nil                           |
 | `released`                                   | Completion writes its comment                            | `done`            | comment, task status `done`                                                   |
+| any                                          | its task changes name (`task.changed`)                   | unchanged         | `title` = the new name                                                        |
 | any                                          | its task is deleted (`task.removed`)                     | (removed)         | removed from `items` and from its cycle's `itemTaskIDs`                       |
+
+An item's task is the task of `projectID` whose id is `taskID`. Its feedback session renames it when it rewrites the
+feedback as a task ([../claude/prompts.md](../claude/prompts.md#feedback-part)); `task.changed` of a task whose name
+equals the item's `title` changes nothing.
 
 **Join rule.** An item in `docsPushed` or `failed` joins the active cycle when its `docsCommit` is an ancestor of the
 cycle's reference commit (`git merge-base --is-ancestor <docsCommit> <reference>` exits 0; a commit is its own
@@ -927,9 +933,9 @@ steps, Retry, tool calls, intake, polling steps, Completion, session and task no
 arrival order, through one internal queue, so no operation interleaves with another across its `await`s.
 `config()` and `status()` answer at once from the current state, without waiting for the queue.
 
-The notifications `sessionChanged`, `sessionRemoved` and `taskRemoved` add their operation to the queue and return
-without waiting for it. `HostService.emit` awaits them, and an operation that starts a session (Feedback intake, a
-regeneration step) emits `session.changed` while it holds the queue: waiting there would deadlock.
+The notifications `sessionChanged`, `sessionRemoved`, `taskChanged` and `taskRemoved` add their operation to the
+queue and return without waiting for it. `HostService.emit` awaits them, and an operation that starts a session
+(Feedback intake, a regeneration step) emits `session.changed` while it holds the queue: waiting there would deadlock.
 
 ## Swift API
 
@@ -973,9 +979,10 @@ public actor ForgeService {
     public func addPrivateTerm(_ term: String) async throws
     /// Private terms: adds the line "# not private: <term>" to the file (Settings "Dismiss"); throws as addPrivateTerm.
     public func dismissPrivateTerm(_ term: String) async throws
-    /// Called by HostService.emit for every session.changed, session.removed and task.removed.
+    /// Called by HostService.emit for every session.changed, session.removed, task.changed and task.removed.
     public func sessionChanged(projectID: String, session: SessionInfo) async
     public func sessionRemoved(projectID: String, sessionID: String) async   // the session id's uuidString
+    public func taskChanged(projectID: String, task: TaskItem) async
     public func taskRemoved(projectID: String, taskID: String) async
 }
 

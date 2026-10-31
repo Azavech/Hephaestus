@@ -387,8 +387,8 @@ public actor EventHub {
   `registry.setPendingPermissions(projectID, sessionID: session.id, count: session.pendingPermissions.count)`, and
   for `sessionRemoved` with `count: 0` (§6.1). Last, it notifies the Forge of the events it follows
   ([../forge/pipeline.md](../forge/pipeline.md)): `sessionChanged` → `forge.sessionChanged(projectID:session:)`,
-  `sessionRemoved` → `forge.sessionRemoved(projectID:sessionID:)` (the id's `uuidString`), `taskRemoved` →
-  `forge.taskRemoved(projectID:taskID:)`. The services of this doc, of [files.md](files.md), [runs.md](runs.md) and
+  `sessionRemoved` → `forge.sessionRemoved(projectID:sessionID:)` (the id's `uuidString`), `taskChanged` →
+  `forge.taskChanged(projectID:task:)`, `taskRemoved` → `forge.taskRemoved(projectID:taskID:)`. The services of this doc, of [files.md](files.md), [runs.md](runs.md) and
   [search.md](search.md), the host protocol requirements (§12) and the Forge emit through `emit`; other services may
   call `events.broadcast` directly for events the Forge does not follow (`mesh.changed`, `migration.progress`).
 - Events given in sequence by one caller reach each connection in that order (each channel sends its frames in order).
