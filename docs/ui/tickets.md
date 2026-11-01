@@ -343,7 +343,9 @@ was this ticket.
 - Selected tab: remembered per ticket while `TicketsView` exists; by default the session with the latest `updated`. A
   session started elsewhere (another device, or Claude through `start_ticket_session`) adds a tab that is not selected.
   When the selected session is removed, the tab on its left is selected, or the first tab.
-- Content: `SessionView(store:sessionID:showsTicketLink: false)` ([sessions.md](sessions.md#session-view)).
+- Content: `SessionView(store:sessionID:showsTicketLink: false)` ([sessions.md](sessions.md#session-view)). macOS: the
+  session's header (title, context, capsules, options menu) is in the window's toolbar while the segment shows it
+  ([sessions.md](sessions.md#header)); the ticket header and the tab strip stay above the transcript.
 - No session: "No Claude session for this ticket yet." and a "New Session…" button.
 
 ### New session sheet

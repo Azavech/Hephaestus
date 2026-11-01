@@ -170,9 +170,10 @@ confirmation dialog whose button sends one ([shell.md](shell.md#63-detail)).
 ## Session view
 
 `SessionView(store:sessionID:showsTicketLink:)` shows one session: header, transcript, status line and composer, top to
-bottom. The Claude section, the Claude segment of a ticket ([tickets.md](tickets.md#claude-segment)) and every session
-shown through the selection (the Forge feedback flow, [../forge/feedback.md](../forge/feedback.md)) use it. Each view
-creates its own `SessionModel` when it appears, calls `appear()` in `onAppear` and `disappear()` in `onDisappear`.
+bottom; on macOS the header is in the window's toolbar instead ([Header](#header)). The Claude section, the Claude
+segment of a ticket ([tickets.md](tickets.md#claude-segment)) and every session shown through the selection (the Forge
+feedback flow, [../forge/feedback.md](../forge/feedback.md)) use it. Each view creates its own `SessionModel` when it
+appears, calls `appear()` in `onAppear` and `disappear()` in `onDisappear`.
 
 - While `model.info` is nil and the store is not loaded, the header shows "Loading…" and the composer is disabled.
 - When `model.isRemoved` is true, the view shows only "This session was deleted." (secondary, centered).
@@ -188,11 +189,23 @@ creates its own `SessionModel` when it appears, calls `appear()` in `onAppear` a
   `allowsAllTools` is true.
 - Options: `SessionOptionsMenu` (button `ellipsis.circle`).
 
-macOS: the header is in `.safeAreaInset(edge: .top, spacing: 0)` of the transcript's `ScrollView`, with a `.bar`
-background and a `Divider` at its bottom. It stays pinned below the window's toolbar, and only the transcript scrolls
-under it and under the toolbar ([shell.md](shell.md#92-toolbar-material-macos)). The states of the
-[transcript](#transcript) without items keep the header pinned the same way. iPadOS and iOS keep the header above the
-transcript.
+iPadOS and iOS: `SessionHeaderView` is a row above the transcript (padding 16 × 10): the title and the context in a
+leading `VStack(alignment: .leading, spacing: 2)`, a `Spacer`, then the capsules and the options button.
+
+macOS: the session view has no header row. `SessionView` adds the header to the window's toolbar with
+`.toolbar { ToolbarItem(placement: .navigation) { SessionHeaderView(…) } }`, so the items show while the session view is
+shown, next to the shell's items ([shell.md](shell.md#9-toolbar)), and leave with it. In the toolbar
+`SessionHeaderView` is an `HStack(spacing: 8)` without padding: the title and the context in a
+`VStack(alignment: .leading, spacing: 0)` at most 240 pt wide (tail truncation), the title in `.headline` and the
+context in `.caption`, then the capsules and the options button. While the header shows "Loading…", the toolbar item
+shows it. A deleted session (`model.isRemoved`) adds no toolbar item.
+
+macOS: the transcript's `ScrollView` is the top of the session view. In the Claude section the session view reaches
+the top of the detail, so the transcript extends under the window's toolbar with the default safe-area behavior: its
+first row starts below the toolbar, and scrolled content shows through the toolbar, blurred
+([shell.md](shell.md#92-toolbar-material-macos)). The states of the [transcript](#transcript) without items start
+below the toolbar. In the Claude segment of a ticket the ticket header and the tab strip stay above the session view
+([tickets.md](tickets.md#claude-segment)), and the transcript starts below them.
 
 ### Options menu
 

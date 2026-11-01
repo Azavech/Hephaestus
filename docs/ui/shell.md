@@ -667,6 +667,8 @@ both ways below reach the same router:
 - Search: a button with `Label("Search", systemImage: "magnifyingglass")`, help "Search (⌘K)", calling
   `context.openSearch()`.
 - In compact width the screens pushed by the sections have their own navigation bars, without these items.
+- macOS: while a `SessionView` is shown (the Claude section, the Claude segment of a ticket), it adds its header, at
+  `.navigation` placement, next to these items ([sessions.md](sessions.md#header)).
 
 ### 9.1 Presence indicator
 
@@ -689,10 +691,11 @@ blurred.
 - A SwiftUI `ScrollView` or `List` that reaches the top of its column extends under the toolbar and keeps the default
   safe-area behavior: its first row starts below the toolbar, and only scrolled content passes under it. The sidebar
   list ([§6.2](#62-sidebar)) does so.
-- A bar or header pinned above a scroll view (the [offline bar](#offline-bar), the session header of
-  [sessions.md](sessions.md#header), the search scope bar of [search.md](search.md)) is in the scroll view's
-  `.safeAreaInset(edge: .top)` with a `.bar` background: it stays pinned below the toolbar and the scroll view extends
-  under both.
+- A bar pinned above a scroll view (the [offline bar](#offline-bar), the search scope bar of [search.md](search.md))
+  is in the scroll view's `.safeAreaInset(edge: .top)` with a `.bar` background: it stays pinned below the toolbar and
+  the scroll view extends under both.
+- The session view has no header bar: its header is in the toolbar ([§9](#9-toolbar)), and in the Claude section the
+  transcript extends under the toolbar like a list ([sessions.md](sessions.md#header)).
 - A view hosted from AppKit or WebKit (the editor of [editor.md](editor.md), the page of a web tab of [web.md](web.md))
   and a view without a scroll view (an `EmptyStateView`, a `ProgressView`) start below the toolbar; the material then
   shows what is behind it, the column's background.
