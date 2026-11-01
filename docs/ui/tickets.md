@@ -100,8 +100,9 @@ section of the same project is shown, and reset when the window shows another se
 
 - Text: the query is split on whitespace; every word must occur, case- and diacritic-insensitive, in the ticket's id,
   name or description.
-- Number: ascending by the integer after the last `-` of the id (the order of `store.tickets`). Last Updated: `updated`
-  descending, ties by number descending.
+- Number: ascending by ticket id ([data/ticket-yml.md](../data/ticket-yml.md#ticket-id)): the tickets by number, then
+  the feedback tickets by number (the order of `store.tickets`). Last Updated: `updated` descending, ties by number
+  descending.
 - Broken tickets (a `TicketItem` with a `parseError`) ignore the status filter; the text filter matches their id and
   parse error.
 

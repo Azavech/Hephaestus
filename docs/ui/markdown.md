@@ -292,7 +292,7 @@ proposed width and the height of its laid-out text.
   kept, clamped to the new length, so a reply that grows while streaming keeps its selection.
 - Links: `linkTextAttributes` give link runs the accent color (`controlAccentColor`, `tintColor`). A click or tap on a
   link passes its URL to the environment's `openURL`, which the `MarkdownView` handles ([Links](#links)):
-  `textView(_:clickedOnLink:at:)` on macOS, `textView(_:primaryActionFor:in:defaultAction:)` on iOS.
+  `textView(_:clickedOnLink:at:)` on macOS, `textView(_:primaryActionFor:defaultAction:)` on iOS.
 - Copy: the text views' own Copy (menu, context menu, ⌘C) copies the selected range.
 
 ## Heading slugs

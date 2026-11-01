@@ -901,7 +901,7 @@ For each section:
    `[.titled, .resizable, .fullSizeContentView]`, `.buffered` and `false`. The window is never ordered in, so nothing
    appears on screen.
 2. `layoutSubtreeIfNeeded()` on the hosting view; the main run loop runs for 1 s (`RunLoop.main.run(until:)`), so the
-   views' tickets run; `layoutSubtreeIfNeeded()` again.
+   views' `.task` modifiers run; `layoutSubtreeIfNeeded()` again.
 3. `cacheDisplay(in: hosting.bounds, to:)` draws the hosting view into
    `NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 2560, pixelsHigh: 1600, bitsPerSample: 8, samplesPerPixel: 4,
    hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)`, whose `size` is

@@ -639,7 +639,7 @@ public final class ProjectStore {
     public let projectID: String
     public private(set) var phase: Phase
     public private(set) var project: Project?
-    public private(set) var tickets: [TicketItem]        // by ticket number, ascending
+    public private(set) var tickets: [TicketItem]        // by ticket id, ascending (TicketID order)
     public private(set) var bundles: [BundleItem]    // by bundle number, ascending
     public private(set) var sessions: [SessionInfo]  // by created, then id
     public private(set) var isRemoved: Bool

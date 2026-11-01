@@ -99,7 +99,7 @@ Internal types (same module): `HTTPRequestParser`, `HTTPRequest`, `HTTPResponse`
 
 ## 3. HTTP/1.1 server
 
-Each accepted `NWConnection` is served by one ticket: it receives up to 65,536 bytes at a time into an
+Each accepted `NWConnection` is served by one Swift `Task`: it receives up to 65,536 bytes at a time into an
 `HTTPRequestParser`, and serves the complete requests in order, one at a time. Connections are served concurrently.
 
 ```swift
