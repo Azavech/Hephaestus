@@ -791,7 +791,7 @@ Result: `BundleDetails` ([../services/bundles.md](../services/bundles.md#swift-a
 ```json
 {
   "name": "start_bundle_ticket",
-  "description": "Start the ticket session of a ticket of your bundle: it implements the ticket in its own git worktree, on the branch ticket/<ticket id>, commits there, comments a summary and reports the ticket finished to you; new instructions clear that report. When the ticket already has a session, send that session instructions instead.",
+  "description": "Start the ticket session of a ticket of your bundle: it implements the ticket in its own git worktree, on the branch ticket/<ticket id>, commits there, comments a summary and reports the ticket finished to you, which closes its session; instructions for a ticket whose session is closed start a new session, and clear that report. When the ticket already has a session, send that session instructions instead.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -885,7 +885,7 @@ more messages.`
 ```json
 {
   "name": "report_ticket_finished",
-  "description": "Report to the coordinator of your bundle that the work of your ticket is finished, with a short summary. Call it once you have committed your changes and commented your summary on the ticket, and again after finishing new instructions from the coordinator. Only the ticket sessions of a bundle can use it.",
+  "description": "Report to the coordinator of your bundle that the work of your ticket is finished, with a short summary, and close this session: it accepts no more messages, and new instructions from the coordinator start a new session. Call it last, once you have committed your changes and commented your summary on the ticket, then end your turn. Only the ticket sessions of a bundle can use it.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -902,7 +902,8 @@ the ticket sessions of a bundle can use this tool.`; `summary` is trimmed of whi
 trimming is `Invalid arguments: summary must not be empty.` Then it calls
 `MCPHost.reportTicketFinished(projectID:bundleID:ticketID:sessionID:summary:)` with the token's `projectID`,
 `bundleID`, `ticketID` and `sessionID` and the trimmed summary: `BundleService.ticketFinished`
-([../services/bundles.md](../services/bundles.md#tools-of-the-ticket-sessions)). Result: the returned text.
+([../services/bundles.md](../services/bundles.md#tools-of-the-ticket-sessions)), which records the report, closes the
+session ([cli.md](cli.md#511-closing-a-session)) and messages the coordinator. Result: the returned text.
 
 ## 7. Locating a project and forwarding
 

@@ -232,12 +232,14 @@ tool's arguments are checked.
 - `startTicket(projectID:bundleID:ticketID:instructions:)`, for `start_bundle_ticket`:
   1. The ticket is in the bundle (`badRequest` `<ticket id> is not in <bundle id>.`); the bundle is `running` or
      `review` (`conflict` `<bundle id> is not running.`).
-  2. When the ticket's `session` names a session of the project: `instructions` must be given (`badRequest` `<ticket id>
+  2. When the ticket's `session` names a session of the project that is not closed (`SessionInfo.closed` nil, a
+     session closes itself when it reports its ticket finished): `instructions` must be given (`badRequest` `<ticket id>
      already has a session: give instructions for it.`), and they are sent to it with `sessions.send`; once they are
      sent, the item's `finished` is cleared. Result: that `SessionInfo`.
-  3. Otherwise the number of ticket sessions of the bundle whose status is `starting`, `running` or `waitingPermission`
-     must be below `bundles.maxParallel` (`conflict` `<n> ticket sessions of <bundle id> are running, the limit of this
-     Main (Settings ▸ Claude ▸ Bundles). Start <ticket id> when one of them ends its turn.`).
+  3. Otherwise (no session, or a closed one) the number of ticket sessions of the bundle whose status is `starting`,
+     `running` or `waitingPermission` must be below `bundles.maxParallel` (`conflict` `<n> ticket sessions of <bundle
+     id> are running, the limit of this Main (Settings ▸ Claude ▸ Bundles). Start <ticket id> when one of them ends its
+     turn.`).
   4. The worktree is created when missing ([Worktrees](#worktrees)), `<base>` being the bundle's `base`, or the
      current branch (`git symbolic-ref --short HEAD` in the code folder) when the bundle has none.
   5. `sessions.start(SessionStart(projectID:, kind: .ticket, ticketID:, mode: .implement, message: instructions,
@@ -264,14 +266,19 @@ session's `bundleID`, `ticketID` and id, and the trimmed summary:
    (`badRequest` `<ticket id> is not in <bundle id>.`); the item's `session` is the calling session (`conflict` `This
    session is no longer the session of <ticket id> in <bundle id>.`).
 2. The item's `finished` = true; the file is written and `bundleChanged` emitted.
-3. When `coordinator` is set: `sessions.send` to it with `finishedMessage(ticketID:summary:)`, `<ticket id> is finished:
+3. The calling session is closed: `sessions.close(projectID:sessionID:)`
+   ([../claude/cli.md](../claude/cli.md#511-closing-a-session)); its process stops once the current turn ends. A
+   failure is logged and not returned.
+4. When `coordinator` is set: `sessions.send` to it with `finishedMessage(ticketID:summary:)`, `<ticket id> is finished:
    <summary>`, and this Main's id as `deviceID`; an error is logged and not returned, since the mark is recorded and
    `get_bundle` shows it.
-4. Result: `Reported <ticket id> as finished to the coordinator of <bundle id>.`
+5. Result: `Reported <ticket id> as finished to the coordinator of <bundle id>. This conversation is over: end your turn
+   now.`
 
-The mark lasts until the coordinator gives the ticket new work: `start_bundle_ticket` clears it, with new instructions
-for the session or a new session ([Tools of the coordinator](#tools-of-the-coordinator)). A turn that ends, stops or
-fails leaves it as it is.
+The mark lasts until the coordinator gives the ticket new work: `start_bundle_ticket` clears it, and since the reporting
+session is closed, it starts a new session for the ticket in the same worktree, with the coordinator's instructions as
+its first message ([Tools of the coordinator](#tools-of-the-coordinator)). A turn that ends, stops or fails leaves the
+mark as it is.
 
 ### Working folder of a ticket session
 

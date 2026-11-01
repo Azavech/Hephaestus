@@ -1225,7 +1225,9 @@ Claude closes its own session with the MCP tool `close_session` ([mcp.md](mcp.md
 `close(projectID:sessionID:)` with the session of its token. Only Claude closes a session: no protocol method does,
 and the app offers no way to reopen one. The prompts say when ([prompts.md](prompts.md)): a `feedback` session as soon
 as no question is open; a `project`, `ticket` or `bundle` session only when the user says the conversation is done or
-asks to close it. A `regeneration` session has no `close_session` tool.
+asks to close it. A `ticket` session of a bundle is also closed by `report_ticket_finished`
+([../services/bundles.md](../services/bundles.md#tools-of-the-ticket-sessions)), which calls `close` after recording its
+report. A `regeneration` session has no `close_session` tool.
 
 1. Checks: the session exists (`notFound`); its kind is not `regeneration` (`badRequest`, `A regeneration session
    cannot be closed.`); the project is writable (`locked`). A session that is already closed is left as it is, and
@@ -1239,9 +1241,9 @@ asks to close it. A `regeneration` session has no `close_session` tool.
 
 A closed session keeps its transcript, its attachments and its file; `sessions.history`, `sessions.readAttachment`,
 `sessions.update`, `sessions.stop` and `sessions.delete` work as for any session. It never starts a process again:
-`sessions.send` fails with `conflict` `This conversation is over.` (5.4), and so do the instructions that
-`start_bundle_ticket` sends to it ([../services/bundles.md](../services/bundles.md)). The UI replaces its composer with
-the text "This conversation is over" ([../ui/sessions.md](../ui/sessions.md#composer)).
+`sessions.send` fails with `conflict` `This conversation is over.` (5.4); `start_bundle_ticket` starts a new session for
+a ticket whose session is closed ([../services/bundles.md](../services/bundles.md#tools-of-the-coordinator)). The UI
+replaces its composer with the text "This conversation is over" ([../ui/sessions.md](../ui/sessions.md#composer)).
 
 ## Depends on
 

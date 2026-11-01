@@ -451,7 +451,7 @@ Tickets of the bundle when this session started:
 
 Bundle tools: get_bundle, start_bundle_ticket (start the session of a ticket, or send instructions to it), update_bundle (set the status to review or running), finish_bundle (remove the worktrees and branches once the work is brought in).
 
-1. Start the ticket sessions with mcp__hephaestus__start_bundle_ticket, in the bundle's order, at most {maxParallel} at a time. Each one implements its ticket, commits on its branch, comments a summary on its ticket, then reports the ticket finished with mcp__hephaestus__report_ticket_finished; get_bundle shows the tickets reported finished (finished: true), and new instructions sent with start_bundle_ticket clear that mark.
+1. Start the ticket sessions with mcp__hephaestus__start_bundle_ticket, in the bundle's order, at most {maxParallel} at a time. Each one implements its ticket, commits on its branch, comments a summary on its ticket, then reports the ticket finished with mcp__hephaestus__report_ticket_finished, which closes its session; get_bundle shows the tickets reported finished (finished: true). Instructions sent with start_bundle_ticket for a ticket whose session is closed start a new session in the same worktree and clear that mark: give them all the context the new session needs.
 2. Hephaestus sends you a message when a ticket session reports its ticket finished, ends its turn, fails or waits for a permission answer. Then read the ticket's comments with mcp__hephaestus__get_ticket and its work with git log and git diff {base}...ticket/<ticket id>, start the next waiting ticket, and send instructions with start_bundle_ticket when the work is incomplete. Tell the user when a session waits for them.
 3. When every ticket of the bundle has reported finished, call mcp__hephaestus__update_bundle with the status review, show the user a summary of each ticket and of the combined changes, and wait for their agreement. Send the changes they ask for to the ticket sessions, with the status running while they work.
 4. When the user agrees, bring the work into {codeFolder} on {base}, one ticket at a time in the bundle's order: git cherry-pick {base}..ticket/<ticket id>. Resolve conflicts yourself, then git cherry-pick --continue; ask the user when a conflict needs a decision.
@@ -469,7 +469,7 @@ Appended to the ticket part of a `ticket` session of a bundle.
 ## Bundle {bundleID}
 
 This session is one of the parallel sessions of bundle {bundleID}. Work only in {workFolder}, a git worktree on the branch ticket/{ticketID}: never change files elsewhere and never switch branches. Commit your changes on ticket/{ticketID} without pushing, and do not wait for the user's agreement first: the coordinator of the bundle reviews the work with the user. When you are blocked, say why in a comment on {ticketID} and end your turn.
-Once you have committed your changes and commented your summary on {ticketID}, call mcp__hephaestus__report_ticket_finished with a short summary of the work: the coordinator waits for it. Call it again when you have finished new instructions from the coordinator.
+Once you have committed your changes and commented your summary on {ticketID}, call mcp__hephaestus__report_ticket_finished with a short summary of the work: the coordinator waits for it. It closes this session, so call it last and then end your turn.
 {bundleScopeLine}
 ````
 
