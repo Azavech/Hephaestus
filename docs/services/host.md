@@ -750,6 +750,8 @@ actor TicketService: HostMethodHandler {
     // sessions (§8.1)
     func sessionChanged(projectID: String, session: SessionInfo) async
     func sessionRemoved(sessionID: UUID)
+    // Forge (§8.1): its item reached regenPushed
+    func fixPushed(projectID: String, ticketID: String) async
 }
 ```
 
@@ -820,17 +822,24 @@ Watcher entry points:
 
 ### 8.1 Status of a ticket while its sessions work
 
-The status of a ticket follows the turns of its Claude sessions: the `ticket` sessions of every mode and the `feedback`
-session of a feedback ticket ([../forge/pipeline.md](../forge/pipeline.md#feedback-intake)). `sessionChanged` keeps in
-memory the last status of every session it is given, per session id (unknown before the first call, so after a restart
-of the Main); `sessionRemoved` forgets it. For a session of kind `ticket` or `feedback` with a `ticketID`, a change of
-status sets the status of that ticket with `update(projectID:ticketID:patch: TicketPatch(status:))`:
+The status of a ticket follows the turns of its `ticket` sessions, of every mode. `sessionChanged` keeps in memory the
+last status of every session it is given, per session id (unknown before the first call, so after a restart of the
+Main); `sessionRemoved` forgets it. For a session of kind `ticket` with a `ticketID`, a change of status sets the status
+of that ticket with `update(projectID:ticketID:patch: TicketPatch(status:))`:
 
-| Previous status of the session                     | New status                       | Ticket status set |
-|----------------------------------------------------|----------------------------------|-------------------|
-| unknown, `stopped`, `starting`, `idle` or `failed` | `running` or `waitingPermission` | `in_progress`     |
-| `running` or `waitingPermission`                   | `idle`, `stopped` or `failed`    | `review`          |
+| Previous status of the session                     | New status                       | Ticket status set                            |
+|----------------------------------------------------|----------------------------------|----------------------------------------------|
+| unknown, `stopped`, `starting`, `idle` or `failed` | `running` or `waitingPermission` | `in_progress`                                |
+| `running` or `waitingPermission`                   | `idle`, `stopped` or `failed`    | `review`; none for a feedback ticket (below) |
 
+- A feedback ticket (its id is a feedback ticket id, `TicketID(_:)?.feedback`,
+  [../data/ticket-yml.md](../data/ticket-yml.md#ticket-id)) stays `in_progress` when the turn of its `ticket` session
+  ends, stops or fails: it goes to `review` once the regeneration holding its fix is pushed, when its Forge item reaches
+  `regenPushed` ([../forge/pipeline.md](../forge/pipeline.md#items)), which calls `fixPushed(projectID:ticketID:)`.
+  That function sets the ticket to `review` when it is a feedback ticket, whatever its status, and does nothing for
+  another ticket; a ticket that does not exist or is broken is left alone, and a failure of the update is logged.
+- The `feedback` session of a feedback ticket ([../forge/pipeline.md](../forge/pipeline.md#feedback-intake)) never
+  changes its ticket's status: the ticket stays `todo`, the status it is created with, through the intake.
 - The rule applies whatever the ticket's status: a `done` ticket goes back to `in_progress` when a session works on it
   again. Nothing is written when the ticket already has the status to set.
 - Any other change (a turn waiting for a permission and resuming, an idle session stopped by its idle timer, a session
@@ -1057,11 +1066,13 @@ migration checks, [../devices/migration.md](../devices/migration.md#outcome-chec
   ([../claude/cli.md](../claude/cli.md#511-closing-a-session)).
 - `bundleTool(_:projectID:bundleID:arguments:)`: the `BundleService` function of the tool
   ([bundles.md](bundles.md#tools-of-the-coordinator)), its result encoded as the tool's JSON text.
+- `reportTicketFinished(projectID:bundleID:ticketID:sessionID:summary:)`: `bundles.ticketFinished` with the same
+  values ([bundles.md](bundles.md#tools-of-the-ticket-sessions)).
 
 ### 12.4 ForgeService ([../forge/pipeline.md](../forge/pipeline.md#swift-api))
 
-There is no host protocol for the Forge. `ForgeService` is created with `init(host: HostService)` and uses these
-members directly: `registry.hosted(_:)`, `tickets.create`, `tickets.addComment` and `tickets.update` (§8),
+There is no host protocol for the Forge. `ForgeService` is created with `init(host: HostService)` and uses these members
+directly: `registry.hosted(_:)`, `tickets.create`, `tickets.addComment`, `tickets.update` and `tickets.fixPushed` (§8),
 `uploads.check` ([files.md](files.md) §7), `sessions.start(_:)` and `sessions.sessions(projectID:)`
 ([../claude/cli.md](../claude/cli.md)), `emit(_:)` (§5), `mesh.localDevice()` and `mesh.snapshot()` (the device names
 and addresses of the private terms too), `registry.all()` and `registry.descendants(of:)` (the projects of the private

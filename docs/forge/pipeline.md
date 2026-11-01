@@ -436,6 +436,13 @@ When step 4 fails, no item is created, the ticket stays, and the error is return
 | any                                          | its ticket changes name (`ticket.changed`)        | unchanged         | `title` = the new name                                                        |
 | any                                          | its ticket is deleted (`ticket.removed`)          | (removed)         | removed from `items` and from its cycle's `itemTicketIDs`                     |
 
+**Review.** An item that enters `regenPushed`, because its cycle reaches that state or because it joins a cycle in that
+state, puts its ticket in review: the regeneration holding the ticket's fix is pushed. The Forge calls
+`host.tickets.fixPushed(projectID:ticketID:)`, which sets a feedback ticket to `review` and leaves any other ticket as
+it is ([../services/host.md](../services/host.md#81-status-of-a-ticket-while-its-sessions-work)). Neither the feedback
+session nor a ticket session of a feedback ticket sets it to `review`: the first leaves it `todo`, the second
+`in_progress`.
+
 An item's ticket is the ticket of `projectID` whose id is `ticketID`. Its feedback session renames it when it rewrites
 the feedback as a ticket ([../claude/prompts.md](../claude/prompts.md#feedback-part)); `ticket.changed` of a ticket
 whose name equals the item's `title` changes nothing.
@@ -495,7 +502,7 @@ from `building`.
    | `trigger`      | the cycle's `trigger` raw value                                                                                                                                                                                                    |
    | `attempt`      | `attempts` + 1                                                                                                                                                                                                                     |
    | `targetCommit` | `targetCommit`                                                                                                                                                                                                                     |
-   | `items`        | one `RegenerationItem {ticketID, docsCommit}` per item of the cycle                                                                                                                                                                  |
+   | `items`        | one `RegenerationItem {ticketID, docsCommit}` per item of the cycle                                                                                                                                                                |
    | `failedRun`    | with `fixRun`: `FailedCIRun {number, url, conclusion, jobs}`, `jobs` = the failed jobs (at most 3; none when the jobs request fails), each `{name, url, log}`, `log` = the last 300 lines of its log or `Log unavailable: <error>` |
 
    The session starts in the permission mode `acceptEdits`, its permission rules and environment are those of
@@ -694,11 +701,11 @@ call with its text. `<tool>` is the tool's name and `<branch>` the configured br
 
      | Situation                                                                                                            | Text                                                                                                                                                                                  |
      |----------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-     | the item is in the active cycle (it joined now or was in it already); for a coordinator, every item of its bundle is | `Pushed docs commit <sha8> for <ticket id>. It is part of the regeneration in progress.`                                                                                                |
-     | the `tool` trigger started a cycle                                                                                   | `Pushed docs commit <sha8> for <ticket id>. Regeneration started.`                                                                                                                      |
-     | a cycle is active                                                                                                    | `Pushed docs commit <sha8> for <ticket id>. It will be regenerated after the regeneration in progress.`                                                                                 |
-     | `forge.autoRegenerate` is off                                                                                        | `Pushed docs commit <sha8> for <ticket id>. Regenerate automatically is off: the user starts the regeneration from the Forge screen.`                                                   |
-     | `head` is not trusted                                                                                                | `Pushed docs commit <sha8> for <ticket id>. Commits pushed to <branch> outside the Forge are not trusted yet: the regeneration waits until they are (Forge screen).`                    |
+     | the item is in the active cycle (it joined now or was in it already); for a coordinator, every item of its bundle is | `Pushed docs commit <sha8> for <ticket id>. It is part of the regeneration in progress.`                                                                                              |
+     | the `tool` trigger started a cycle                                                                                   | `Pushed docs commit <sha8> for <ticket id>. Regeneration started.`                                                                                                                    |
+     | a cycle is active                                                                                                    | `Pushed docs commit <sha8> for <ticket id>. It will be regenerated after the regeneration in progress.`                                                                               |
+     | `forge.autoRegenerate` is off                                                                                        | `Pushed docs commit <sha8> for <ticket id>. Regenerate automatically is off: the user starts the regeneration from the Forge screen.`                                                 |
+     | `head` is not trusted                                                                                                | `Pushed docs commit <sha8> for <ticket id>. Commits pushed to <branch> outside the Forge are not trusted yet: the regeneration waits until they are (Forge screen).`                  |
 
    - `forge_push_regen`: `regenCommit` = `<sha>`, `pushedAt` = now, state `regenPushed`, join rule, polling starts.
      Result: `Pushed regeneration commit <sha8>. The Forge now waits for the CI run and the release.`.
@@ -820,11 +827,10 @@ When the release of the cycle's run is found:
    ([update.md](update.md#schedule)).
 2. For each item of the cycle still `released`, in order:
    `host.tickets.addComment(projectID:ticketID:body:attachments:author:)` with the body below, no attachment and author
-   = this Main's device name; the item becomes `done`; `forge.json` is written. The ticket's status is not changed: its
-   feedback session left it in `review`
-   ([../services/host.md](../services/host.md#81-status-of-a-ticket-while-its-sessions-work)), and the user sets it to
-   `done`. A ticket that no longer exists (`notFound`) removes its item. Any other error stops
-   Completion: `lastError` is its message and the cycle stays `released`.
+   = this Main's device name; the item becomes `done`; `forge.json` is written. The ticket's status is not changed:
+   it went to `review` when its item reached `regenPushed` ([Items](#items)), and the user sets it to `done`. A ticket
+   that no longer exists (`notFound`) removes its item. Any other error stops Completion: `lastError` is its message and
+   the cycle stays `released`.
    Completion runs again from this step after every check while the cycle is `released`, whatever the check's outcome
    ([Checks and triggers](#checks-and-triggers)), and at the next enabling
    ([Startup and shutdown](#startup-and-shutdown) step 4).

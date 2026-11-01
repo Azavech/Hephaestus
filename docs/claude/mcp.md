@@ -80,6 +80,10 @@ public protocol MCPHost: Sendable {
     /// The BundleService function of a bundle tool (6.21–6.24): its result as JSON text, or a thrown ProtocolError
     /// whose message is the error text.
     func bundleTool(_ name: String, projectID: String, bundleID: String, arguments: Data) async throws -> String
+    /// BundleService.ticketFinished (6.27): the text given back to Claude, or a thrown ProtocolError whose message is
+    /// the error text.
+    func reportTicketFinished(projectID: String, bundleID: String, ticketID: String, sessionID: UUID,
+                              summary: String) async throws -> String
 }
 
 public struct MCPMain: Sendable, Equatable {
@@ -250,6 +254,7 @@ given by `MCPToolKinds.kinds(for:)` from this table:
 | 6.21–6.24 the bundle tools                                   | `bundle`                                                        |
 | 6.25 `rename_session`                                        | `project`, `ticket`, `bundle`, `feedback`, `regeneration`       |
 | 6.26 `close_session`                                         | `project`, `ticket`, `bundle`, `feedback`                       |
+| 6.27 `report_ticket_finished`                                | `ticket` (of a bundle only)                                     |
 
 A `feedback` session therefore lists `get_ticket`, `update_ticket`, `comment_ticket`, `rename_session` and
 `close_session`, and a `regeneration` session lists `forge_push_regen` and `rename_session`. A feedback session uses
@@ -272,7 +277,8 @@ command: in the Forge source project it holds a push tool.
 A `ticket` session lists `forge_push_docs` too. It pushes only for a ticket session of the Forge source project, on the
 Forge host, that is not a session of a bundle ([../forge/pipeline.md](../forge/pipeline.md#mcp-tools)): implementing a
 feedback ticket there pushes its documentation and starts the regeneration, as a bundle does. The ticket sessions of a
-bundle leave the push to their coordinator.
+bundle leave the push to their coordinator, and tell it that their ticket's work is finished with
+`report_ticket_finished`, which answers a tool error to a ticket session that is not of a bundle.
 
 ```swift
 struct MCPToolDefinition: Sendable {
@@ -599,7 +605,7 @@ Calls `tickets.delete {projectID, ticketID}`. Result: `{"deleted":"HEPH-12"}`.
 ```json
 {
   "name": "start_ticket_session",
-  "description": "Start a Claude session that works on a ticket. It runs on the Main hosting the ticket's project, and the user can follow and answer it from any device. Modes: implement (implement the ticket, keep the docs in sync, build and test, comment a summary), debug (find the root cause, explain it, fix it after the user confirms), review (review the work done for the ticket and comment the findings), plan (comment an implementation plan, no code changes), custom (follow the given instructions). The ticket goes to in_progress when the session starts a turn and to review when it ends it.",
+  "description": "Start a Claude session that works on a ticket. It runs on the Main hosting the ticket's project, and the user can follow and answer it from any device. Modes: implement (implement the ticket, keep the docs in sync, build and test, comment a summary), debug (find the root cause, explain it, fix it after the user confirms), review (review the work done for the ticket and comment the findings), plan (comment an implementation plan, no code changes), custom (follow the given instructions). The ticket goes to in_progress when the session starts a turn and to review when it ends it; a feedback ticket stays in_progress and goes to review once the regeneration holding its fix is pushed.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -785,7 +791,7 @@ Result: `BundleDetails` ([../services/bundles.md](../services/bundles.md#swift-a
 ```json
 {
   "name": "start_bundle_ticket",
-  "description": "Start the ticket session of a ticket of your bundle: it implements the ticket in its own git worktree, on the branch ticket/<ticket id>, commits there and comments a summary; the ticket goes to review when its session ends its turn. When the ticket already has a session, send that session instructions instead.",
+  "description": "Start the ticket session of a ticket of your bundle: it implements the ticket in its own git worktree, on the branch ticket/<ticket id>, commits there, comments a summary and reports the ticket finished to you; new instructions clear that report. When the ticket already has a session, send that session instructions instead.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -874,6 +880,30 @@ Calls `MCPHost.closeSession(projectID:sessionID:)` with the token's `projectID` 
 ([cli.md](cli.md#511-closing-a-session)). Result: `This conversation is over. End your turn now: the session accepts no
 more messages.`
 
+### 6.27 report_ticket_finished (ticket sessions of a bundle)
+
+```json
+{
+  "name": "report_ticket_finished",
+  "description": "Report to the coordinator of your bundle that the work of your ticket is finished, with a short summary. Call it once you have committed your changes and commented your summary on the ticket, and again after finishing new instructions from the coordinator. Only the ticket sessions of a bundle can use it.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "summary": {"type": "string", "minLength": 1, "description": "A short summary of the work done, for the coordinator."}
+    },
+    "required": ["summary"],
+    "additionalProperties": false
+  }
+}
+```
+
+After the arguments are checked (section 6), a session without a `bundleID` or a `ticketID` gets the tool error `Only
+the ticket sessions of a bundle can use this tool.`; `summary` is trimmed of whitespace and line breaks, and empty after
+trimming is `Invalid arguments: summary must not be empty.` Then it calls
+`MCPHost.reportTicketFinished(projectID:bundleID:ticketID:sessionID:summary:)` with the token's `projectID`,
+`bundleID`, `ticketID` and `sessionID` and the trimmed summary: `BundleService.ticketFinished`
+([../services/bundles.md](../services/bundles.md#tools-of-the-ticket-sessions)). Result: the returned text.
+
 ## 7. Locating a project and forwarding
 
 A tool acting on a project (every tool with `project`, `ticket` or `parent`) finds the Main hosting it:
@@ -888,7 +918,7 @@ The tool's protocol calls then go to that Main with `MCPHost.perform(_:params:on
 on another Main they are requests over the peer link ([../services/host.md](../services/host.md)), exactly like the
 requests of a remote device. Nothing else is forwarded: `list_devices` and the skills tools use this Main (the registry
 and the skills library are synced between Mains), `rename_session` renames a session of this Main, and the Forge,
-bundle and close tools call the local hooks.
+bundle, close and report tools call the local hooks.
 
 ## 8. Results and errors
 
@@ -898,13 +928,13 @@ bundle and close tools call the local hooks.
 {"content":[{"type":"text","text":"<JSON or message>"}],"isError":false}
 ```
 
-| Situation                                                                | `isError` | `text`                                                                  |
-|--------------------------------------------------------------------------|-----------|-------------------------------------------------------------------------|
-| success                                                                  | false     | the result of the tool (section 6)                                      |
-| an argument is missing, of the wrong type, or breaks a rule of section 6 | true      | `Invalid arguments: <what is wrong>.`                                   |
-| a protocol call fails with `ProtocolError`                               | true      | `<code>: <message>`, for example `locked: Project HEPH is being moved.` |
-| a tool-specific check fails                                              | true      | the message given in section 6                                          |
-| a Forge, bundle or close tool's `MCPHost` call throws (6.19–6.24, 6.26)  | true      | the error's message alone                                               |
+| Situation                                                                             | `isError` | `text`                                                                  |
+|---------------------------------------------------------------------------------------|-----------|-------------------------------------------------------------------------|
+| success                                                                               | false     | the result of the tool (section 6)                                      |
+| an argument is missing, of the wrong type, or breaks a rule of section 6              | true      | `Invalid arguments: <what is wrong>.`                                   |
+| a protocol call fails with `ProtocolError`                                            | true      | `<code>: <message>`, for example `locked: Project HEPH is being moved.` |
+| a tool-specific check fails                                                           | true      | the message given in section 6                                          |
+| a Forge, bundle, close or report tool's `MCPHost` call throws (6.19–6.24, 6.26, 6.27) | true      | the error's message alone                                               |
 
 ## Depends on
 

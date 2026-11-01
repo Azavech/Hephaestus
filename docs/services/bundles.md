@@ -11,10 +11,10 @@ A bundle is a named, ordered group of tickets of one project that Claude works o
 the Tickets screen ([../ui/tickets.md](../ui/tickets.md#bundles)) and presses Work on Bundle: the Main starts the
 bundle's **coordinator**, a Claude session of kind `bundle`, which starts one ticket session per ticket, at most
 `bundles.maxParallel` at a time. Each ticket session works in its own git worktree, on its own branch, so that the
-sessions never change each other's files. When every ticket is in review, the coordinator shows the user the combined
-work, and once the user agrees it brings the branches into the project's branch, pushes them (the Forge source
-project, [../forge/pipeline.md](../forge/pipeline.md#mcp-tools)) or leaves them for the user to push (other projects),
-and finishes the bundle.
+sessions never change each other's files. When every ticket session has reported its ticket finished, the coordinator
+shows the user the combined work, and once the user agrees it brings the branches into the project's branch, pushes
+them (the Forge source project, [../forge/pipeline.md](../forge/pipeline.md#mcp-tools)) or leaves them for the user to
+push (other projects), and finishes the bundle.
 
 `BundleFile.swift` is in `HephCore`; the files of `HephHost/Bundles` are macOS only and wrapped in `#if os(macOS)`.
 Logging uses `Log.host` ([../architecture.md](../architecture.md#logging)), in `BundleFile` too; bundle names are never
@@ -51,10 +51,11 @@ write uses the new names ([../data/project-yml.md](../data/project-yml.md#rename
 
 Item of `tickets`:
 
-| Key       | YAML type | Required | Default | Written  | Meaning                                                         |
-|-----------|-----------|----------|---------|----------|-----------------------------------------------------------------|
-| `ticket`  | string    | yes      |         | always   | Ticket id, of the bundle's project.                             |
-| `session` | string    | no       | absent  | when set | UUID of the ticket session the bundle started for it, the last. |
+| Key        | YAML type | Required | Default | Written   | Meaning                                                                                                 |
+|------------|-----------|----------|---------|-----------|---------------------------------------------------------------------------------------------------------|
+| `ticket`   | string    | yes      |         | always    | Ticket id, of the bundle's project.                                                                     |
+| `session`  | string    | no       | absent  | when set  | UUID of the ticket session the bundle started for it, the last.                                         |
+| `finished` | boolean   | no       | `false` | when true | Its session reported its work finished ([Tools of the ticket sessions](#tools-of-the-ticket-sessions)). |
 
 Validation, applied as in [../data/ticket-yml.md](../data/ticket-yml.md#validation-and-normalization):
 
@@ -96,14 +97,15 @@ coordinator: 6A1F0C2E-3B4D-4E5F-8A9B-0C1D2E3F4A5B
 tickets:
 - ticket: HEPH-12
   session: 0B1E5C6A-2F3D-4E5F-8A9B-0C1D2E3F4A5B
+  finished: true
 - ticket: HEPH-14
 ```
 
 ## Mapping to BundleItem
 
 `BundleItem` ([../protocol/types.md](../protocol/types.md#bundleitem)): `id`, `name`, `status`, `created`, `updated`,
-`base`, `coordinatorSessionID` = `coordinator`, `tickets` = one `BundleTicket {ticketID, sessionID}` per item of
-`tickets`.
+`base`, `coordinatorSessionID` = `coordinator`, `tickets` = one `BundleTicket {ticketID, sessionID, finished}` per item
+of `tickets`, `finished` being `true` when the item's `finished` is true and `nil` otherwise.
 
 ## Worktrees
 
@@ -171,7 +173,7 @@ the project that is not broken (`notFound` `Ticket <id> does not exist.`, `confl
 | Method           | Statuses allowed                  | Effect                                                                                                                    |
 |------------------|-----------------------------------|---------------------------------------------------------------------------------------------------------------------------|
 | `bundles.create` | —                                 | new file: `name`, `status` `draft`, the tickets in the given order, repeats removed (first kept); at least one ticket     |
-| `bundles.update` | `name`: any; `ticketIDs`: `draft` | `name` replaced; `ticketIDs` replaces the tickets, keeping the `session` of a ticket that stays                           |
+| `bundles.update` | `name`: any; `ticketIDs`: `draft` | `name` replaced; `ticketIDs` replaces the tickets, keeping the `session` and `finished` of a ticket that stays            |
 | `bundles.delete` | `draft`, `done`                   | Removing the work ([Worktrees](#worktrees)); file deleted                                                                 |
 | `bundles.start`  | `draft`                           | Start (below)                                                                                                             |
 | `bundles.stop`   | `running`, `review`               | `sessions.stop` of the coordinator and of every ticket session of the bundle; status `draft`; worktrees and branches kept |
@@ -231,16 +233,18 @@ tool's arguments are checked.
   1. The ticket is in the bundle (`badRequest` `<ticket id> is not in <bundle id>.`); the bundle is `running` or
      `review` (`conflict` `<bundle id> is not running.`).
   2. When the ticket's `session` names a session of the project: `instructions` must be given (`badRequest` `<ticket id>
-     already has a session: give instructions for it.`), and they are sent to it with `sessions.send`. Result: that
-     `SessionInfo`.
+     already has a session: give instructions for it.`), and they are sent to it with `sessions.send`; once they are
+     sent, the item's `finished` is cleared. Result: that `SessionInfo`.
   3. Otherwise the number of ticket sessions of the bundle whose status is `starting`, `running` or `waitingPermission`
      must be below `bundles.maxParallel` (`conflict` `<n> ticket sessions of <bundle id> are running, the limit of this
      Main (Settings ▸ Claude ▸ Bundles). Start <ticket id> when one of them ends its turn.`).
   4. The worktree is created when missing ([Worktrees](#worktrees)), `<base>` being the bundle's `base`, or the
      current branch (`git symbolic-ref --short HEAD` in the code folder) when the bundle has none.
   5. `sessions.start(SessionStart(projectID:, kind: .ticket, ticketID:, mode: .implement, message: instructions,
-     deviceID: <this Main>, bundleID:))`; the item's `session` = its id. Result: the `SessionInfo`. The ticket's
-     status follows the turns of its session ([host.md](host.md#81-status-of-a-ticket-while-its-sessions-work)).
+     deviceID: <this Main>, bundleID:))`; the item's `session` = its id and its `finished` is cleared. Result: the
+     `SessionInfo`. The ticket's status follows the turns of its session
+     ([host.md](host.md#81-status-of-a-ticket-while-its-sessions-work)); a feedback ticket stays `in_progress` when the
+     turn ends, so the coordinator waits for `finished`, not for a status.
 - `setStatus(projectID:bundleID:status:)`, for `update_bundle`: `status` must be `running` or `review` (`badRequest`
   `Invalid arguments: status must be one of running, review.`), and so must the bundle (`conflict` `<bundle id> is not
   running.`).
@@ -249,6 +253,25 @@ tool's arguments are checked.
   ([Worktrees](#worktrees)); the bundle becomes `done`. The statuses of its tickets are left as they are: the user sets
   a ticket to `done` ([host.md](host.md#81-status-of-a-ticket-while-its-sessions-work)). Result:
   `{"bundle":<BundleItem>,"keptBranches":[…]}`, the branches kept because their work is not on `base`.
+
+### Tools of the ticket sessions
+
+`ticketFinished(projectID:bundleID:ticketID:sessionID:summary:)`, for `report_ticket_finished`
+([../claude/mcp.md](../claude/mcp.md#627-report_ticket_finished-ticket-sessions-of-a-bundle)), called with the calling
+session's `bundleID`, `ticketID` and id, and the trimmed summary:
+
+1. The bundle is `running` or `review` (`conflict` `<bundle id> is not running.`); the ticket is in the bundle
+   (`badRequest` `<ticket id> is not in <bundle id>.`); the item's `session` is the calling session (`conflict` `This
+   session is no longer the session of <ticket id> in <bundle id>.`).
+2. The item's `finished` = true; the file is written and `bundleChanged` emitted.
+3. When `coordinator` is set: `sessions.send` to it with `finishedMessage(ticketID:summary:)`, `<ticket id> is finished:
+   <summary>`, and this Main's id as `deviceID`; an error is logged and not returned, since the mark is recorded and
+   `get_bundle` shows it.
+4. Result: `Reported <ticket id> as finished to the coordinator of <bundle id>.`
+
+The mark lasts until the coordinator gives the ticket new work: `start_bundle_ticket` clears it, with new instructions
+for the session or a new session ([Tools of the coordinator](#tools-of-the-coordinator)). A turn that ends, stops or
+fails leaves it as it is.
 
 ### Working folder of a ticket session
 
@@ -290,7 +313,9 @@ public struct BundleFile: Codable, Sendable, Equatable {
         /// Read from the old key task when ticket is absent (Renamed keys of project-yml.md).
         public var ticket: String
         public var session: UUID?
-        public init(ticket: String, session: UUID?)
+        /// Absent in the file: false; written only when true.
+        public var finished: Bool
+        public init(ticket: String, session: UUID?, finished: Bool = false)
     }
     public var id: String
     public var name: String
@@ -346,6 +371,11 @@ actor BundleService: HostMethodHandler {
         -> SessionInfo
     func setStatus(projectID: String, bundleID: String, status: BundleStatus) async throws -> BundleItem
     func finish(projectID: String, bundleID: String) async throws -> BundleFinishResult
+    // tool of the ticket sessions
+    func ticketFinished(projectID: String, bundleID: String, ticketID: String, sessionID: UUID, summary: String)
+        async throws -> String
+    /// "<ticket id> is finished: <summary>"
+    static func finishedMessage(ticketID: String, summary: String) -> String
 }
 
 struct BundleGit: Sendable {
@@ -377,7 +407,7 @@ folder; absent while the worktree does not exist). `BundleFinishResult`: `bundle
 | `bundles.*`, `bundle.changed`, `bundle.removed`                                        | [../protocol/methods.md](../protocol/methods.md#bundles), [../protocol/events.md](../protocol/events.md) |
 | `HostService`, `registry.write`, `emit`, `TicketService`                               | [host.md](host.md)                                                                                       |
 | `SessionService` (`start`, `send`, `stop`, `SessionStart.bundleID`), working directory | [../claude/cli.md](../claude/cli.md)                                                                     |
-| the coordinator's tools                                                                | [../claude/mcp.md](../claude/mcp.md)                                                                     |
+| the coordinator's tools, `report_ticket_finished`                                      | [../claude/mcp.md](../claude/mcp.md)                                                                     |
 | the prompts of the coordinator and of its ticket sessions                              | [../claude/prompts.md](../claude/prompts.md)                                                             |
 | `forge_push_docs` for bundles of the Forge source project                              | [../forge/pipeline.md](../forge/pipeline.md#mcp-tools)                                                   |
 | `bundles.maxParallel`, `Worktrees/`                                                    | [../data/app-storage.md](../data/app-storage.md)                                                         |

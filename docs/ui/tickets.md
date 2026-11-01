@@ -237,8 +237,10 @@ sheet; failure shows the message in red.
 - Status: a `Menu` whose label is the `TicketStatusBadge`; its items are the four statuses (current checked) and send
   `TicketPatch(status:)`. The badge shows the chosen status at once and returns to the stored status when the request
   fails. The Main also sets the status itself: In Progress when a Claude session of the ticket starts a turn, Review
-  when it ends its turn, stops or fails
-  ([../services/host.md](../services/host.md#81-status-of-a-ticket-while-its-sessions-work)); only the user sets Done.
+  when it ends its turn, stops or fails. A feedback ticket stays To Do while its feedback session works, stays In
+  Progress when the turn of a session implementing it ends, and goes to Review when the regeneration holding its fix is
+  pushed ([../services/host.md](../services/host.md#81-status-of-a-ticket-while-its-sessions-work)); only the user sets
+  Done.
 - Dates: "Created <date>" (abbreviated date, shortened time) · "Updated <relative time>" (refreshed every minute; the
   absolute date in the help tag).
 

@@ -261,21 +261,22 @@ Ticket bundles: [services/bundles.md](../services/bundles.md).
 
 ### BundleStatus
 
-| Raw value | `displayName` | Meaning                                                       |
-|-----------|---------------|---------------------------------------------------------------|
-| `draft`   | Draft         | Not being worked on                                           |
-| `running` | Running       | Its coordinator and ticket sessions work on it                |
-| `review`  | Review        | Every ticket is done; the coordinator waits for the user's OK |
-| `done`    | Done          | Its work was brought in and its worktrees removed             |
+| Raw value | `displayName` | Meaning                                                           |
+|-----------|---------------|-------------------------------------------------------------------|
+| `draft`   | Draft         | Not being worked on                                               |
+| `running` | Running       | Its coordinator and ticket sessions work on it                    |
+| `review`  | Review        | Every ticket is finished; the coordinator waits for the user's OK |
+| `done`    | Done          | Its work was brought in and its worktrees removed                 |
 
 ### BundleTicket
 
 Identifiable by `ticketID` (`var id: String { ticketID }`).
 
-| Field       | Type     | Meaning                                                    |
-|-------------|----------|------------------------------------------------------------|
-| `ticketID`  | `String` | Ticket id                                                  |
-| `sessionID` | `UUID?`  | The last ticket session the bundle started for this ticket |
+| Field       | Type     | Meaning                                                                                                          |
+|-------------|----------|------------------------------------------------------------------------------------------------------------------|
+| `ticketID`  | `String` | Ticket id                                                                                                        |
+| `sessionID` | `UUID?`  | The last ticket session the bundle started for this ticket                                                       |
+| `finished`  | `Bool?`  | `true` once its session reported the ticket's work finished, until the coordinator gives it new work; else `nil` |
 
 ### BundleItem
 
